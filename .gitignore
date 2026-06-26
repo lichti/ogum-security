@@ -1,0 +1,83 @@
+# AI Assistant Context (internal only)
+CLAUDE.md
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Node.js
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+agent/ogum-agent
+agent/bpf/*.o
+
+# Secrets / Credentials
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+credentials.json
+service-account*.json
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Docker
+docker-compose.override.yml
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+
+# Logs
+*.log
+logs/
+
+# Prowler scan outputs (never commit scan results)
+prowler-output/
+output/

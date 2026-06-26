@@ -1,0 +1,178 @@
+name: ogum-security
+
+services:
+
+  # ── ArangoDB — Graph Database ─────────────────────────────────────────────
+  arangodb:
+    image: arangodb:3.12
+    container_name: ogum-arangodb
+    environment:
+      ARANGO_ROOT_PASSWORD: ${ARANGO_PASSWORD:-changeme}
+    ports:
+      - "8529:8529"
+    volumes:
+      - arangodb_data:/var/lib/arangodb3
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8529/_api/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redis — Task Queue & Cache ────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: ogum-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redpanda — Kafka-compatible Message Broker ────────────────────────────
+  redpanda:
+    image: redpandadata/redpanda:v24.2.1
+    container_name: ogum-redpanda
+    command:
+      - redpanda
+      - start
+      - --smp 1
+      - --memory 512M
+      - --overprovisioned
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://localhost:9092
+    ports:
+      - "9092:9092"
+      - "9644:9644"
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "info"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Qdrant — Vector DB for RAG ────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.11.0
+    container_name: ogum-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  # ── Ollama — Local LLM for Ogum.AI ───────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ogum-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    # Uncomment for GPU support:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # ── Backend — FastAPI ─────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: ogum-backend
+    environment:
+      - APP_ENV=${APP_ENV:-development}
+      - ARANGO_HOST=arangodb
+      - ARANGO_PORT=8529
+      - ARANGO_DB=${ARANGO_DB:-ogum_security}
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD:-changeme}
+      - REDIS_URL=redis://redis:6379/0
+      - REDPANDA_BROKERS=redpanda:9092
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3:instruct}
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      arangodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Celery Worker — Scan Jobs ─────────────────────────────────────────────
+  worker:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: ogum-worker
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      - APP_ENV=${APP_ENV:-development}
+      - ARANGO_HOST=arangodb
+      - ARANGO_PORT=8529
+      - ARANGO_DB=${ARANGO_DB:-ogum_security}
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD:-changeme}
+      - REDIS_URL=redis://redis:6379/0
+      - REDPANDA_BROKERS=redpanda:9092
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+      - /var/run/docker.sock:/var/run/docker.sock  # for side-scanning container management
+    depends_on:
+      - redis
+      - arangodb
+    restart: unless-stopped
+
+  # ── Frontend — Next.js ────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend.Dockerfile
+    container_name: ogum-frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_WS_URL=ws://localhost:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  arangodb_data:
+  redis_data:
+  redpanda_data:
+  qdrant_data:
+  ollama_data:
