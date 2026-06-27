@@ -42,7 +42,7 @@ Ogum Security is an **open-source CNAPP** (Cloud-Native Application Protection P
 It is built on top of [Prowler v5](https://github.com/prowler-cloud/prowler) and extends it with:
 
 - **Graph-based risk correlation** — connects isolated findings into visual Attack Paths
-- **Agentless Side-Scanning** — reads VM disks, Lambda artifacts, and container filesystems without touching production workloads
+- **Side-Scanning (No Production Impact)** — reads VM disk snapshots, Lambda artifacts, and container filesystems without touching production workloads or installing agents
 - **Near Real-Time detection** — from cloud event to alert in under 2 seconds
 - **AI-powered remediation** — context-aware RAG generates corrective IaC code and opens Pull Requests automatically
 
@@ -85,12 +85,12 @@ Internet Gateway → EC2 (CVE-Critical) → IAM Admin Role → S3 Bucket [PII]
 
 That's a **Toxic Combination** — an actual attack chain. Everything else is noise.
 
-### Agentless Side-Scanning
-Inspired by Orca Security's approach:
+### Side-Scanning (No Production Impact)
+Inspired by Orca Security's approach. Scans production workloads without installing agents or touching running processes:
 
-- **Virtual Machines:** creates an ephemeral EBS snapshot, mounts it read-only in an isolated analyzer, scans with Trivy + YARA + secret detectors, then destroys the snapshot — zero agent installation, zero CPU impact on production
-- **AWS Lambda:** extracts the deployment artifact via API, scans dependencies and source code for vulnerabilities and hardcoded secrets in an isolated RAM disk
-- **Kubernetes containers (runtime):** a privileged DaemonSet reads `/proc/<PID>/root` from the host node — the target container never knows it was scanned
+- **Virtual Machines (AWS EC2, Azure VM):** creates an ephemeral disk snapshot, mounts it read-only in an isolated analyzer container, scans with Trivy + YARA + secret detectors, then destroys the snapshot immediately — zero CPU impact on production, zero agent installation
+- **AWS Lambda:** extracts the deployment artifact via API, scans dependencies and source code in an isolated RAM disk — the function is never invoked
+- **Kubernetes containers (runtime):** an ephemeral privileged DaemonSet reads `/proc/<PID>/root` from the host node — the target container never knows it was scanned. Note: this requires a DaemonSet with elevated permissions, not a fully agentless approach
 
 ### Near Real-Time Detection
 ```

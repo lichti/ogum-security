@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-lint:
+    name: Backend — Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Poetry
+        run: pip install poetry==1.8.3
+
+      - name: Install dependencies
+        working-directory: backend
+        run: poetry install --no-root
+
+      - name: Lint (ruff)
+        working-directory: backend
+        run: poetry run ruff check .
+
+      - name: Format check (ruff)
+        working-directory: backend
+        run: poetry run ruff format --check .
+
+      - name: Type check (mypy)
+        working-directory: backend
+        run: poetry run mypy app/
+
+  backend-test:
+    name: Backend — Tests
+    runs-on: ubuntu-latest
+    needs: backend-lint
+
+    services:
+      arangodb:
+        image: arangodb:3.12
+        env:
+          ARANGO_ROOT_PASSWORD: testpassword
+        ports:
+          - 8529:8529
+        options: >-
+          --health-cmd "curl -f http://localhost:8529/_api/version"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Poetry
+        run: pip install poetry==1.8.3
+
+      - name: Install dependencies
+        working-directory: backend
+        run: poetry install
+
+      - name: Run tests
+        working-directory: backend
+        run: poetry run pytest --cov=app --cov-report=term-missing
+        env:
+          ARANGO_URL: http://localhost:8529
+          ARANGO_ROOT_PASSWORD: testpassword
+          REDIS_URL: redis://localhost:6379/0
+          ENVIRONMENT: test
+
+  backend-security:
+    name: Backend — Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit dependencies
+        working-directory: backend
+        run: pip-audit --requirement <(pip install poetry && poetry export --without-hashes)
+
+  frontend-check:
+    name: Frontend — Build & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Type check & build
+        working-directory: frontend
+        run: npm run build
+
+  agent-check:
+    name: Agent — Vet & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: agent/go.sum
+
+      - name: Go vet
+        working-directory: agent
+        run: go vet ./...
+
+      - name: Build
+        working-directory: agent
+        run: go build ./...
