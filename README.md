@@ -52,6 +52,11 @@ It is built on top of [Prowler v4](https://github.com/prowler-cloud/prowler) and
 
 ## Features
 
+### Unified Asset Inventory
+Before scanning for anything, Ogum Security discovers and maps every resource across your cloud environments into a unified, searchable inventory — persisted as a graph in ArangoDB. This is the foundation everything else is built on.
+
+Every EC2 instance, IAM Role, S3 bucket, Lambda function, Kubernetes pod, and network endpoint is catalogued with its relationships to other resources. The graph is structurally complete before a single security check runs.
+
 ### Multi-Cloud Coverage
 Scan across **AWS, Azure, GCP, Kubernetes, OCI, Alibaba Cloud, GitHub, Microsoft 365, Cloudflare,** and **MongoDB Atlas** — all from a single platform.
 
@@ -120,26 +125,37 @@ For on-premise servers, edge environments, or unsupported clouds — a lightweig
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Ogum Security UI                         │
-│              (React 19 + Next.js 15 + React Flow)               │
-└────────────────────────────┬────────────────────────────────────┘
-                             │ REST / WebSocket
-┌────────────────────────────▼────────────────────────────────────┐
-│                      FastAPI Gateway                            │
-└──────┬──────────────────────────────────────────────────┬───────┘
-       │                                                  │
-┌──────▼──────┐  ┌──────────────┐  ┌──────────────┐  ┌───▼──────┐
-│Ogum.Static  │  │ Ogum.Dynamic │  │  Ogum.Pulse  │  │ Ogum.AI  │
-│Prowler v4   │  │Side-Scanning │  │  Redpanda +  │  │RAG+GitOps│
-│+ Checkov    │  │VM/Lambda/K8s │  │  Flink CEP   │  │  Ollama  │
-└──────┬──────┘  └──────┬───────┘  └──────┬───────┘  └───┬──────┘
-       │                │                 │               │
-       └────────────────▼─────────────────▼───────────────┘
-                        │         Ogum.Graph
-                        │      (ArangoDB Multi-Model)
-                        │   Vertices + Edges = Attack Paths
-                        └──────────────────────────────────
+┌──────────────────────────────────────────────────────────────────┐
+│                 Cloud APIs / K8s / On-Premise                    │
+└───────────────────────────────┬──────────────────────────────────┘
+                                │
+                ┌───────────────▼───────────────┐
+                │        Ogum.Inventory          │  ← built first
+                │   Asset Discovery & Graph      │
+                │   Population (all providers)   │
+                └───────────────┬───────────────┘
+                                │ populates vertices + edges
+┌───────────────────────────────▼──────────────────────────────────┐
+│                     Ogum.Graph (ArangoDB)                        │
+│              Resources · Identities · NetworkEndpoints           │
+│              DataAssets · Vulnerabilities · Attack Paths         │
+└──────┬──────────────────────────────────────────────────┬────────┘
+       ↑                    ↑                             ↑
+┌──────┴──────┐  ┌──────────┴───────┐  ┌────────────────┴────────┐
+│Ogum.Static  │  │  Ogum.Dynamic    │  │      Ogum.Pulse         │
+│Prowler v4   │  │  Side-Scanning   │  │  Redpanda + Flink CEP   │
+│+ Checkov    │  │  VM/Lambda/K8s   │  │  NRT < 2s latency       │
+└─────────────┘  └──────────────────┘  └─────────────────────────┘
+                                │
+                ┌───────────────▼───────────────┐
+                │          Ogum.AI              │
+                │   RAG + GitOps PR generation  │
+                └───────────────┬───────────────┘
+                                │
+┌───────────────────────────────▼──────────────────────────────────┐
+│               Ogum Security UI  ←  FastAPI Gateway               │
+│         React 19 · Next.js 15 · React Flow Attack Path Canvas    │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 **Core stack:** Python 3.11 · FastAPI · Prowler v4 · ArangoDB · Redpanda · Apache Flink · React 19 · Next.js 15 · Go · eBPF · LangChain · Ollama
@@ -197,17 +213,22 @@ curl -X POST http://localhost:8000/api/v1/scans \
 We are building this in public. Here is where we are and where we are going:
 
 ### Phase 1 — MVP (In Progress 🔨)
-> Core scanning engine and compliance dashboard
+> Asset inventory layer first, then CSPM and compliance dashboard
 
 - [x] Project structure and architecture
 - [x] Docker Compose dev stack (ArangoDB, Redpanda, Qdrant, Ollama)
-- [ ] FastAPI backend with Prowler v4 integration
-- [ ] ArangoDB graph schema (resources, identities, vulnerabilities)
-- [ ] Scan orchestration via Celery workers
-- [ ] Findings API with filtering (provider, severity, framework)
-- [ ] Multi-tenant OIDC authentication
-- [ ] Compliance posture dashboard (CIS, NIST, PCI DSS, SOC 2)
-- [ ] Next.js 15 findings console with remediation panel
+- [ ] **Ogum.Inventory:** ArangoDB graph schema (resources, identities, network endpoints, data assets)
+- [ ] **Ogum.Inventory:** AWS asset discovery (EC2, IAM, S3, RDS, Lambda, EKS, VPC, Security Groups)
+- [ ] **Ogum.Inventory:** Relationship edge creation (BELONGS_TO, ATTACHED_TO, ASSUMES_ROLE, ROUTES_TRAFFIC)
+- [ ] **Ogum.Inventory:** Inventory API with filtering and pagination
+- [ ] **Ogum.Inventory:** Inventory UI — searchable asset table with provider breakdown
+- [ ] **Ogum.Inventory:** Scheduled re-discovery (Celery Beat, incremental upsert)
+- [ ] **Ogum.Static:** FastAPI backend with Prowler v4 integration
+- [ ] **Ogum.Static:** Scan orchestration via Celery workers
+- [ ] **Ogum.Static:** Findings API with filtering (provider, severity, framework)
+- [ ] **Ogum.Static:** Compliance posture dashboard (CIS, NIST, PCI DSS, SOC 2)
+- [ ] **Ogum.Static:** Next.js 15 findings console with remediation panel
+- [ ] Multi-tenant OIDC authentication (Ogum.Auth)
 
 ### Phase 2 — Alpha (Planned 📋)
 > Graph risk engine, side-scanning, and AI remediation
