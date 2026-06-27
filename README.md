@@ -114,6 +114,22 @@ Continuous posture tracking per framework. If a developer opens a port at 3am, O
 - AssumeRole chaining detection: maps hidden privilege escalation paths across roles
 - Least-privilege policy generation: Ogum.AI rewrites overpermissive IAM policies from scratch based on actual usage
 
+### Cloud Detection and Response (Ogum.CDR)
+When a threat is detected, Ogum doesn't just alert — it acts:
+
+**Tier 1 — Automatic containment (< 10 seconds, no human needed):**
+- Disable compromised IAM access key
+- Block attacker IP in Security Group
+- Apply Kubernetes NetworkPolicy deny-all on compromised pod
+- Suspend Azure Entra ID user
+
+**Tier 2 — Guided containment (human approval via Slack/Teams):**
+High-impact actions — isolate EC2, terminate deployment, revoke org access — sent as interactive approval requests before executing.
+
+**Forensics first:** before any destructive action, CloudTrail (last 90 min), EBS snapshots, and K8s container logs are captured to an immutable S3 WORM bucket.
+
+> CDR is the only module that modifies cloud resources directly — and only when an active threat demands it. Misconfigurations go through GitOps. Active attackers don't wait for PRs.
+
 ### Hybrid Coverage with eBPF Agent
 For on-premise servers, edge environments, or unsupported clouds — a lightweight Go + C agent using **eBPF** provides:
 - Passive network lineage (no intrusive port scanning)
@@ -146,13 +162,15 @@ For on-premise servers, edge environments, or unsupported clouds — a lightweig
 │Prowler v5   │  │  Side-Scanning   │  │  Redpanda + Flink CEP   │
 │+ Checkov    │  │  VM/Lambda/K8s   │  │  NRT < 2s latency       │
 └─────────────┘  └──────────────────┘  └─────────────────────────┘
-                                │
-                ┌───────────────▼───────────────┐
-                │          Ogum.AI              │
-                │   RAG + GitOps PR generation  │
-                └───────────────┬───────────────┘
-                                │
-┌───────────────────────────────▼──────────────────────────────────┐
+       │ (misconfiguration)                         │ (active threat)
+┌──────▼──────────────┐               ┌─────────────▼──────────────┐
+│      Ogum.AI        │               │        Ogum.CDR            │
+│  RAG + GitOps PRs   │               │  Tier 1: auto < 10s        │
+│  never direct cloud │               │  Tier 2: Slack approval     │
+└──────┬──────────────┘               └─────────────┬──────────────┘
+       └────────────────────┬────────────────────────┘
+                            │
+┌───────────────────────────▼──────────────────────────────────────┐
 │               Ogum Security UI  ←  FastAPI Gateway               │
 │         React 19 · Next.js 15 · React Flow Attack Path Canvas    │
 └──────────────────────────────────────────────────────────────────┘
