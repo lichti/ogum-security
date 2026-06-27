@@ -10,7 +10,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
 [![Status: Early Development](https://img.shields.io/badge/Status-Early%20Development-yellow.svg)]()
-[![Powered by Prowler](https://img.shields.io/badge/Powered%20by-Prowler%20v4-blue.svg)](https://github.com/prowler-cloud/prowler)
+[![Powered by Prowler](https://img.shields.io/badge/Powered%20by-Prowler%20v5-blue.svg)](https://github.com/prowler-cloud/prowler)
 [![Follow the Build](https://img.shields.io/badge/Follow-the%20Build-brightgreen.svg)]()
 
 [What is Ogum?](#-what-is-ogum-security) •
@@ -39,7 +39,7 @@ Open-source alternatives (Prowler, Trivy, Falco) are excellent sensors. But they
 
 Ogum Security is an **open-source CNAPP** (Cloud-Native Application Protection Platform) that combines the best open-source security engines under a unified **contextual risk graph** — delivering the disruptive value of Wiz and Orca Security, self-hosted, with no licensing cost.
 
-It is built on top of [Prowler v4](https://github.com/prowler-cloud/prowler) and extends it with:
+It is built on top of [Prowler v5](https://github.com/prowler-cloud/prowler) and extends it with:
 
 - **Graph-based risk correlation** — connects isolated findings into visual Attack Paths
 - **Agentless Side-Scanning** — reads VM disks, Lambda artifacts, and container filesystems without touching production workloads
@@ -61,7 +61,7 @@ Every EC2 instance, IAM Role, S3 bucket, Lambda function, Kubernetes pod, and ne
 Scan across **AWS, Azure, GCP, Kubernetes, OCI, Alibaba Cloud, GitHub, Microsoft 365, Cloudflare,** and **MongoDB Atlas** — all from a single platform.
 
 ### 1,700+ Ready-to-Use Security Checks
-Inherited from Prowler v4 and extended, with native mapping to:
+Inherited from Prowler v5 and extended, with native mapping to:
 
 | Framework | Coverage |
 |---|---|
@@ -143,7 +143,7 @@ For on-premise servers, edge environments, or unsupported clouds — a lightweig
        ↑                    ↑                             ↑
 ┌──────┴──────┐  ┌──────────┴───────┐  ┌────────────────┴────────┐
 │Ogum.Static  │  │  Ogum.Dynamic    │  │      Ogum.Pulse         │
-│Prowler v4   │  │  Side-Scanning   │  │  Redpanda + Flink CEP   │
+│Prowler v5   │  │  Side-Scanning   │  │  Redpanda + Flink CEP   │
 │+ Checkov    │  │  VM/Lambda/K8s   │  │  NRT < 2s latency       │
 └─────────────┘  └──────────────────┘  └─────────────────────────┘
                                 │
@@ -158,7 +158,7 @@ For on-premise servers, edge environments, or unsupported clouds — a lightweig
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-**Core stack:** Python 3.11 · FastAPI · Prowler v4 · ArangoDB · Redpanda · Apache Flink · React 19 · Next.js 15 · Go · eBPF · LangChain · Ollama
+**Core stack:** Python 3.13 · FastAPI · Prowler v5 (`prowler-core`) · ArangoDB · Redpanda · Apache Flink · React 19 · Next.js 15 · Go · eBPF · LangChain · Ollama
 
 ---
 
@@ -223,7 +223,7 @@ We are building this in public. Here is where we are and where we are going:
 - [ ] **Ogum.Inventory:** Inventory API with filtering and pagination
 - [ ] **Ogum.Inventory:** Inventory UI — searchable asset table with provider breakdown
 - [ ] **Ogum.Inventory:** Scheduled re-discovery (Celery Beat, incremental upsert)
-- [ ] **Ogum.Static:** FastAPI backend with Prowler v4 integration
+- [ ] **Ogum.Static:** FastAPI backend with Prowler v5 integration
 - [ ] **Ogum.Static:** Scan orchestration via Celery workers
 - [ ] **Ogum.Static:** Findings API with filtering (provider, severity, framework)
 - [ ] **Ogum.Static:** Compliance posture dashboard (CIS, NIST, PCI DSS, SOC 2)
@@ -298,7 +298,7 @@ See [docs/getting-started.md](docs/getting-started.md) for the full development 
 
 ### Security Checks and Compliance Rules
 
-One of the fastest ways to contribute is adding new security checks or improving compliance mappings. Ogum Security leverages Prowler v4's check system — new checks are YAML + Python and do not require deep platform knowledge.
+One of the fastest ways to contribute is adding new security checks or improving compliance mappings. Ogum Security leverages Prowler v5's check system — new checks are YAML + Python and do not require deep platform knowledge.
 
 ---
 
