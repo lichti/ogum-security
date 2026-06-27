@@ -60,31 +60,62 @@ See [docs/architecture.md](docs/architecture.md) for an overview of how the modu
 
 ## Running Tests
 
-**Backend:**
+### Backend
+
 ```bash
 cd backend
 
-# Lint and type check
+# Lint and type check first
 poetry run ruff check .
 poetry run mypy app/
 
-# Tests (requires ArangoDB running — use docker compose)
-poetry run pytest
+# Fast loop during development — unit tests only (no Docker needed)
+poetry run pytest -m unit
 
-# With coverage
+# Pre-push — unit + security + integration (requires ArangoDB + Redis running)
+docker compose up -d arangodb redis
+poetry run pytest -m "unit or integration or security"
+
+# Full suite with coverage report
 poetry run pytest --cov=app --cov-report=term-missing
+
+# CI runs all of the above (coverage threshold enforced: 80%)
 ```
 
-> **Important:** Do not mock the ArangoDB in tests. All tests use a real ArangoDB instance running in Docker. This is intentional — mock/prod divergence caused real issues in similar projects.
+**Test layer breakdown:**
 
-**Frontend:**
+| Marker | Requires | When to run |
+|---|---|---|
+| `unit` | Nothing | Every save — instant feedback |
+| `integration` | ArangoDB + Redis (Docker) | Before pushing |
+| `security` | ArangoDB (Docker) | Before pushing — always blocking |
+| `e2e` | Full Docker Compose stack | Before merging to main |
+
+> **Non-negotiable:** Never mock ArangoDB or Redis in tests — always use real instances via Docker.
+> Cloud provider APIs (boto3, azure-sdk, gcp) are always mocked at the SDK level using `moto` and `pytest-mock`.
+
+### Frontend (component tests)
+
 ```bash
 cd frontend
 npm run lint
-npm run build  # also runs type check
+npm run test           # Jest + React Testing Library
+npm run test:coverage  # with coverage report
 ```
 
-**Go agent:**
+### Frontend (E2E — Playwright)
+
+```bash
+# Requires full stack running
+docker compose up -d
+
+cd frontend
+npx playwright install chromium
+npx playwright test e2e/
+```
+
+### Go agent
+
 ```bash
 cd agent
 go vet ./...

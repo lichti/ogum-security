@@ -1,0 +1,42 @@
+{
+  "_comment": "Fixture: boto3 iam.list_roles() response. Use with moto or direct patch.",
+  "Roles": [
+    {
+      "RoleName": "WebServerRole",
+      "RoleId": "AROA1234567890EXAMPLE",
+      "Arn": "arn:aws:iam::111111111111:role/WebServerRole",
+      "Path": "/",
+      "CreateDate": "2025-06-01T00:00:00Z",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": { "Service": "ec2.amazonaws.com" },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "MaxSessionDuration": 3600
+    },
+    {
+      "RoleName": "AdminRole",
+      "RoleId": "AROA0987654321EXAMPLE",
+      "Arn": "arn:aws:iam::111111111111:role/AdminRole",
+      "Path": "/",
+      "CreateDate": "2025-01-01T00:00:00Z",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": { "AWS": "arn:aws:iam::111111111111:root" },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "MaxSessionDuration": 43200
+    }
+  ],
+  "IsTruncated": false
+}
