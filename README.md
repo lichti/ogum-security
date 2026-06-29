@@ -210,19 +210,31 @@ This starts:
 - **Backend API** — FastAPI (`:8000`, `/docs` for Swagger)
 - **Frontend** — Next.js console (`:3000`)
 
-### Run Your First Scan (coming in Phase 1)
+### Connect Your First Cloud Account
 
 ```bash
-# Via API
-curl -X POST http://localhost:8000/api/v1/scans \
-  -H "Authorization: Bearer <token>" \
+# 1. Register an AWS account and start discovery
+curl -X POST http://localhost:8000/api/v1/providers \
   -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: dev-tenant" \
   -d '{
     "provider": "aws",
-    "accounts": ["123456789012"],
-    "compliance_frameworks": ["CIS-AWS-2.0", "SOC2"]
+    "display_name": "My AWS Account",
+    "account_id": "123456789012",
+    "regions": ["us-east-1", "us-west-2"],
+    "validate_connection": false
   }'
+
+# 2. View your inventory
+open http://localhost:3000/inventory
+
+# 3. Export inventory as CSV
+curl "http://localhost:8000/api/v1/inventory/export?format=csv" \
+  -H "X-Tenant-ID: dev-tenant" \
+  -o inventory.csv
 ```
+
+> CSPM scans with Prowler v5 are coming in Phase 1 — Ogum.Static.
 
 ---
 
@@ -231,16 +243,20 @@ curl -X POST http://localhost:8000/api/v1/scans \
 We are building this in public. Here is where we are and where we are going:
 
 ### Phase 1 — MVP (In Progress 🔨)
-> Asset inventory layer first, then CSPM and compliance dashboard
+> Asset inventory layer complete — CSPM and compliance dashboard next
 
 - [x] Project structure and architecture
 - [x] Docker Compose dev stack (ArangoDB, Redpanda, Qdrant, Ollama)
-- [ ] **Ogum.Inventory:** ArangoDB graph schema (resources, identities, network endpoints, data assets)
-- [ ] **Ogum.Inventory:** AWS asset discovery (EC2, IAM, S3, RDS, Lambda, EKS, VPC, Security Groups)
-- [ ] **Ogum.Inventory:** Relationship edge creation (BELONGS_TO, ATTACHED_TO, ASSUMES_ROLE, ROUTES_TRAFFIC)
-- [ ] **Ogum.Inventory:** Inventory API with filtering and pagination
-- [ ] **Ogum.Inventory:** Inventory UI — searchable asset table with provider breakdown
-- [ ] **Ogum.Inventory:** Scheduled re-discovery (Celery Beat, incremental upsert)
+- [x] **Ogum.Inventory:** ArangoDB graph schema (resources, identities, network endpoints, data assets)
+- [x] **Ogum.Inventory:** AWS asset discovery (EC2, IAM, S3, RDS, Lambda, EKS, VPC, Security Groups, KMS, CloudTrail)
+- [x] **Ogum.Inventory:** Relationship edge creation (BELONGS_TO, ATTACHED_TO, ASSUMES_ROLE, ROUTES_TRAFFIC, MEMBER_OF)
+- [x] **Ogum.Inventory:** Multi-cloud discovery — Azure (VMs, VNets, NSGs, AKS, Storage, Key Vault), GCP (Compute, GCS, GKE), Kubernetes (Pods, Deployments, Services, Nodes)
+- [x] **Ogum.Inventory:** Inventory REST API — filtering, pagination, full-text search, resource detail with graph edges
+- [x] **Ogum.Inventory:** Inventory UI — searchable asset table with provider tabs, detail panel, skeleton loading
+- [x] **Ogum.Inventory:** Scheduled auto-discovery (Celery Beat every 6h, Redis distributed lock)
+- [x] **Ogum.Inventory:** Provider onboarding wizard — connect AWS/Azure/GCP/K8s from the UI
+- [x] **Ogum.Inventory:** Inventory export — CSV and OCSF-inspired JSON via streaming API
+- [x] **Ogum.Inventory:** Tenant isolation — separate ArangoDB database per tenant, 5 security tests blocking in CI
 - [ ] **Ogum.Static:** FastAPI backend with Prowler v5 integration
 - [ ] **Ogum.Static:** Scan orchestration via Celery workers
 - [ ] **Ogum.Static:** Findings API with filtering (provider, severity, framework)
