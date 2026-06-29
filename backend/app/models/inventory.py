@@ -31,6 +31,7 @@ class Provider(StrEnum):
 class IdentityType(StrEnum):
     IAM_ROLE = "iam_role"
     IAM_USER = "iam_user"
+    IAM_GROUP = "iam_group"
     SERVICE_ACCOUNT = "service_account"
 
 

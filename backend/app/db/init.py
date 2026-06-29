@@ -18,6 +18,9 @@ EDGE_COLLECTIONS = [
     "CONTAINS_BUG",
     "STORES_SENSITIVE_DATA",
     "ROUTES_TRAFFIC",
+    "BELONGS_TO",
+    "ATTACHED_TO",
+    "MEMBER_OF",
 ]
 
 # (collection_name, fields, unique)
