@@ -16,7 +16,26 @@ Commit types that trigger version bumps:
 ## [Unreleased]
 
 ### Added
-<!-- New features since the last release. -->
+
+- **Ogum.Inventory Sprint 2 — Expanded AWS Discovery (`discover_aws` task)**
+  - Full coverage: VPC, Subnet, Internet Gateway, Elastic IP, Security Group, RDS, Lambda,
+    EKS, EKS, ECR, KMS (customer-managed keys only), Secrets Manager (metadata only),
+    CloudTrail, and IAM Groups
+  - `IdentityType.IAM_GROUP` enum value added to inventory model
+  - Three new edge collections: `BELONGS_TO`, `ATTACHED_TO`, `MEMBER_OF`
+  - `_upsert_edge` helper: idempotent AQL UPSERT keyed on `(_from, _to)`
+  - `_create_resource_edges` orchestrator: builds BELONGS_TO (EC2→VPC, Subnet→VPC),
+    ATTACHED_TO (SG→EC2, SG→Lambda), ROUTES_TRAFFIC (IGW→VPC),
+    ASSUMES_ROLE (EC2/Lambda→IAM Role), and MEMBER_OF (IAM User→IAM Group) edges
+  - `discover_aws` Celery task: full discovery with edge creation, replaces `discover_aws_basic`
+    for production use; `discover_aws_basic` retained for backwards compatibility
+  - `pythonpath = ["."]` added to `pyproject.toml` pytest config (no manual `PYTHONPATH` export needed)
+
+- **Integration tests — Sprint 2 (17 new tests, 50 total passing)**
+  - `TestAWSExpandedDiscovery`: VPC discovery, open-ingress SG marked `is_public=True`,
+    RDS instance discovery, Lambda with execution role, ECR repository, soft-delete of removed VPC
+  - `TestRelationshipEdgeCreation`: EC2→VPC (BELONGS_TO), SG→EC2 (ATTACHED_TO),
+    IGW→VPC (ROUTES_TRAFFIC), Lambda→Role (ASSUMES_ROLE), 2-hop AQL traversal IGW→VPC→EC2
 
 ### Changed
 <!-- Changes to existing features. -->
