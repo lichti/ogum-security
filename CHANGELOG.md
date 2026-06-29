@@ -31,6 +31,10 @@ Commit types that trigger version bumps:
   these packages and any independent range declaration causes dependency resolution failure.
   All these SDKs remain available as prowler transitive dependencies; only `boto3` is kept
   as a direct dependency since it is used in discovery tasks that run independently of prowler
+- `backend/pyproject.toml` — removed `truffleHog3 ^3.0.0`; all 3.x versions pin
+  `attrs==20.3.0` which is incompatible with `prowler`'s required `jsonschema==4.23.0`
+  (which needs `attrs>=22.2.0`); `truffleHog3` was planned for Epic 03 (Side-Scanning)
+  and is deferred until a compatible secrets-scanner alternative is chosen
 
 ### Added
 
