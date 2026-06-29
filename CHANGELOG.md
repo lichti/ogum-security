@@ -17,6 +17,38 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Ogum.Inventory Sprint 4 — Multi-Provider Discovery + Celery Beat Scheduling**
+  - `AzureResource(ResourceBase)` model — adds `subscription_id` field; `arango_key()`
+    uses `{sub_prefix}_{resource_group}_{name}` for unique, length-safe ArangoDB keys
+  - `GCPResource(ResourceBase)` model — adds `project_id` field; inherits `arango_key()`
+    from `ResourceBase` using `{provider}_{type}_{compact_id}`
+  - `K8sResource(ResourceBase)` model — adds `cluster_name` and `namespace` fields;
+    overrides `arango_key()` as `k8s_{cluster}_{type}[_{namespace}]_{uid}`
+  - `app/workers/tasks/scheduling.py` — `acquire_lock(redis, tenant_id, provider)` and
+    `release_lock(redis, tenant_id, provider)` helpers using Redis `SET NX EX` pattern
+    (TTL = 7h); `trigger_all_discoveries` Celery task routes Beat events to provider tasks
+  - `app/workers/tasks/azure_discovery.py` — `discover_azure` task: VMs, VNets, NSGs,
+    Storage Accounts, AKS clusters, Key Vaults (metadata only); soft-delete of absent
+    resources; distributed lock guards against concurrent runs
+  - `app/workers/tasks/gcp_discovery.py` — `discover_gcp` task: Compute instances
+    (aggregated across all zones), GCS buckets, GKE clusters; distributed lock
+  - `app/workers/tasks/k8s_discovery.py` — `discover_k8s` task: Pods, Deployments,
+    Services, Nodes, Namespaces; supports kubeconfig dict or in-cluster config;
+    distributed lock; K8s UIDs used as `resource_id` for stable keys
+  - `celery_app.py` — updated `include` list to register all new task modules;
+    default `beat_schedule` added (`trigger_all_discoveries` every 6h for dev)
+  - `docker-compose.yml` — `celery-beat` service added (single instance, Redis-backed)
+  - `pyproject.toml` — added `azure-mgmt-compute`, `azure-mgmt-network`,
+    `azure-mgmt-storage`, `azure-mgmt-containerservice`, `azure-mgmt-keyvault`,
+    `google-cloud-compute`, `google-cloud-storage`, `google-cloud-container`,
+    `kubernetes` as explicit runtime dependencies
+  - 19 integration tests — all passing:
+    - `test_scheduling.py` (7): distributed lock acquisition, release, tenant/provider
+      isolation, trigger routing, unknown-provider error handling
+    - `test_azure_discovery.py` (4): VMs persisted, idempotency, soft-delete, lock skip
+    - `test_gcp_discovery.py` (4): compute instances persisted, idempotency, soft-delete, lock skip
+    - `test_k8s_discovery.py` (4): pods persisted, idempotency, soft-delete, lock skip
+
 - **Ogum.Inventory Sprint 3 — REST API + Inventory UI**
   - `GET /api/v1/inventory` — list resources with filters (`provider`, `resource_type`,
     `account_id`, `region`, `status`, `search`), `limit`/`offset` pagination, and
