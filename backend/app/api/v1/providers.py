@@ -41,12 +41,27 @@ def _validate_aws(regions: list[str]) -> str:
         raise HTTPException(status_code=422, detail=f"AWS validation failed: {exc}")
 
 
-def _dispatch_discovery(provider: str, tenant_id: str, config_key: str, request: ProviderRegisterRequest, db: StandardDatabase) -> str | None:
+def _dispatch_discovery(
+    provider: str,
+    tenant_id: str,
+    config_key: str,
+    request: ProviderRegisterRequest,
+    db: StandardDatabase,
+    role_arn: str | None = None,
+    external_id: str | None = None,
+) -> str | None:
     """Dispatch discovery task for the given provider. Returns job_id or None."""
     job_id: str | None = None
     try:
         if provider == "aws":
-            job_id = discover_aws.delay(tenant_id, request.regions, request.account_id).id
+            job_id = discover_aws.delay(
+                tenant_id,
+                request.regions,
+                request.account_id,
+                role_arn=role_arn,
+                external_id=external_id,
+                provider_key=config_key,
+            ).id
         elif provider == "azure":
             job_id = discover_azure.delay(tenant_id, request.subscription_id or "").id
         elif provider == "gcp":
@@ -77,7 +92,11 @@ async def register_provider_endpoint(
             request = request.model_copy(update={"account_id": detected})
 
     config = register_provider(db, x_tenant_id, request)
-    job_id = _dispatch_discovery(request.provider, x_tenant_id, config.key, request, db)
+    job_id = _dispatch_discovery(
+        request.provider, x_tenant_id, config.key, request, db,
+        role_arn=config.role_arn,
+        external_id=config.external_id,
+    )
 
     queued = "queued" if job_id else "not started"
     return ApiResponse(
@@ -158,7 +177,11 @@ async def trigger_discovery_endpoint(
         regions=config.regions,
         validate_connection=False,
     )
-    job_id = _dispatch_discovery(config.provider, x_tenant_id, provider_id, stub, db)
+    job_id = _dispatch_discovery(
+        config.provider, x_tenant_id, provider_id, stub, db,
+        role_arn=config.role_arn,
+        external_id=config.external_id,
+    )
     if not job_id:
         raise HTTPException(status_code=503, detail="Failed to dispatch discovery job. Check worker connectivity.")
 

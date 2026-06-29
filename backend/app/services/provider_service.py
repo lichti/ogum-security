@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 
 from arango.database import StandardDatabase
@@ -39,6 +40,13 @@ def register_provider(
     )
     key = _make_key(request.provider, identifier)
 
+    # Check if an external_id already exists (idempotent re-registration must preserve it)
+    existing_external_id: str | None = None
+    _ensure_collection(db)
+    existing = db.collection("tenant_config").get(key)
+    if existing:
+        existing_external_id = existing.get("external_id")
+
     doc = {
         "_key": key,
         "provider": request.provider,
@@ -50,6 +58,8 @@ def register_provider(
         "regions": request.regions,
         "enabled": True,
         "status": "pending",
+        "role_arn": request.role_arn,
+        "external_id": existing_external_id or str(uuid.uuid4()),
         "last_discovery_at": None,
         "last_discovery_job_id": None,
         "created_at": datetime.now(timezone.utc).isoformat(),

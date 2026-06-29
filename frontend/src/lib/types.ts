@@ -82,6 +82,7 @@ export interface ProviderRegisterRequest {
   provider: ProviderType
   display_name: string
   account_id?: string
+  role_arn?: string
   subscription_id?: string
   project_id?: string
   cluster_name?: string

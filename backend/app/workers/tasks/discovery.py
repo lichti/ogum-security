@@ -73,6 +73,45 @@ def retry_with_backoff(
     return decorator
 
 
+# ─── AWS session / credential helpers ────────────────────────────────────────
+
+def _get_aws_session(
+    role_arn: str | None = None,
+    external_id: str | None = None,
+) -> boto3.Session:
+    """Return a boto3 Session. Uses STS AssumeRole when role_arn is provided."""
+    if not role_arn:
+        return boto3.Session()
+
+    sts = boto3.client("sts", region_name="us-east-1")
+    assume_kwargs: dict[str, Any] = {
+        "RoleArn": role_arn,
+        "RoleSessionName": "ogum-discovery",
+        "DurationSeconds": 3600,
+    }
+    if external_id:
+        assume_kwargs["ExternalId"] = external_id
+
+    resp = sts.assume_role(**assume_kwargs)
+    creds = resp["Credentials"]
+    return boto3.Session(
+        aws_access_key_id=creds["AccessKeyId"],
+        aws_secret_access_key=creds["SecretAccessKey"],
+        aws_session_token=creds["SessionToken"],
+    )
+
+
+def _set_provider_status(db: Any, provider_key: str | None, status: str) -> None:
+    """Update provider discovery status in tenant_config (best-effort)."""
+    if not provider_key:
+        return
+    try:
+        if db.has_collection("tenant_config"):
+            db.collection("tenant_config").update({"_key": provider_key, "status": status})
+    except Exception:
+        pass
+
+
 # ─── ArangoDB helpers ─────────────────────────────────────────────────────────
 
 def _get_tenant_db(tenant_id: str):  # type: ignore[no-untyped-def]
@@ -943,6 +982,9 @@ def discover_aws(
     tenant_id: str,
     regions: list[str],
     account_id: str | None = None,
+    role_arn: str | None = None,
+    external_id: str | None = None,
+    provider_key: str | None = None,
 ) -> dict[str, int | str]:
     """
     Full AWS discovery: all services + relationship edges.
@@ -955,22 +997,32 @@ def discover_aws(
         tenant_id: Tenant identifier — selects the ArangoDB database.
         regions: AWS regions to scan for regional resources.
         account_id: AWS account ID; resolved via STS if not provided.
+        role_arn: Cross-account IAM Role ARN to assume (preferred credential model).
+        external_id: External ID for the AssumeRole call (confused deputy protection).
+        provider_key: ArangoDB key of the provider config for status updates.
     """
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
 
     try:
-        sts = boto3.client("sts", region_name="us-east-1")
+        session = _get_aws_session(role_arn, external_id)
+        sts = session.client("sts", region_name="us-east-1")
         if not account_id:
             account_id = sts.get_caller_identity().get("Account", "")
     except NoCredentialsError:
         logger.error(
-            "AWS discovery skipped for tenant %s: no credentials found. "
-            "Set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY or configure an IAM role.",
+            "AWS discovery failed for tenant %s: no credentials found. "
+            "Provide a role_arn in the provider config or set AWS_ACCESS_KEY_ID / "
+            "AWS_SECRET_ACCESS_KEY in the worker environment.",
             tenant_id,
         )
+        _set_provider_status(db, provider_key, "error")
         return {"status": "failed", "reason": "no_credentials", "resources": 0}
-    except ClientError:
+    except ClientError as exc:
+        if "AccessDenied" in str(exc) or "InvalidClientTokenId" in str(exc):
+            logger.error("AWS discovery failed for tenant %s: %s", tenant_id, exc)
+            _set_provider_status(db, provider_key, "error")
+            return {"status": "failed", "reason": str(exc), "resources": 0}
         account_id = account_id or ""
 
     resource_keys: set[str] = set()
@@ -989,14 +1041,14 @@ def discover_aws(
     all_lambda: list[AWSResource] = []
 
     for region in regions:
-        ec2_client = boto3.client("ec2", region_name=region)
-        rds_client = boto3.client("rds", region_name=region)
-        lambda_client = boto3.client("lambda", region_name=region)
-        eks_client = boto3.client("eks", region_name=region)
-        ecr_client = boto3.client("ecr", region_name=region)
-        kms_client = boto3.client("kms", region_name=region)
-        sm_client = boto3.client("secretsmanager", region_name=region)
-        ct_client = boto3.client("cloudtrail", region_name=region)
+        ec2_client = session.client("ec2", region_name=region)
+        rds_client = session.client("rds", region_name=region)
+        lambda_client = session.client("lambda", region_name=region)
+        eks_client = session.client("eks", region_name=region)
+        ecr_client = session.client("ecr", region_name=region)
+        kms_client = session.client("kms", region_name=region)
+        sm_client = session.client("secretsmanager", region_name=region)
+        ct_client = session.client("cloudtrail", region_name=region)
 
         for resource in _list_vpcs(ec2_client, tenant_id, account_id, region):
             _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
@@ -1065,7 +1117,7 @@ def discover_aws(
         )
 
     # ── IAM (global) ─────────────────────────────────────────────────────────
-    iam_client = boto3.client("iam", region_name="us-east-1")
+    iam_client = session.client("iam", region_name="us-east-1")
 
     roles = _list_iam_roles(iam_client, tenant_id)
     for identity in roles:
@@ -1090,7 +1142,7 @@ def discover_aws(
     )
 
     # ── S3 (global) ──────────────────────────────────────────────────────────
-    s3_client = boto3.client("s3", region_name="us-east-1")
+    s3_client = session.client("s3", region_name="us-east-1")
     buckets = _list_s3_buckets(s3_client, tenant_id)
     for asset in buckets:
         _upsert(db, "data_assets", asset.to_arango_doc(), asset.to_arango_update())
@@ -1149,6 +1201,8 @@ def discover_aws(
         "Full discovery complete [tenant=%s]: discovered=%d deleted=%d edges=%d",
         tenant_id, total_discovered, total_deleted, total_edges,
     )
+
+    _set_provider_status(db, provider_key, "active")
 
     return {
         "tenant_id": tenant_id,
