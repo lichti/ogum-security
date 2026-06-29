@@ -6,11 +6,19 @@ from arango.database import StandardDatabase
 
 from app.api.v1.inventory import get_tenant_db
 from app.models.api_responses import ApiResponse
-from app.models.provider import ProviderConfig, ProviderRegisterRequest, ProviderRegisterResponse
+from app.models.provider import (
+    DiscoverResponse,
+    ProviderConfig,
+    ProviderRegisterRequest,
+    ProviderRegisterResponse,
+    ProviderUpdateRequest,
+)
 from app.services.provider_service import (
     delete_provider,
+    get_provider,
     list_providers,
     register_provider,
+    update_provider,
     update_provider_last_discovery,
 )
 from app.workers.tasks.discovery import discover_aws
@@ -33,6 +41,30 @@ def _validate_aws(regions: list[str]) -> str:
         raise HTTPException(status_code=422, detail=f"AWS validation failed: {exc}")
 
 
+def _dispatch_discovery(provider: str, tenant_id: str, config_key: str, request: ProviderRegisterRequest, db: StandardDatabase) -> str | None:
+    """Dispatch discovery task for the given provider. Returns job_id or None."""
+    job_id: str | None = None
+    try:
+        if provider == "aws":
+            job_id = discover_aws.delay(tenant_id, request.regions, request.account_id).id
+        elif provider == "azure":
+            job_id = discover_azure.delay(tenant_id, request.subscription_id or "").id
+        elif provider == "gcp":
+            job_id = discover_gcp.delay(tenant_id, request.project_id or "").id
+        elif provider == "k8s":
+            job_id = discover_k8s.delay(tenant_id, request.cluster_name or "").id
+
+        if job_id:
+            update_provider_last_discovery(db, config_key, job_id)
+    except Exception:
+        pass  # config saved even if dispatch fails — user can retry via POST /{id}/discover
+    return job_id
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# POST /api/v1/providers
+# ──────────────────────────────────────────────────────────────────────────────
+
 @router.post("", response_model=ApiResponse[ProviderRegisterResponse], status_code=201)
 async def register_provider_endpoint(
     request: ProviderRegisterRequest,
@@ -45,22 +77,7 @@ async def register_provider_endpoint(
             request = request.model_copy(update={"account_id": detected})
 
     config = register_provider(db, x_tenant_id, request)
-
-    job_id: str | None = None
-    try:
-        if request.provider == "aws":
-            job_id = discover_aws.delay(x_tenant_id, request.regions, request.account_id).id
-        elif request.provider == "azure":
-            job_id = discover_azure.delay(x_tenant_id, request.subscription_id or "").id
-        elif request.provider == "gcp":
-            job_id = discover_gcp.delay(x_tenant_id, request.project_id or "").id
-        elif request.provider == "k8s":
-            job_id = discover_k8s.delay(x_tenant_id, request.cluster_name or "").id
-
-        if job_id:
-            update_provider_last_discovery(db, config.key, job_id)
-    except Exception:
-        pass  # config saved even if dispatch fails — user can retry manually
+    job_id = _dispatch_discovery(request.provider, x_tenant_id, config.key, request, db)
 
     queued = "queued" if job_id else "not started"
     return ApiResponse(
@@ -72,12 +89,91 @@ async def register_provider_endpoint(
     )
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# GET /api/v1/providers
+# ──────────────────────────────────────────────────────────────────────────────
+
 @router.get("", response_model=ApiResponse[list[ProviderConfig]])
 async def list_providers_endpoint(
     db: StandardDatabase = Depends(get_tenant_db),
 ) -> ApiResponse[list[ProviderConfig]]:
     return ApiResponse(data=list_providers(db))
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# GET /api/v1/providers/{provider_id}
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.get("/{provider_id}", response_model=ApiResponse[ProviderConfig])
+async def get_provider_endpoint(
+    provider_id: str,
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> ApiResponse[ProviderConfig]:
+    config = get_provider(db, provider_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    return ApiResponse(data=config)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PATCH /api/v1/providers/{provider_id}
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.patch("/{provider_id}", response_model=ApiResponse[ProviderConfig])
+async def update_provider_endpoint(
+    provider_id: str,
+    update: ProviderUpdateRequest,
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> ApiResponse[ProviderConfig]:
+    config = update_provider(db, provider_id, update)
+    if not config:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    return ApiResponse(data=config)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# POST /api/v1/providers/{provider_id}/discover
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.post("/{provider_id}/discover", response_model=ApiResponse[DiscoverResponse])
+async def trigger_discovery_endpoint(
+    provider_id: str,
+    db: StandardDatabase = Depends(get_tenant_db),
+    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+) -> ApiResponse[DiscoverResponse]:
+    config = get_provider(db, provider_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    if not config.enabled:
+        raise HTTPException(status_code=409, detail="Provider is disabled. Enable it before triggering discovery.")
+
+    from app.models.provider import ProviderRegisterRequest as _Req
+    stub = _Req(
+        provider=config.provider,
+        display_name=config.display_name,
+        account_id=config.account_id,
+        subscription_id=config.subscription_id,
+        project_id=config.project_id,
+        cluster_name=config.cluster_name,
+        regions=config.regions,
+        validate_connection=False,
+    )
+    job_id = _dispatch_discovery(config.provider, x_tenant_id, provider_id, stub, db)
+    if not job_id:
+        raise HTTPException(status_code=503, detail="Failed to dispatch discovery job. Check worker connectivity.")
+
+    return ApiResponse(
+        data=DiscoverResponse(
+            provider_id=provider_id,
+            discovery_job_id=job_id,
+            message="Discovery job queued — check /api/v1/inventory for resources.",
+        )
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# DELETE /api/v1/providers/{provider_id}
+# ──────────────────────────────────────────────────────────────────────────────
 
 @router.delete("/{provider_id}", response_model=ApiResponse[dict])
 async def delete_provider_endpoint(

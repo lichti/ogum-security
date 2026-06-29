@@ -4,12 +4,24 @@ from datetime import datetime, timezone
 
 from arango.database import StandardDatabase
 
-from app.models.provider import ProviderConfig, ProviderRegisterRequest
+from app.models.provider import ProviderConfig, ProviderRegisterRequest, ProviderUpdateRequest
 
 
 def _make_key(provider: str, identifier: str) -> str:
     safe = identifier.replace("/", "_").replace(":", "_")
     return f"{provider}-{safe}"[:220]
+
+
+def _ensure_collection(db: StandardDatabase) -> None:
+    if not db.has_collection("tenant_config"):
+        db.create_collection("tenant_config")
+
+
+def _doc_to_config(doc: dict) -> ProviderConfig:
+    return ProviderConfig(
+        key=doc["_key"],
+        **{k: v for k, v in doc.items() if k not in ("_key", "_id", "_rev")},
+    )
 
 
 def register_provider(
@@ -37,29 +49,52 @@ def register_provider(
         "cluster_name": request.cluster_name,
         "regions": request.regions,
         "enabled": True,
+        "status": "pending",
         "last_discovery_at": None,
         "last_discovery_job_id": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    if not db.has_collection("tenant_config"):
-        db.create_collection("tenant_config")
-
+    _ensure_collection(db)
     db.collection("tenant_config").insert(doc, overwrite=True)
     return ProviderConfig(key=key, **{k: v for k, v in doc.items() if k != "_key"})
+
+
+def get_provider(db: StandardDatabase, provider_id: str) -> ProviderConfig | None:
+    _ensure_collection(db)
+    try:
+        doc = db.collection("tenant_config").get(provider_id)
+        return _doc_to_config(doc) if doc else None
+    except Exception:
+        return None
 
 
 def list_providers(db: StandardDatabase) -> list[ProviderConfig]:
     if not db.has_collection("tenant_config"):
         return []
     cursor = db.aql.execute("FOR c IN tenant_config RETURN c")
-    return [
-        ProviderConfig(
-            key=doc["_key"],
-            **{k: v for k, v in doc.items() if k not in ("_key", "_id", "_rev")},
-        )
-        for doc in cursor
-    ]
+    return [_doc_to_config(doc) for doc in cursor]
+
+
+def update_provider(
+    db: StandardDatabase,
+    provider_id: str,
+    update: ProviderUpdateRequest,
+) -> ProviderConfig | None:
+    _ensure_collection(db)
+    patch: dict = {"_key": provider_id}
+    if update.display_name is not None:
+        patch["display_name"] = update.display_name
+    if update.regions is not None:
+        patch["regions"] = update.regions
+    if update.enabled is not None:
+        patch["enabled"] = update.enabled
+        patch["status"] = "disabled" if not update.enabled else "active"
+    try:
+        db.collection("tenant_config").update(patch)
+        return get_provider(db, provider_id)
+    except Exception:
+        return None
 
 
 def delete_provider(db: StandardDatabase, provider_id: str) -> bool:
@@ -79,4 +114,5 @@ def update_provider_last_discovery(db: StandardDatabase, provider_id: str, job_i
         "_key": provider_id,
         "last_discovery_at": datetime.now(timezone.utc).isoformat(),
         "last_discovery_job_id": job_id,
+        "status": "active",
     })

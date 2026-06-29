@@ -19,7 +19,7 @@ interface ConnectWizardProps {
 
 export function ConnectWizard({ onComplete, onCancel }: ConnectWizardProps) {
   const [step, setStep] = useState<Step>('select')
-  const [selectedProvider, setSelectedProvider] = useState<string>('')
+  const [selectedProvider, setSelectedProvider] = useState('')
   const [form, setForm] = useState({
     display_name: '',
     account_id: '',
@@ -37,7 +37,7 @@ export function ConnectWizard({ onComplete, onCancel }: ConnectWizardProps) {
     try {
       const regions = form.regions.split(',').map((r) => r.trim()).filter(Boolean)
       const resp = await providersApi.register({
-        provider: selectedProvider,
+        provider: selectedProvider as import('@/lib/types').ProviderType,
         display_name: form.display_name || `${selectedProvider.toUpperCase()} Account`,
         account_id: form.account_id || undefined,
         subscription_id: form.subscription_id || undefined,

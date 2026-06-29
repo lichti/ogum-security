@@ -59,9 +59,12 @@ export interface InventoryFilters {
   offset: number
 }
 
+export type ProviderType = 'aws' | 'azure' | 'gcp' | 'k8s'
+export type ProviderStatus = 'pending' | 'active' | 'error' | 'disabled'
+
 export interface ProviderConfig {
   key: string
-  provider: string
+  provider: ProviderType
   display_name: string
   account_id?: string | null
   subscription_id?: string | null
@@ -69,13 +72,14 @@ export interface ProviderConfig {
   cluster_name?: string | null
   regions: string[]
   enabled: boolean
+  status: ProviderStatus
   last_discovery_at?: string | null
   last_discovery_job_id?: string | null
   created_at: string
 }
 
 export interface ProviderRegisterRequest {
-  provider: string
+  provider: ProviderType
   display_name: string
   account_id?: string
   subscription_id?: string
@@ -85,8 +89,20 @@ export interface ProviderRegisterRequest {
   validate_connection?: boolean
 }
 
+export interface ProviderUpdateRequest {
+  display_name?: string
+  regions?: string[]
+  enabled?: boolean
+}
+
 export interface ProviderRegisterResponse {
   provider_id: string
   discovery_job_id: string | null
+  message: string
+}
+
+export interface DiscoverResponse {
+  provider_id: string
+  discovery_job_id: string
   message: string
 }

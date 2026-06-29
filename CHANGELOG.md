@@ -15,6 +15,24 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Added
+
+- **Provider Management API** (`/api/v1/providers`): new endpoints `GET /{id}`, `PATCH /{id}`,
+  and `POST /{id}/discover` for fetching, updating, and re-triggering discovery on a specific provider
+- **Provider `status` field**: `ProviderConfig` now tracks `pending | active | error | disabled` state;
+  status transitions automatically on discovery dispatch and enable/disable toggle
+- **`ProviderUpdateRequest` model**: supports partial PATCH of `display_name`, `regions`, and `enabled`
+- **`DiscoverResponse` model**: typed response for the re-trigger discovery endpoint
+- **`ProviderType` enum**: provider field is now validated as a literal type (`aws | azure | gcp | k8s`)
+- **`/providers` page** (frontend): connected accounts management page with table showing provider
+  type, display name, account identifier, regions, status badge, last discovery time, and per-row
+  actions (re-discover, enable/disable, delete)
+- **`ProvidersTable` component**: reusable table and card components for provider management,
+  with busy state per row and correct disabled states for actions
+- **`providersApi` client additions**: `get()`, `update()`, and `triggerDiscovery()` methods
+- **`docs/connecting-accounts.md`**: comprehensive guide covering UI wizard, API reference,
+  credential model, discovery schedule, status reference, and troubleshooting
+
 ### Fixed
 
 - `docker/backend.Dockerfile` — base image updated from `python:3.11-slim` to `python:3.13-slim`
