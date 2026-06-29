@@ -27,6 +27,7 @@ env/
 htmlcov/
 .coverage
 coverage.xml
+celerybeat-schedule
 
 # Node.js
 node_modules/
