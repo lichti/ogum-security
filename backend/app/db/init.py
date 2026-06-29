@@ -10,6 +10,7 @@ VERTEX_COLLECTIONS = [
     "vulnerabilities",
     "network_endpoints",
     "data_assets",
+    "tenant_config",
 ]
 
 EDGE_COLLECTIONS = [

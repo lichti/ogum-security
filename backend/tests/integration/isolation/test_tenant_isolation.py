@@ -8,6 +8,7 @@ A failure here blocks the PR unconditionally.
 import pytest
 from arango.database import StandardDatabase as ArangoDatabase
 
+from app.db.init import init_tenant_schema
 from tests.conftest import TEST_TENANT_A, TEST_TENANT_B
 
 
@@ -77,6 +78,58 @@ class TestTenantDatabaseIsolation:
         keys = list(cursor)
         assert "s3-secret-bucket" not in keys, \
             "AQL traversal on Tenant B's graph must not reach Tenant A's resources"
+
+
+@pytest.mark.integration
+@pytest.mark.security
+class TestProviderConfigIsolation:
+    """Provider configurations must never leak between tenants."""
+
+    def test_provider_config_in_tenant_a_not_visible_in_tenant_b(
+        self,
+        db_tenant_a: ArangoDatabase,
+        db_tenant_b: ArangoDatabase,
+    ) -> None:
+        init_tenant_schema(db_tenant_a)
+        init_tenant_schema(db_tenant_b)
+
+        db_tenant_a.collection("tenant_config").insert({
+            "_key": "aws-111111111111",
+            "provider": "aws",
+            "account_id": "111111111111",
+            "display_name": "Secret Account",
+        })
+
+        count = (
+            db_tenant_b.collection("tenant_config").count()
+            if db_tenant_b.has_collection("tenant_config")
+            else 0
+        )
+        assert count == 0, "Tenant B must not see Tenant A's provider configs"
+
+    def test_resource_data_does_not_cross_tenant_boundary(
+        self,
+        db_tenant_a: ArangoDatabase,
+        db_tenant_b: ArangoDatabase,
+    ) -> None:
+        """AQL query on Tenant B's database must not return Tenant A's resources."""
+        init_tenant_schema(db_tenant_a)
+        init_tenant_schema(db_tenant_b)
+
+        db_tenant_a.collection("resources").insert({
+            "_key": "aws_ec2_instance_i-secret",
+            "tenant_id": TEST_TENANT_A,
+            "name": "secret-server",
+            "provider": "aws",
+            "resource_type": "ec2_instance",
+            "status": "active",
+        })
+
+        result = list(db_tenant_b.aql.execute(
+            "FOR r IN resources FILTER r.tenant_id == @tid RETURN r",
+            bind_vars={"tid": TEST_TENANT_A},
+        ))
+        assert result == [], "Tenant B's AQL must return zero rows from Tenant A's namespace"
 
 
 @pytest.mark.integration

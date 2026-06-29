@@ -58,3 +58,35 @@ export interface InventoryFilters {
   limit: number
   offset: number
 }
+
+export interface ProviderConfig {
+  key: string
+  provider: string
+  display_name: string
+  account_id?: string | null
+  subscription_id?: string | null
+  project_id?: string | null
+  cluster_name?: string | null
+  regions: string[]
+  enabled: boolean
+  last_discovery_at?: string | null
+  last_discovery_job_id?: string | null
+  created_at: string
+}
+
+export interface ProviderRegisterRequest {
+  provider: string
+  display_name: string
+  account_id?: string
+  subscription_id?: string
+  project_id?: string
+  cluster_name?: string
+  regions?: string[]
+  validate_connection?: boolean
+}
+
+export interface ProviderRegisterResponse {
+  provider_id: string
+  discovery_job_id: string | null
+  message: string
+}

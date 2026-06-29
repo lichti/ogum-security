@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import csv
+import io
+import json
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from arango import ArangoClient
 from arango.database import StandardDatabase
 
@@ -71,6 +77,102 @@ async def inventory_stats(
 ) -> ApiResponse[InventoryStats]:
     stats = get_inventory_stats(db, x_tenant_id)
     return ApiResponse(data=stats)
+
+
+@router.get("/export")
+async def export_inventory(
+    format: str = Query("csv", pattern="^(csv|json)$"),
+    status: str | None = Query(None, pattern="^(active|deleted)$"),
+    provider: str | None = Query(None),
+    db: StandardDatabase = Depends(get_tenant_db),
+    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+) -> StreamingResponse:
+    """Export full inventory as CSV or OCSF-inspired JSON (streamed, capped at 50k rows)."""
+    items, total = list_resources(
+        db,
+        x_tenant_id,
+        provider=provider,
+        status=status,
+        limit=50_000,
+        offset=0,
+    )
+    if format == "csv":
+        return _export_csv(items, x_tenant_id)
+    return _export_json(items, x_tenant_id, total)
+
+
+def _export_csv(items: list[ResourceSummary], tenant_id: str) -> StreamingResponse:
+    buf = io.StringIO()
+    writer = csv.DictWriter(
+        buf,
+        fieldnames=[
+            "key", "provider", "resource_type", "resource_id", "name",
+            "region", "account_id", "status", "is_public", "tags", "last_scanned_at",
+        ],
+    )
+    writer.writeheader()
+    for item in items:
+        writer.writerow({
+            "key": item.key,
+            "provider": item.provider,
+            "resource_type": item.resource_type,
+            "resource_id": item.resource_id,
+            "name": item.name,
+            "region": item.region or "",
+            "account_id": item.account_id or "",
+            "status": item.status,
+            "is_public": item.is_public,
+            "tags": json.dumps(item.tags),
+            "last_scanned_at": item.last_scanned_at or "",
+        })
+    buf.seek(0)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    filename = f"ogum_inventory_{tenant_id}_{ts}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _export_json(items: list[ResourceSummary], tenant_id: str, total: int) -> StreamingResponse:
+    """OCSF-inspired JSON export (simplified Cloud Resources category)."""
+    doc = {
+        "ocsf_version": "1.0.0",
+        "category_name": "Discovery",
+        "class_name": "Resource Inventory",
+        "metadata": {
+            "tenant_id": tenant_id,
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "total_resources": total,
+            "product": {"name": "Ogum Security", "version": "0.1.0"},
+        },
+        "resources": [
+            {
+                "uid": item.key,
+                "type": item.resource_type,
+                "name": item.name,
+                "cloud": {
+                    "provider": item.provider,
+                    "account_uid": item.account_id,
+                    "region": item.region,
+                },
+                "is_public": item.is_public,
+                "status": item.status,
+                "labels": item.tags,
+                "last_scanned_time": item.last_scanned_at,
+            }
+            for item in items
+        ],
+    }
+    content = json.dumps(doc, indent=2, default=str)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    filename = f"ogum_inventory_{tenant_id}_{ts}.json"
+    return StreamingResponse(
+        iter([content]),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{resource_key}", response_model=ApiResponse[ResourceDetail])

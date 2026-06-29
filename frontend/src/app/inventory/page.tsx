@@ -70,6 +70,14 @@ export default function InventoryPage() {
     ? formatDistanceToNow(new Date(stats.last_discovery_at), { addSuffix: true })
     : null
 
+  const isPristineEmpty =
+    !listLoading &&
+    (listData?.meta.total ?? 0) === 0 &&
+    !filters.search &&
+    !filters.resource_type &&
+    !filters.region &&
+    !filters.provider
+
   return (
     <div className="min-h-screen bg-slate-950">
       <header className="border-b border-slate-800 bg-slate-900 px-6 py-4">
@@ -108,15 +116,29 @@ export default function InventoryPage() {
           onRegion={handleRegion}
         />
 
-        <DataTable
-          resources={listData?.data ?? []}
-          total={listData?.meta.total ?? 0}
-          limit={filters.limit}
-          offset={filters.offset}
-          loading={listLoading}
-          onPageChange={(offset) => setFilters((f) => ({ ...f, offset }))}
-          onRowClick={handleRowClick}
-        />
+        {isPristineEmpty ? (
+          <div className="text-center py-20">
+            <div className="text-slate-600 text-5xl mb-4">☁</div>
+            <h2 className="text-xl font-semibold text-slate-300 mb-2">No cloud accounts connected</h2>
+            <p className="text-slate-500 mb-6">Connect your first account to start discovering resources.</p>
+            <a
+              href="/providers/new"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              Connect Account
+            </a>
+          </div>
+        ) : (
+          <DataTable
+            resources={listData?.data ?? []}
+            total={listData?.meta.total ?? 0}
+            limit={filters.limit}
+            offset={filters.offset}
+            loading={listLoading}
+            onPageChange={(offset) => setFilters((f) => ({ ...f, offset }))}
+            onRowClick={handleRowClick}
+          />
+        )}
       </main>
 
       <DetailPanel resource={selected} onClose={() => setSelected(null)} />

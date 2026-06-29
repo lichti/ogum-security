@@ -17,6 +17,44 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Ogum.Inventory Sprint 5 — Onboarding, Export, and Tenant Isolation**
+  - `tenant_config` document collection added to `init_tenant_schema()` — stores connected
+    provider metadata per tenant (no credentials — those come from env/Vault at task time)
+  - `app/models/provider.py` — Pydantic v2 schemas: `ProviderConfig`, `ProviderRegisterRequest`,
+    `ProviderRegisterResponse`
+  - `app/services/provider_service.py` — CRUD on `tenant_config` collection:
+    `register_provider`, `list_providers`, `delete_provider`, `update_provider_last_discovery`
+  - `POST /api/v1/providers` — register a cloud provider connection; dispatches discovery
+    task (aws/azure/gcp/k8s) and records job_id; 201 with `provider_id` and `discovery_job_id`
+  - `GET /api/v1/providers` — list all connected providers for the tenant
+  - `DELETE /api/v1/providers/{provider_id}` — remove a provider config; 404 if not found
+  - `GET /api/v1/inventory/export?format=csv` — streaming CSV export of full tenant inventory
+    (capped at 50k rows); `Content-Disposition` attachment header with timestamped filename
+  - `GET /api/v1/inventory/export?format=json` — streaming OCSF-inspired JSON export with
+    `ocsf_version`, `metadata` (tenant_id, exported_at, total_resources, product), and
+    `resources` array; 422 for unsupported format values
+  - Export endpoint registered before `/{resource_key}` to prevent route shadowing
+  - Frontend: `ConnectWizard` component (`components/providers/ConnectWizard.tsx`) — 4-step
+    modal (select provider → configure → connecting → done); supports AWS, Azure, GCP, K8s;
+    provider-specific fields shown conditionally; error display on failed registration
+  - Frontend: `/providers/new` page — renders ConnectWizard; redirects to /inventory on success
+  - Frontend: Inventory page — pristine empty state (zero resources + no active filters)
+    now shows "No cloud accounts connected" callout with a "Connect Account" CTA link
+  - Frontend: `providersApi` and `inventoryApi.exportCsv/exportJson` added to `src/lib/api.ts`
+  - Frontend: `ProviderConfig`, `ProviderRegisterRequest`, `ProviderRegisterResponse`
+    interfaces added to `src/lib/types.ts`
+  - 15 backend integration tests — all passing:
+    - `test_providers_api.py` (15): register (AWS, Azure, GCP), missing header → 422,
+      idempotency, list empty/populated, delete existing/nonexistent, CSV export content-type
+      and header row, JSON export OCSF structure, JSON metadata fields, invalid format → 422,
+      CSV with seeded resources contains data rows
+  - 2 new tenant isolation tests (`TestProviderConfigIsolation`): provider config in
+    Tenant A not visible in Tenant B; AQL on Tenant B returns zero Tenant A resources
+  - 8 frontend component tests for `ConnectWizard` — provider selection, configure step per
+    provider, back navigation, cancel handler; all passing
+  - `docs/getting-started.md` — new "Using the Web Console" and "Using the API" sections
+    with `curl` examples for connect, list, export CSV, and export JSON
+
 - **Ogum.Inventory Sprint 4 — Multi-Provider Discovery + Celery Beat Scheduling**
   - `AzureResource(ResourceBase)` model — adds `subscription_id` field; `arango_key()`
     uses `{sub_prefix}_{resource_group}_{name}` for unique, length-safe ArangoDB keys
