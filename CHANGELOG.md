@@ -18,8 +18,11 @@ Commit types that trigger version bumps:
 ### Fixed
 
 - `docker/backend.Dockerfile` — base image updated from `python:3.11-slim` to `python:3.13-slim`
-  to match the `python = "^3.13"` constraint in `pyproject.toml`; `docker compose up` was
-  failing with "currently activated Python version 3.11.15 is not supported by the project"
+  to match the Python 3.13 requirement in `pyproject.toml`; `docker compose up` was failing
+  with "currently activated Python version 3.11.15 is not supported by the project"
+- `backend/pyproject.toml` — Python constraint changed from `^3.13` (`>=3.13,<4.0`) to
+  `>=3.13,<3.14`; `prowler ^5.31.0` requires `Python <3.14` and Poetry was unable to resolve
+  dependencies when the upper bound was open-ended at `<4.0`
 
 ### Added
 
