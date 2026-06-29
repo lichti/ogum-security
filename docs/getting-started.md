@@ -41,7 +41,51 @@ Open **http://localhost:3000** — you should see the Ogum Security login screen
 
 ## Connecting Your First Cloud Account
 
-### AWS
+### Using the Web Console (recommended)
+
+1. Open **http://localhost:3000/inventory** — if no accounts are connected, you will see a "Connect Account" button.
+2. Click **Connect Account** — the setup wizard opens.
+3. Select your cloud provider (AWS, Azure, GCP, or Kubernetes).
+4. Fill in the required fields (Account ID, regions, etc.) and click **Connect & Start Discovery**.
+5. Discovery starts automatically in the background. Return to the Inventory page to see resources as they appear.
+
+### Using the API
+
+```bash
+# Register an AWS account and start discovery
+curl -X POST http://localhost:8000/api/v1/providers \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: dev-tenant" \
+  -d '{
+    "provider": "aws",
+    "display_name": "My AWS Account",
+    "account_id": "123456789012",
+    "regions": ["us-east-1", "us-west-2"],
+    "validate_connection": false
+  }'
+
+# List connected providers
+curl http://localhost:8000/api/v1/providers \
+  -H "X-Tenant-ID: dev-tenant"
+
+# Check discovered resources
+curl http://localhost:8000/api/v1/inventory \
+  -H "X-Tenant-ID: dev-tenant"
+
+# Export inventory as CSV
+curl "http://localhost:8000/api/v1/inventory/export?format=csv" \
+  -H "X-Tenant-ID: dev-tenant" \
+  -o inventory.csv
+
+# Export inventory as OCSF-inspired JSON
+curl "http://localhost:8000/api/v1/inventory/export?format=json" \
+  -H "X-Tenant-ID: dev-tenant" \
+  -o inventory.json
+```
+
+---
+
+### AWS — Cross-Account IAM Role Setup
 
 Ogum uses a **Cross-Account IAM Role** to access your AWS account. This means:
 - No long-lived access keys stored in Ogum
