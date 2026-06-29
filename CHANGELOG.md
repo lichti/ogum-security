@@ -17,6 +17,48 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Ogum.Inventory Sprint 3 — REST API + Inventory UI**
+  - `GET /api/v1/inventory` — list resources with filters (`provider`, `resource_type`,
+    `account_id`, `region`, `status`, `search`), `limit`/`offset` pagination, and
+    `sort_by`/`sort_dir` ordering; returns standard `{data, meta, error}` envelope
+  - `GET /api/v1/inventory/stats` — aggregate counts by provider, resource type, status;
+    also returns `identity_count`, `data_asset_count`, and `last_discovery_at`
+  - `GET /api/v1/inventory/{resource_key}` — full resource detail including all
+    relationship edges (inbound + outbound across all 8 edge collections)
+  - `POST /api/v1/inventory/discover` — enqueues `discover_aws` Celery task and returns
+    `job_id` (Celery task ID); returns 422 for providers not yet implemented
+  - `app/services/inventory_service.py` — ArangoDB query service; AQL built with
+    `bind_vars` only (no string interpolation with user input); sort field validated
+    against allowlist before use
+  - `app/models/api_responses.py` — Pydantic v2 response models: `ApiResponse[T]`,
+    `Meta`, `ResourceSummary`, `ResourceDetail`, `EdgeSummary`, `InventoryStats`,
+    `DiscoverJobResponse`
+  - `X-Tenant-ID` header (dev mode) — replaces JWT tenant extraction until Sprint 7;
+    clearly marked as temporary in code comments
+  - Frontend: Next.js 15 App Router scaffold — `layout.tsx`, `page.tsx` (→ /inventory),
+    `globals.css`, `tsconfig.json`, `next.config.ts`, `tailwind.config.ts`
+  - Frontend: `InventoryPage` (`src/app/inventory/page.tsx`) — full inventory UI with
+    React Query data fetching, provider tabs, filters, paginated DataTable, and DetailPanel
+  - Frontend: `DataTable` component — sortable table with Provider badge, name/ID,
+    type, account, region, status badge, pagination controls, and skeleton loading state
+  - Frontend: `ProviderTabs` component — All/AWS/Azure/GCP/K8s tabs with resource counts
+  - Frontend: `Filters` component — search input (name/ARN/ID), resource type dropdown,
+    region dropdown
+  - Frontend: `DetailPanel` component — 420px slide-in panel with Metadata section,
+    Tags, Relationships (edges with direction arrows), Findings placeholder, and
+    "Open in console" deep-link for AWS resources
+  - Frontend: `Badge` component (`components/ui/Badge.tsx`) — provider, status, and
+    severity variants with dark-theme color coding (orange accent, slate palette)
+  - Frontend: `Skeleton` component (`components/ui/Skeleton.tsx`) — loading placeholder
+  - Frontend: `src/lib/types.ts` — TypeScript interfaces for all API response shapes
+  - Frontend: `src/lib/api.ts` — Axios-based API client with `X-Tenant-ID` interceptor
+  - Jest testing setup — `jest.config.js`, `jest.setup.ts`, `@testing-library/react`,
+    `@testing-library/jest-dom`, `@testing-library/user-event` added to devDependencies
+  - 16 backend API integration tests (100% passing) — happy path, filters, pagination,
+    search, 422 validation, 404 for missing resource, stats aggregation, discover dispatch
+  - 32 frontend component tests — Badge (11 tests), DataTable (9 tests), DetailPanel
+    (12 tests); all passing with `@testing-library/react`
+
 - **Ogum.Inventory Sprint 2 — Expanded AWS Discovery (`discover_aws` task)**
   - Full coverage: VPC, Subnet, Internet Gateway, Elastic IP, Security Group, RDS, Lambda,
     EKS, EKS, ECR, KMS (customer-managed keys only), Secrets Manager (metadata only),

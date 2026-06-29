@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.api.v1 import inventory
 
 app = FastAPI(
     title="Ogum Security API",
@@ -24,6 +25,8 @@ app.add_middleware(
 async def health() -> dict:
     return {"status": "ok", "version": "0.1.0"}
 
+
+app.include_router(inventory.router)
 
 # Routers registered here as modules are built
 # from app.api.v1 import scans, findings, graph, compliance, auth
