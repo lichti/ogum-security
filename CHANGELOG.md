@@ -35,6 +35,18 @@ Commit types that trigger version bumps:
   `attrs==20.3.0` which is incompatible with `prowler`'s required `jsonschema==4.23.0`
   (which needs `attrs>=22.2.0`); `truffleHog3` was planned for Epic 03 (Side-Scanning)
   and is deferred until a compatible secrets-scanner alternative is chosen
+- `backend/pyproject.toml` and `docker/backend.Dockerfile` — downgraded target runtime
+  from Python 3.13 to **Python 3.12**; Python 3.13 has no pre-built wheels for several
+  `prowler` transitive dependencies (notably `alibabacloud-tea`), which forces source
+  compilation; during source compilation, Poetry's mid-install downgrade of `packaging`
+  (26.2 → 23.2) leaves `packaging/tags.py` temporarily absent, breaking the build
+  isolation subprocess; Python 3.12 has full wheel coverage for all prowler dependencies,
+  eliminating source builds and the packaging race condition entirely
+- `.github/workflows/ci.yml` — updated all `python-version` references from `3.13` to
+  `3.12` to match the runtime constraint in `pyproject.toml` and `backend.Dockerfile`
+- `.github/workflows/ci.yml` — added `docker-build` job that runs `docker compose build
+  --no-cache` on every push and PR; validates that the Docker build succeeds before any
+  other job runs; prevents `docker compose up` regressions from reaching `main`
 
 ### Added
 
