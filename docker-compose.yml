@@ -16,7 +16,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8529/_api/version"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
 
   # ── Redis — Task Queue & Cache ────────────────────────────────────────────

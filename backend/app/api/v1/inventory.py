@@ -11,6 +11,7 @@ from arango import ArangoClient
 from arango.database import StandardDatabase
 
 from app.core.config import settings
+from app.db.init import init_tenant_schema
 from app.models.api_responses import (
     ApiResponse,
     DiscoverJobResponse,
@@ -28,11 +29,13 @@ router = APIRouter(prefix="/api/v1/inventory", tags=["inventory"])
 def get_tenant_db(x_tenant_id: str = Header(..., alias="X-Tenant-ID")) -> StandardDatabase:
     """DEV MODE: tenant_id from X-Tenant-ID header. Sprint 7 replaces this with JWT extraction."""
     client = ArangoClient(hosts=f"http://{settings.ARANGO_HOST}:{settings.ARANGO_PORT}")
-    return client.db(
-        f"ogum_{x_tenant_id}",
-        username=settings.ARANGO_USER,
-        password=settings.ARANGO_PASSWORD,
-    )
+    sys_db = client.db("_system", username=settings.ARANGO_USER, password=settings.ARANGO_PASSWORD)
+    db_name = f"ogum_{x_tenant_id}"
+    if not sys_db.has_database(db_name):
+        sys_db.create_database(db_name)
+    db = client.db(db_name, username=settings.ARANGO_USER, password=settings.ARANGO_PASSWORD)
+    init_tenant_schema(db)
+    return db
 
 
 @router.get("", response_model=ApiResponse[list[ResourceSummary]])

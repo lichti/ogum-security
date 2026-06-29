@@ -16,7 +16,7 @@ from typing import Any
 
 import boto3
 from arango import ArangoClient
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError
 
 from app.core.config import settings
 from app.db.init import init_tenant_schema
@@ -959,12 +959,19 @@ def discover_aws(
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
 
-    if not account_id:
-        try:
-            sts = boto3.client("sts", region_name="us-east-1")
-            account_id = sts.get_caller_identity()["Account"]
-        except ClientError:
-            account_id = ""
+    try:
+        sts = boto3.client("sts", region_name="us-east-1")
+        if not account_id:
+            account_id = sts.get_caller_identity().get("Account", "")
+    except NoCredentialsError:
+        logger.error(
+            "AWS discovery skipped for tenant %s: no credentials found. "
+            "Set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY or configure an IAM role.",
+            tenant_id,
+        )
+        return {"status": "failed", "reason": "no_credentials", "resources": 0}
+    except ClientError:
+        account_id = account_id or ""
 
     resource_keys: set[str] = set()
     identity_keys: set[str] = set()

@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -9,6 +9,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Poetry
 RUN pip install --no-cache-dir poetry==1.8.3
+
+# Pin packaging to the version checkov requires (~=23.0) and pre-install setuptools.
+# Without this, poetry downgrades packaging mid-install, causing alibabacloud-tea's
+# build isolation step to fail with FileNotFoundError on packaging/tags.py.
+RUN pip install --no-cache-dir "packaging==23.2" "setuptools>=68"
 
 COPY pyproject.toml poetry.lock* ./
 

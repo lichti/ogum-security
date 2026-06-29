@@ -15,6 +15,39 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Fixed
+
+- `docker/backend.Dockerfile` — base image updated from `python:3.11-slim` to `python:3.13-slim`
+  to match the Python 3.13 requirement in `pyproject.toml`; `docker compose up` was failing
+  with "currently activated Python version 3.11.15 is not supported by the project"
+- `backend/pyproject.toml` — Python constraint changed from `^3.13` (`>=3.13,<4.0`) to
+  `>=3.13,<3.14`; `prowler ^5.31.0` requires `Python <3.14` and Poetry was unable to resolve
+  dependencies when the upper bound was open-ended at `<4.0`
+- `backend/pyproject.toml` — removed all cloud provider SDK direct declarations
+  (`azure-identity`, `azure-mgmt-security`, `azure-mgmt-compute`, `azure-mgmt-network`,
+  `azure-mgmt-storage`, `azure-mgmt-containerservice`, `azure-mgmt-keyvault`,
+  `google-cloud-securitycenter`, `google-cloud-compute`, `google-cloud-storage`,
+  `google-cloud-container`, `kubernetes`); `prowler ^5.31.0` pins specific versions of all
+  these packages and any independent range declaration causes dependency resolution failure.
+  All these SDKs remain available as prowler transitive dependencies; only `boto3` is kept
+  as a direct dependency since it is used in discovery tasks that run independently of prowler
+- `backend/pyproject.toml` — removed `truffleHog3 ^3.0.0`; all 3.x versions pin
+  `attrs==20.3.0` which is incompatible with `prowler`'s required `jsonschema==4.23.0`
+  (which needs `attrs>=22.2.0`); `truffleHog3` was planned for Epic 03 (Side-Scanning)
+  and is deferred until a compatible secrets-scanner alternative is chosen
+- `backend/pyproject.toml` and `docker/backend.Dockerfile` — downgraded target runtime
+  from Python 3.13 to **Python 3.12**; Python 3.13 has no pre-built wheels for several
+  `prowler` transitive dependencies (notably `alibabacloud-tea`), which forces source
+  compilation; during source compilation, Poetry's mid-install downgrade of `packaging`
+  (26.2 → 23.2) leaves `packaging/tags.py` temporarily absent, breaking the build
+  isolation subprocess; Python 3.12 has full wheel coverage for all prowler dependencies,
+  eliminating source builds and the packaging race condition entirely
+- `.github/workflows/ci.yml` — updated all `python-version` references from `3.13` to
+  `3.12` to match the runtime constraint in `pyproject.toml` and `backend.Dockerfile`
+- `.github/workflows/ci.yml` — added `docker-build` job that runs `docker compose build
+  --no-cache` on every push and PR; validates that the Docker build succeeds before any
+  other job runs; prevents `docker compose up` regressions from reaching `main`
+
 ### Added
 
 - **Ogum.Inventory Sprint 5 — Onboarding, Export, and Tenant Isolation**
