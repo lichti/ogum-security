@@ -151,6 +151,28 @@ services:
       - arangodb
     restart: unless-stopped
 
+  # ── Celery Beat — Discovery Scheduler ────────────────────────────────────
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: ogum-celery-beat
+    command: celery -A app.workers.celery_app beat --loglevel=info
+    environment:
+      - APP_ENV=${APP_ENV:-development}
+      - ARANGO_HOST=arangodb
+      - ARANGO_PORT=8529
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD:-changeme}
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - redis
+    restart: unless-stopped
+
   # ── Frontend — Next.js ────────────────────────────────────────────────────
   frontend:
     build:

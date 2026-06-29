@@ -93,6 +93,35 @@ class AWSResource(ResourceBase):
         return self
 
 
+class AzureResource(ResourceBase):
+    """Azure cloud resource."""
+
+    provider: Provider = Provider.AZURE
+    subscription_id: str = ""
+
+
+class GCPResource(ResourceBase):
+    """GCP cloud resource."""
+
+    provider: Provider = Provider.GCP
+    project_id: str = ""
+
+
+class K8sResource(ResourceBase):
+    """Kubernetes resource — cluster-scoped or namespaced."""
+
+    provider: Provider = Provider.K8S
+    cluster_name: str = ""
+    namespace: str | None = None
+
+    def arango_key(self) -> str:
+        resource_type = self.resource_type.replace(".", "_")
+        resource_id = _sanitize_key_part(self.resource_id)
+        cluster = _sanitize_key_part(self.cluster_name)
+        ns = f"_{self.namespace}" if self.namespace else ""
+        return f"k8s_{cluster}_{resource_type}{ns}_{resource_id}"
+
+
 class Identity(BaseModel):
     """IAM role, user, or service account."""
 
