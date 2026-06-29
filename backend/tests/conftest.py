@@ -15,7 +15,8 @@ from fastapi.testclient import TestClient
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
-ARANGO_PASSWORD = os.getenv("ARANGO_ROOT_PASSWORD", "ogum-test")
+# Use ARANGO_PASSWORD to match app/core/config.py — docker-compose maps ARANGO_ROOT_PASSWORD to this
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "changeme")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/1")
 
 TEST_TENANT_A = "test-tenant-aaa"

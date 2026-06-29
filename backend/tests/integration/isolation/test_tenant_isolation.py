@@ -6,7 +6,7 @@ any data leakage between tenants, even under buggy query conditions.
 A failure here blocks the PR unconditionally.
 """
 import pytest
-from arango import ArangoDatabase
+from arango.database import StandardDatabase as ArangoDatabase
 
 from tests.conftest import TEST_TENANT_A, TEST_TENANT_B
 
