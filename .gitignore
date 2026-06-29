@@ -1,5 +1,6 @@
-# AI Assistant Context (internal only)
+# AI Assistant Context (internal only — never commit)
 CLAUDE.md
+.claude/
 
 # Environment
 .env
