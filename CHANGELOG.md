@@ -23,6 +23,12 @@ Commit types that trigger version bumps:
 - `backend/pyproject.toml` — Python constraint changed from `^3.13` (`>=3.13,<4.0`) to
   `>=3.13,<3.14`; `prowler ^5.31.0` requires `Python <3.14` and Poetry was unable to resolve
   dependencies when the upper bound was open-ended at `<4.0`
+- `backend/pyproject.toml` — removed direct declarations of `azure-mgmt-compute`,
+  `azure-mgmt-network`, `azure-mgmt-storage`, `azure-mgmt-containerservice`,
+  `azure-mgmt-keyvault`, `google-cloud-compute`, `google-cloud-storage`,
+  `google-cloud-container`, and `kubernetes`; these are provided as transitive dependencies
+  by `prowler ^5.31.0` with specific pinned versions that conflicted with our declared
+  ranges (e.g. prowler pins `kubernetes==32.0.1` while we declared `^36.0.0`)
 
 ### Added
 
