@@ -15,6 +15,12 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Fixed
+
+- `docker/backend.Dockerfile` — base image updated from `python:3.11-slim` to `python:3.13-slim`
+  to match the `python = "^3.13"` constraint in `pyproject.toml`; `docker compose up` was
+  failing with "currently activated Python version 3.11.15 is not supported by the project"
+
 ### Added
 
 - **Ogum.Inventory Sprint 5 — Onboarding, Export, and Tenant Isolation**
