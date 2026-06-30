@@ -114,6 +114,15 @@ def _get_aws_session(
     return boto3.Session()
 
 
+def _resolve_aws_regions(session: boto3.Session) -> list[str]:
+    """Return all enabled regions for the given session/account."""
+    ec2 = session.client("ec2", region_name="us-east-1")
+    resp = ec2.describe_regions(
+        Filters=[{"Name": "opt-in-status", "Values": ["opt-in-not-required", "opted-in"]}]
+    )
+    return sorted(r["RegionName"] for r in resp["Regions"])
+
+
 def _set_provider_status(db: Any, provider_key: str | None, status: str) -> None:
     """Update provider discovery status in tenant_config (best-effort)."""
     if not provider_key:
@@ -890,6 +899,10 @@ def discover_aws_basic(
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
 
+    if not regions:
+        regions = _resolve_aws_regions(boto3.Session())
+        logger.info("discover_aws_basic: no regions specified — scanning all %d enabled regions", len(regions))
+
     resource_keys: set[str] = set()
     identity_keys: set[str] = set()
     data_asset_keys: set[str] = set()
@@ -1060,6 +1073,10 @@ def discover_aws(
             _set_provider_status(db, provider_key, "error")
             return {"status": "failed", "reason": str(exc), "resources": 0}
         account_id = account_id or ""
+
+    if not regions:
+        regions = _resolve_aws_regions(session)
+        logger.info("discover_aws: no regions specified — scanning all %d enabled regions", len(regions))
 
     resource_keys: set[str] = set()
     identity_keys: set[str] = set()

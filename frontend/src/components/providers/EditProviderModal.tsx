@@ -76,7 +76,8 @@ export function EditProviderModal({ provider, onSave, onCancel }: EditProviderMo
 
       await providersApi.update(provider.key, {
         display_name: displayName || undefined,
-        regions: regionList.length > 0 ? regionList : undefined,
+        // Send explicit empty list for AWS to mean "all regions"; undefined = don't update
+        regions: provider.provider === 'aws' ? regionList : undefined,
         role_arn: provider.provider === 'aws' ? (roleArn || null) : undefined,
         azure_tenant_id:
           provider.provider === 'azure' ? (azureTenantId || null) : undefined,
@@ -145,7 +146,7 @@ export function EditProviderModal({ provider, onSave, onCancel }: EditProviderMo
                 type="text"
                 value={regions}
                 onChange={(e) => setRegions(e.target.value)}
-                placeholder="us-east-1, us-west-2"
+                placeholder="Leave empty to scan all available regions"
                 className={INPUT_CLASS}
               />
             </div>

@@ -43,7 +43,7 @@ class ProviderRegisterRequest(BaseModel):
     subscription_id: str | None = None
     project_id: str | None = None
     cluster_name: str | None = None
-    regions: list[str] = Field(default_factory=lambda: ["us-east-1"])
+    regions: list[str] = Field(default_factory=list)  # empty = all available regions
     validate_connection: bool = True
     # AWS — option A: cross-account IAM role (recommended for multi-account)
     role_arn: str | None = None

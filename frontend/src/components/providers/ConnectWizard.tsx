@@ -79,7 +79,7 @@ export function ConnectWizard({ onComplete, onCancel }: ConnectWizardProps) {
     role_arn: '',
     aws_access_key_id: '',
     aws_secret_access_key: '',
-    regions: 'us-east-1',
+    regions: '',
     // Azure
     subscription_id: '',
     azure_tenant_id: '',
@@ -350,11 +350,14 @@ aws iam attach-role-policy \\
                     <label className={LABEL_CLASS}>Regions (comma-separated)</label>
                     <input
                       type="text"
-                      placeholder="us-east-1, us-west-2"
+                      placeholder="Leave empty to scan all available regions"
                       value={form.regions}
                       onChange={set('regions')}
                       className={INPUT_CLASS}
                     />
+                    <p className="text-slate-500 text-xs mt-1">
+                      e.g. <span className="font-mono">us-east-1, eu-west-1</span>. Empty = all enabled regions.
+                    </p>
                   </div>
                 </>
               )}

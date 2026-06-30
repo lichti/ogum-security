@@ -17,6 +17,12 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Scan all regions by default**: `regions: []` (empty list) now means "scan all enabled regions"
+  across all providers. For AWS, the task calls `ec2:DescribeRegions` to resolve the full list
+  at runtime. Azure, GCP, and Kubernetes already scanned all resources regardless of region.
+  The wizard and edit modal show an empty field by default with a hint explaining the behavior;
+  users can still restrict to specific regions by listing them comma-separated.
+
 - **Edit provider**: `PATCH /api/v1/providers/{id}` now accepts `role_arn`, `azure_tenant_id`,
   and `azure_client_id` updates (non-secret, safe to persist); `EditProviderModal` component
   pre-fills current config values and supports optionally re-triggering discovery with new
