@@ -16,6 +16,7 @@ from app.models.provider import (
 from app.services.provider_service import (
     delete_provider,
     get_provider,
+    get_provider_credentials,
     list_providers,
     register_provider,
     update_provider,
@@ -212,9 +213,9 @@ async def trigger_discovery_endpoint(
     if not config.enabled:
         raise HTTPException(status_code=409, detail="Provider is disabled. Enable it before triggering discovery.")
 
-    creds = body or DiscoverRequest()
-    # Sensitive credentials not stored — re-provided in body or fall back to ambient.
-    # Non-secret Azure IDs are re-hydrated from stored config.
+    # Body credentials override stored ones; stored credentials are the fallback for scheduled jobs.
+    body_creds = body or DiscoverRequest()
+    stored = get_provider_credentials(db, provider_id)
     from app.models.provider import ProviderRegisterRequest as _Req
     stub = _Req(
         provider=config.provider,
@@ -227,11 +228,11 @@ async def trigger_discovery_endpoint(
         validate_connection=False,
         azure_tenant_id=config.azure_tenant_id,
         azure_client_id=config.azure_client_id,
-        aws_access_key_id=creds.aws_access_key_id,
-        aws_secret_access_key=creds.aws_secret_access_key,
-        azure_client_secret=creds.azure_client_secret,
-        gcp_service_account_json=creds.gcp_service_account_json,
-        kubeconfig=creds.kubeconfig,
+        aws_access_key_id=body_creds.aws_access_key_id or stored.get("aws_access_key_id"),
+        aws_secret_access_key=body_creds.aws_secret_access_key or stored.get("aws_secret_access_key"),
+        azure_client_secret=body_creds.azure_client_secret or stored.get("azure_client_secret"),
+        gcp_service_account_json=body_creds.gcp_service_account_json or stored.get("gcp_service_account_json"),
+        kubeconfig=body_creds.kubeconfig or stored.get("kubeconfig"),
     )
     job_id = _dispatch_discovery(
         config.provider, x_tenant_id, provider_id, stub, db,

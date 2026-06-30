@@ -65,9 +65,15 @@ class ProviderUpdateRequest(BaseModel):
     regions: list[str] | None = None
     enabled: bool | None = None
     # Non-secret credential metadata — safe to store in tenant_config
-    role_arn: str | None = None          # AWS cross-account role ARN (empty string clears it)
-    azure_tenant_id: str | None = None   # Azure AAD tenant ID
-    azure_client_id: str | None = None   # Azure App Registration client ID
+    role_arn: str | None = None
+    azure_tenant_id: str | None = None
+    azure_client_id: str | None = None
+    # Secrets stored for scheduled jobs — NEVER returned in API responses
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
+    azure_client_secret: str | None = None
+    gcp_service_account_json: dict | None = None
+    kubeconfig: dict | None = None
 
 
 class ProviderRegisterResponse(BaseModel):

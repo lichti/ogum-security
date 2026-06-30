@@ -25,7 +25,7 @@ export function EditProviderModal({ provider, onSave, onCancel }: EditProviderMo
   const [azureTenantId, setAzureTenantId] = useState(provider.azure_tenant_id ?? '')
   const [azureClientId, setAzureClientId] = useState(provider.azure_client_id ?? '')
 
-  // Ephemeral credential fields — never stored, only used for optional re-trigger
+  // Credential fields — stored in ArangoDB for scheduled jobs; re-enter to update
   const [showCredSection, setShowCredSection] = useState(false)
   const [awsKeyId, setAwsKeyId] = useState('')
   const [awsKeySecret, setAwsKeySecret] = useState('')
@@ -74,6 +74,22 @@ export function EditProviderModal({ provider, onSave, onCancel }: EditProviderMo
     try {
       const regionList = regions.split(',').map((r) => r.trim()).filter(Boolean)
 
+      // Build credential update payload (only include fields that were filled in)
+      const credUpdate: Record<string, unknown> = {}
+      if (provider.provider === 'aws') {
+        if (awsKeyId) credUpdate.aws_access_key_id = awsKeyId
+        if (awsKeySecret) credUpdate.aws_secret_access_key = awsKeySecret
+      }
+      if (provider.provider === 'azure' && azureClientSecret) {
+        credUpdate.azure_client_secret = azureClientSecret
+      }
+      if (provider.provider === 'gcp' && gcpJson.trim()) {
+        credUpdate.gcp_service_account_json = JSON.parse(gcpJson)
+      }
+      if (provider.provider === 'k8s' && kubeconfig.trim()) {
+        credUpdate.kubeconfig = JSON.parse(kubeconfig)
+      }
+
       await providersApi.update(provider.key, {
         display_name: displayName || undefined,
         // Send explicit empty list for AWS to mean "all regions"; undefined = don't update
@@ -83,12 +99,8 @@ export function EditProviderModal({ provider, onSave, onCancel }: EditProviderMo
           provider.provider === 'azure' ? (azureTenantId || null) : undefined,
         azure_client_id:
           provider.provider === 'azure' ? (azureClientId || null) : undefined,
+        ...credUpdate,
       })
-
-      if (hasEphemeralCreds()) {
-        const discoverBody = buildDiscoverRequest()
-        await providersApi.triggerDiscovery(provider.key, discoverBody ?? undefined)
-      }
 
       onSave()
     } catch (e: unknown) {

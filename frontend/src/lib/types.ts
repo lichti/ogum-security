@@ -112,6 +112,12 @@ export interface ProviderUpdateRequest {
   role_arn?: string | null
   azure_tenant_id?: string | null
   azure_client_id?: string | null
+  // Secrets stored for scheduled jobs — never returned in API responses
+  aws_access_key_id?: string | null
+  aws_secret_access_key?: string | null
+  azure_client_secret?: string | null
+  gcp_service_account_json?: Record<string, unknown> | null
+  kubeconfig?: Record<string, unknown> | null
 }
 
 export interface DiscoverRequest {
