@@ -151,14 +151,18 @@ jobs:
         working-directory: backend
         run: |
           pip install pip-audit
-          # Ignored vulnerabilities:
-          # CVE-2026-3219, CVE-2026-6357, PYSEC-2026-196 — affect pip (CI runner tool, not a project dep)
-          # GHSA-537c-gmf6-5ccf — cryptography transitive dep; tracked for upgrade in separate PR
+          # Ignored vulnerabilities (tracked in chore/security-upgrades):
+          # CVE-2026-3219, CVE-2026-6357, PYSEC-2026-196 — affect pip (CI runner, not a project dep)
+          # GHSA-537c-gmf6-5ccf — cryptography transitive dep; no fix path without breaking changes
+          # GHSA-gr75-jv2w-4656, PYSEC-2026-77 — langchain/langchain-text-splitters; fix requires
+          #   1.x which does not exist on PyPI — tracked for upgrade when available
           PIPAPI_PYTHON_LOCATION=$(poetry env info --path)/bin/python pip-audit \
             --ignore-vuln CVE-2026-3219 \
             --ignore-vuln CVE-2026-6357 \
             --ignore-vuln PYSEC-2026-196 \
-            --ignore-vuln GHSA-537c-gmf6-5ccf
+            --ignore-vuln GHSA-537c-gmf6-5ccf \
+            --ignore-vuln GHSA-gr75-jv2w-4656 \
+            --ignore-vuln PYSEC-2026-77
 
   frontend-check:
     name: Frontend — Lint, Type Check & Component Tests
