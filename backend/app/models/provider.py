@@ -90,6 +90,7 @@ class DiscoverRequest(BaseModel):
     Credentials passed here are forwarded to the task and never stored.
     Omit the body (or all fields) to use ambient worker credentials / stored role_arn.
     """
+
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
     azure_client_secret: str | None = None

@@ -2,6 +2,7 @@
 Unit tests for inventory resource Pydantic models.
 No external dependencies — all tests run in-process.
 """
+
 import pytest
 from pydantic import ValidationError
 

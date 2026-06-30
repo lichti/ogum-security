@@ -5,6 +5,7 @@ boto3 calls are wrapped with exponential backoff to handle provider throttling.
 ArangoDB upserts are idempotent: re-running discovery never duplicates resources.
 Resources absent from the current scan are soft-deleted (status: "deleted").
 """
+
 from __future__ import annotations
 
 import functools
@@ -32,16 +33,19 @@ from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
-_RETRYABLE_CODES = frozenset({
-    "Throttling",
-    "ThrottlingException",
-    "RequestLimitExceeded",
-    "TooManyRequestsException",
-    "ServiceUnavailable",
-})
+_RETRYABLE_CODES = frozenset(
+    {
+        "Throttling",
+        "ThrottlingException",
+        "RequestLimitExceeded",
+        "TooManyRequestsException",
+        "ServiceUnavailable",
+    }
+)
 
 
 # ─── Retry decorator ──────────────────────────────────────────────────────────
+
 
 def retry_with_backoff(
     max_retries: int = 5,
@@ -49,6 +53,7 @@ def retry_with_backoff(
     max_delay: float = 60.0,
 ):
     """Decorator: exponential backoff with jitter on AWS throttling errors."""
+
     def decorator(func):  # type: ignore[no-untyped-def]
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -60,20 +65,27 @@ def retry_with_backoff(
                     if code not in _RETRYABLE_CODES or attempt == max_retries - 1:
                         raise
                     delay = min(
-                        base_delay * (2 ** attempt) + random.uniform(0, 1),
+                        base_delay * (2**attempt) + random.uniform(0, 1),
                         max_delay,
                     )
                     logger.warning(
                         "AWS throttle (%s) on %s, retry %d/%d in %.1fs",
-                        code, func.__name__, attempt + 1, max_retries, delay,
+                        code,
+                        func.__name__,
+                        attempt + 1,
+                        max_retries,
+                        delay,
                     )
                     time.sleep(delay)
             return None  # unreachable — satisfies mypy
+
         return wrapper
+
     return decorator
 
 
 # ─── AWS session / credential helpers ────────────────────────────────────────
+
 
 def _get_aws_session(
     role_arn: str | None = None,
@@ -117,9 +129,7 @@ def _get_aws_session(
 def _resolve_aws_regions(session: boto3.Session) -> list[str]:
     """Return all enabled regions for the given session/account."""
     ec2 = session.client("ec2", region_name="us-east-1")
-    resp = ec2.describe_regions(
-        Filters=[{"Name": "opt-in-status", "Values": ["opt-in-not-required", "opted-in"]}]
-    )
+    resp = ec2.describe_regions(Filters=[{"Name": "opt-in-status", "Values": ["opt-in-not-required", "opted-in"]}])
     return sorted(r["RegionName"] for r in resp["Regions"])
 
 
@@ -135,6 +145,7 @@ def _set_provider_status(db: Any, provider_key: str | None, status: str) -> None
 
 
 # ─── ArangoDB helpers ─────────────────────────────────────────────────────────
+
 
 def _get_tenant_db(tenant_id: str):  # type: ignore[no-untyped-def]
     client = ArangoClient(hosts=f"http://{settings.ARANGO_HOST}:{settings.ARANGO_PORT}")
@@ -245,6 +256,7 @@ def _mark_stale_deleted(
 
 # ─── Sprint 1: EC2, IAM, S3 discovery ────────────────────────────────────────
 
+
 @retry_with_backoff()
 def _list_ec2_instances(ec2_client: Any, tenant_id: str, region: str) -> list[AWSResource]:
     instances: list[AWSResource] = []
@@ -275,12 +287,8 @@ def _list_ec2_instances(ec2_client: Any, tenant_id: str, region: str) -> list[AW
                             "subnet_id": inst.get("SubnetId"),
                             "private_ip": inst.get("PrivateIpAddress"),
                             "public_ip": inst.get("PublicIpAddress"),
-                            "security_groups": [
-                                sg["GroupId"] for sg in inst.get("SecurityGroups", [])
-                            ],
-                            "iam_instance_profile": (
-                                inst.get("IamInstanceProfile", {}) or {}
-                            ).get("Arn"),
+                            "security_groups": [sg["GroupId"] for sg in inst.get("SecurityGroups", [])],
+                            "iam_instance_profile": (inst.get("IamInstanceProfile", {}) or {}).get("Arn"),
                         },
                     )
                 )
@@ -367,6 +375,7 @@ def _list_s3_buckets(s3_client: Any, tenant_id: str) -> list[DataAsset]:
 
 # ─── Sprint 2: expanded EC2/network/RDS/Lambda/EKS/ECR/KMS/SM/CT/IAM ────────
 
+
 @retry_with_backoff()
 def _list_vpcs(ec2_client: Any, tenant_id: str, account_id: str, region: str) -> list[AWSResource]:
     vpcs: list[AWSResource] = []
@@ -427,9 +436,7 @@ def _list_subnets(ec2_client: Any, tenant_id: str, account_id: str, region: str)
 
 
 @retry_with_backoff()
-def _list_internet_gateways(
-    ec2_client: Any, tenant_id: str, account_id: str, region: str
-) -> list[AWSResource]:
+def _list_internet_gateways(ec2_client: Any, tenant_id: str, account_id: str, region: str) -> list[AWSResource]:
     igws: list[AWSResource] = []
     paginator = ec2_client.get_paginator("describe_internet_gateways")
 
@@ -437,9 +444,7 @@ def _list_internet_gateways(
         for igw in page.get("InternetGateways", []):
             igw_id: str = igw["InternetGatewayId"]
             tags = {t["Key"]: t["Value"] for t in igw.get("Tags", [])}
-            attached_vpc_ids = [
-                a["VpcId"] for a in igw.get("Attachments", []) if a.get("State") == "available"
-            ]
+            attached_vpc_ids = [a["VpcId"] for a in igw.get("Attachments", []) if a.get("State") == "available"]
             igws.append(
                 AWSResource(
                     tenant_id=tenant_id,
@@ -458,9 +463,7 @@ def _list_internet_gateways(
 
 
 @retry_with_backoff()
-def _list_elastic_ips(
-    ec2_client: Any, tenant_id: str, account_id: str, region: str
-) -> list[AWSResource]:
+def _list_elastic_ips(ec2_client: Any, tenant_id: str, account_id: str, region: str) -> list[AWSResource]:
     eips: list[AWSResource] = []
     response = ec2_client.describe_addresses()
 
@@ -490,9 +493,7 @@ def _list_elastic_ips(
 
 
 @retry_with_backoff()
-def _list_security_groups(
-    ec2_client: Any, tenant_id: str, account_id: str, region: str
-) -> list[AWSResource]:
+def _list_security_groups(ec2_client: Any, tenant_id: str, account_id: str, region: str) -> list[AWSResource]:
     sgs: list[AWSResource] = []
     paginator = ec2_client.get_paginator("describe_security_groups")
 
@@ -503,7 +504,8 @@ def _list_security_groups(
 
             ingress_rules = sg.get("IpPermissions", [])
             is_public = any(
-                r.get("IpProtocol") == "-1" or any(
+                r.get("IpProtocol") == "-1"
+                or any(
                     ip.get("CidrIp") == "0.0.0.0/0" or ip.get("CidrIpv6") == "::/0"
                     for ip in (r.get("IpRanges", []) + r.get("Ipv6Ranges", []))
                 )
@@ -725,9 +727,7 @@ def _list_secrets_manager(sm_client: Any, tenant_id: str, region: str) -> list[A
 
 
 @retry_with_backoff()
-def _list_cloudtrail_trails(
-    ct_client: Any, tenant_id: str, account_id: str, region: str
-) -> list[AWSResource]:
+def _list_cloudtrail_trails(ct_client: Any, tenant_id: str, account_id: str, region: str) -> list[AWSResource]:
     trails: list[AWSResource] = []
     response = ct_client.describe_trails(includeShadowTrails=False)
 
@@ -794,6 +794,7 @@ def _list_iam_groups(iam_client: Any, tenant_id: str) -> list[Identity]:
 
 # ─── Relationship edge creation ───────────────────────────────────────────────
 
+
 def _create_resource_edges(
     db: Any,
     *,
@@ -832,8 +833,10 @@ def _create_resource_edges(
             profile_name = profile_arn.rstrip("/").split("/")[-1]
             if profile_name in role_key_map:
                 _upsert_edge(
-                    db, "ASSUMES_ROLE",
-                    ec2_handle, f"identities/{role_key_map[profile_name]}",
+                    db,
+                    "ASSUMES_ROLE",
+                    ec2_handle,
+                    f"identities/{role_key_map[profile_name]}",
                     extra,
                 )
                 count += 1
@@ -844,8 +847,10 @@ def _create_resource_edges(
         for vpc_id in igw.raw_metadata.get("attached_vpc_ids", []):
             if vpc_id in vpc_key_map:
                 _upsert_edge(
-                    db, "ROUTES_TRAFFIC",
-                    igw_handle, f"resources/{vpc_key_map[vpc_id]}",
+                    db,
+                    "ROUTES_TRAFFIC",
+                    igw_handle,
+                    f"resources/{vpc_key_map[vpc_id]}",
                     extra,
                 )
                 count += 1
@@ -858,8 +863,10 @@ def _create_resource_edges(
             role_name = role_arn.rstrip("/").split("/")[-1]
             if role_name in role_key_map:
                 _upsert_edge(
-                    db, "ASSUMES_ROLE",
-                    lam_handle, f"identities/{role_key_map[role_name]}",
+                    db,
+                    "ASSUMES_ROLE",
+                    lam_handle,
+                    f"identities/{role_key_map[role_name]}",
                     extra,
                 )
                 count += 1
@@ -870,8 +877,10 @@ def _create_resource_edges(
         for user_arn in group.raw_metadata.get("member_arns", []):
             if user_arn in user_arn_to_key:
                 _upsert_edge(
-                    db, "MEMBER_OF",
-                    f"identities/{user_arn_to_key[user_arn]}", group_handle,
+                    db,
+                    "MEMBER_OF",
+                    f"identities/{user_arn_to_key[user_arn]}",
+                    group_handle,
                     extra,
                 )
                 count += 1
@@ -880,6 +889,7 @@ def _create_resource_edges(
 
 
 # ─── Celery tasks ──────────────────────────────────────────────────────────────
+
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def discover_aws_basic(
@@ -972,7 +982,9 @@ def discover_aws_basic(
 
     logger.info(
         "Discovery complete [tenant=%s]: discovered=%d deleted=%d",
-        tenant_id, total_discovered, total_deleted,
+        tenant_id,
+        total_discovered,
+        total_deleted,
     )
 
     return {
@@ -1035,16 +1047,18 @@ def discover_aws(
     init_tenant_schema(db)
 
     logger.info(
-        "discover_aws start [tenant=%s regions=%s account_id=%s "
-        "has_role_arn=%s has_static_keys=%s]",
-        tenant_id, regions, account_id,
+        "discover_aws start [tenant=%s regions=%s account_id=%s has_role_arn=%s has_static_keys=%s]",
+        tenant_id,
+        regions,
+        account_id,
         bool(role_arn),
         bool(aws_access_key_id and aws_secret_access_key),
     )
 
     try:
         session = _get_aws_session(
-            role_arn, external_id,
+            role_arn,
+            external_id,
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key,
         )
@@ -1166,7 +1180,9 @@ def discover_aws(
 
         logger.info(
             "Region %s complete: %d resources [tenant=%s]",
-            region, len(resource_keys), tenant_id,
+            region,
+            len(resource_keys),
+            tenant_id,
         )
 
     # ── IAM (global) ─────────────────────────────────────────────────────────
@@ -1191,7 +1207,10 @@ def discover_aws(
 
     logger.info(
         "IAM: %d roles, %d users, %d groups [tenant=%s]",
-        len(roles), len(users), len(iam_groups), tenant_id,
+        len(roles),
+        len(users),
+        len(iam_groups),
+        tenant_id,
     )
 
     # ── S3 (global) ──────────────────────────────────────────────────────────
@@ -1252,7 +1271,10 @@ def discover_aws(
 
     logger.info(
         "Full discovery complete [tenant=%s]: discovered=%d deleted=%d edges=%d",
-        tenant_id, total_discovered, total_deleted, total_edges,
+        tenant_id,
+        total_discovered,
+        total_deleted,
+        total_edges,
     )
 
     _set_provider_status(db, provider_key, "active")

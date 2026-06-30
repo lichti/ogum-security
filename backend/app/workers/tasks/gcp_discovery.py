@@ -5,6 +5,7 @@ GCP SDK calls are mocked at the SDK class level in tests via pytest-mock.
 ArangoDB upserts are idempotent: re-running discovery never duplicates resources.
 Resources absent from the current scan are soft-deleted (status: "deleted").
 """
+
 from __future__ import annotations
 
 import logging
@@ -40,6 +41,7 @@ _ALL_GCP_RESOURCE_TYPES = [
 
 
 # ─── Resource list helpers ────────────────────────────────────────────────────
+
 
 def _list_compute_instances(
     instances_client: InstancesClient,
@@ -140,6 +142,7 @@ def _list_gke_clusters(
 
 # ─── Celery task ──────────────────────────────────────────────────────────────
 
+
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def discover_gcp(
     self: Any,
@@ -168,9 +171,7 @@ def discover_gcp(
     try:
         credentials: SACredentials | None = None
         if service_account_info:
-            credentials = SACredentials.from_service_account_info(
-                service_account_info, scopes=_GCP_SCOPES
-            )
+            credentials = SACredentials.from_service_account_info(service_account_info, scopes=_GCP_SCOPES)
         # When credentials=None the GCP client libraries use ADC automatically
 
         instances_client = InstancesClient(credentials=credentials)
@@ -206,7 +207,10 @@ def discover_gcp(
 
         logger.info(
             "GCP discovery complete [tenant=%s project=%s]: discovered=%d deleted=%d",
-            tenant_id, project_id, len(resource_keys), deleted,
+            tenant_id,
+            project_id,
+            len(resource_keys),
+            deleted,
         )
         _set_provider_status(db, provider_key, "active")
         return {

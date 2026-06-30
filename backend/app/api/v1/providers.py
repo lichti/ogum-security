@@ -40,7 +40,8 @@ def _validate_aws(
     """Validate AWS credentials via ec2:DescribeRegions + sts:GetCallerIdentity."""
     try:
         session = _get_aws_session(
-            role_arn, external_id,
+            role_arn,
+            external_id,
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key,
         )
@@ -120,6 +121,7 @@ def _dispatch_discovery(
 # POST /api/v1/providers
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @router.post("", response_model=ApiResponse[ProviderRegisterResponse], status_code=201)
 async def register_provider_endpoint(
     request: ProviderRegisterRequest,
@@ -139,7 +141,11 @@ async def register_provider_endpoint(
 
     config = register_provider(db, x_tenant_id, request)
     job_id = _dispatch_discovery(
-        request.provider, x_tenant_id, config.key, request, db,
+        request.provider,
+        x_tenant_id,
+        config.key,
+        request,
+        db,
         role_arn=config.role_arn,
         external_id=config.external_id,
     )
@@ -158,6 +164,7 @@ async def register_provider_endpoint(
 # GET /api/v1/providers
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("", response_model=ApiResponse[list[ProviderConfig]])
 async def list_providers_endpoint(
     db: StandardDatabase = Depends(get_tenant_db),
@@ -168,6 +175,7 @@ async def list_providers_endpoint(
 # ──────────────────────────────────────────────────────────────────────────────
 # GET /api/v1/providers/{provider_id}
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @router.get("/{provider_id}", response_model=ApiResponse[ProviderConfig])
 async def get_provider_endpoint(
@@ -184,6 +192,7 @@ async def get_provider_endpoint(
 # PATCH /api/v1/providers/{provider_id}
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @router.patch("/{provider_id}", response_model=ApiResponse[ProviderConfig])
 async def update_provider_endpoint(
     provider_id: str,
@@ -199,6 +208,7 @@ async def update_provider_endpoint(
 # ──────────────────────────────────────────────────────────────────────────────
 # POST /api/v1/providers/{provider_id}/discover
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @router.post("/{provider_id}/discover", response_model=ApiResponse[DiscoverResponse])
 async def trigger_discovery_endpoint(
@@ -217,6 +227,7 @@ async def trigger_discovery_endpoint(
     body_creds = body or DiscoverRequest()
     stored = get_provider_credentials(db, provider_id)
     from app.models.provider import ProviderRegisterRequest as _Req
+
     stub = _Req(
         provider=config.provider,
         display_name=config.display_name,
@@ -235,7 +246,11 @@ async def trigger_discovery_endpoint(
         kubeconfig=body_creds.kubeconfig or stored.get("kubeconfig"),
     )
     job_id = _dispatch_discovery(
-        config.provider, x_tenant_id, provider_id, stub, db,
+        config.provider,
+        x_tenant_id,
+        provider_id,
+        stub,
+        db,
         role_arn=config.role_arn,
         external_id=config.external_id,
     )
@@ -255,6 +270,7 @@ async def trigger_discovery_endpoint(
 # DELETE /api/v1/providers/{provider_id}
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @router.delete("/{provider_id}", response_model=ApiResponse[dict])
 async def delete_provider_endpoint(
     provider_id: str,
@@ -263,8 +279,10 @@ async def delete_provider_endpoint(
     ok, purge_counts = delete_provider(db, provider_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Provider not found")
-    return ApiResponse(data={
-        "deleted": True,
-        "provider_id": provider_id,
-        "purged": purge_counts,
-    })
+    return ApiResponse(
+        data={
+            "deleted": True,
+            "provider_id": provider_id,
+            "purged": purge_counts,
+        }
+    )

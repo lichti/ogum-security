@@ -151,7 +151,10 @@ jobs:
         working-directory: backend
         run: |
           pip install pip-audit
-          PIPAPI_PYTHON_LOCATION=$(poetry env info --path)/bin/python pip-audit
+          # CVE-2026-3219 and CVE-2026-6357 affect pip (the CI runner tool, not a project dep)
+          PIPAPI_PYTHON_LOCATION=$(poetry env info --path)/bin/python pip-audit \
+            --ignore-vuln CVE-2026-3219 \
+            --ignore-vuln CVE-2026-6357
 
   frontend-check:
     name: Frontend — Lint, Type Check & Component Tests

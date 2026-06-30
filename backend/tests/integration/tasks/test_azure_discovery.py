@@ -7,6 +7,7 @@ Rules:
 - Redis lock: mocked so tests focus on discovery logic
 - Celery: task.apply() runs synchronously — no broker required
 """
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -34,10 +35,7 @@ def _make_mock_vm(
     vm = MagicMock()
     vm.name = name
     vm.location = location
-    vm.id = (
-        f"/subscriptions/{SUB_ID}/resourceGroups/{rg}"
-        f"/providers/Microsoft.Compute/virtualMachines/{name}"
-    )
+    vm.id = f"/subscriptions/{SUB_ID}/resourceGroups/{rg}/providers/Microsoft.Compute/virtualMachines/{name}"
     vm.tags = {"env": "test"}
     vm.hardware_profile.vm_size = "Standard_D2s_v3"
     vm.os_profile.computer_name = name
@@ -102,10 +100,7 @@ class TestAzureDiscoveryTask:
         discover_azure.apply(kwargs=_AZURE_KWARGS).get()
         discover_azure.apply(kwargs=_AZURE_KWARGS).get()
 
-        vms_in_db = [
-            r for r in db_tenant_a.collection("resources").all()
-            if r["resource_type"] == "virtual_machine"
-        ]
+        vms_in_db = [r for r in db_tenant_a.collection("resources").all() if r["resource_type"] == "virtual_machine"]
         assert len(vms_in_db) == 1
 
     def test_absent_vms_marked_deleted(self, db_tenant_a, mocker) -> None:
@@ -143,10 +138,7 @@ class TestAzureDiscoveryTask:
 
         # First run: VM is discovered
         discover_azure.apply(kwargs=_AZURE_KWARGS).get()
-        vms_first = [
-            r for r in db_tenant_a.collection("resources").all()
-            if r["resource_type"] == "virtual_machine"
-        ]
+        vms_first = [r for r in db_tenant_a.collection("resources").all() if r["resource_type"] == "virtual_machine"]
         assert len(vms_first) == 1
         assert vms_first[0]["status"] == "active"
 
@@ -154,10 +146,7 @@ class TestAzureDiscoveryTask:
         result = discover_azure.apply(kwargs=_AZURE_KWARGS).get()
 
         assert result["deleted"] >= 1
-        vms_after = [
-            r for r in db_tenant_a.collection("resources").all()
-            if r["resource_type"] == "virtual_machine"
-        ]
+        vms_after = [r for r in db_tenant_a.collection("resources").all() if r["resource_type"] == "virtual_machine"]
         assert len(vms_after) == 1
         assert vms_after[0]["status"] == "deleted"
 

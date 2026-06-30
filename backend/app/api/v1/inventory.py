@@ -109,25 +109,36 @@ def _export_csv(items: list[ResourceSummary], tenant_id: str) -> StreamingRespon
     writer = csv.DictWriter(
         buf,
         fieldnames=[
-            "key", "provider", "resource_type", "resource_id", "name",
-            "region", "account_id", "status", "is_public", "tags", "last_scanned_at",
+            "key",
+            "provider",
+            "resource_type",
+            "resource_id",
+            "name",
+            "region",
+            "account_id",
+            "status",
+            "is_public",
+            "tags",
+            "last_scanned_at",
         ],
     )
     writer.writeheader()
     for item in items:
-        writer.writerow({
-            "key": item.key,
-            "provider": item.provider,
-            "resource_type": item.resource_type,
-            "resource_id": item.resource_id,
-            "name": item.name,
-            "region": item.region or "",
-            "account_id": item.account_id or "",
-            "status": item.status,
-            "is_public": item.is_public,
-            "tags": json.dumps(item.tags),
-            "last_scanned_at": item.last_scanned_at or "",
-        })
+        writer.writerow(
+            {
+                "key": item.key,
+                "provider": item.provider,
+                "resource_type": item.resource_type,
+                "resource_id": item.resource_id,
+                "name": item.name,
+                "region": item.region or "",
+                "account_id": item.account_id or "",
+                "status": item.status,
+                "is_public": item.is_public,
+                "tags": json.dumps(item.tags),
+                "last_scanned_at": item.last_scanned_at or "",
+            }
+        )
     buf.seek(0)
     ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     filename = f"ogum_inventory_{tenant_id}_{ts}.csv"

@@ -7,6 +7,7 @@ Rules:
 - Redis lock: mocked so tests focus on discovery logic
 - Celery: task.apply() runs synchronously — no broker required
 """
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -83,10 +84,7 @@ class TestK8sDiscoveryTask:
         discover_k8s.apply(kwargs=_K8S_KWARGS).get()
         discover_k8s.apply(kwargs=_K8S_KWARGS).get()
 
-        pods_in_db = [
-            r for r in db_tenant_a.collection("resources").all()
-            if r["resource_type"] == "pod"
-        ]
+        pods_in_db = [r for r in db_tenant_a.collection("resources").all() if r["resource_type"] == "pod"]
         assert len(pods_in_db) == 1
 
     def test_absent_pods_marked_deleted(self, db_tenant_a, mocker) -> None:
@@ -119,10 +117,7 @@ class TestK8sDiscoveryTask:
         result = discover_k8s.apply(kwargs=_K8S_KWARGS).get()
 
         assert result["deleted"] >= 1
-        pods_in_db = [
-            r for r in db_tenant_a.collection("resources").all()
-            if r["resource_type"] == "pod"
-        ]
+        pods_in_db = [r for r in db_tenant_a.collection("resources").all() if r["resource_type"] == "pod"]
         assert len(pods_in_db) == 1
         assert pods_in_db[0]["status"] == "deleted"
 

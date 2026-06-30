@@ -7,6 +7,7 @@ Rules:
 - Celery: task.apply() runs synchronously — no broker required
 - _get_tenant_db is patched to return the fixture DB directly
 """
+
 import json
 
 import boto3
@@ -27,13 +28,15 @@ def _populate_aws(region: str = "us-east-1") -> dict:
         ImageId="ami-00000001",
         MinCount=1,
         MaxCount=1,
-        TagSpecifications=[{
-            "ResourceType": "instance",
-            "Tags": [
-                {"Key": "Name", "Value": "test-web-server"},
-                {"Key": "Environment", "Value": "test"},
-            ],
-        }],
+        TagSpecifications=[
+            {
+                "ResourceType": "instance",
+                "Tags": [
+                    {"Key": "Name", "Value": "test-web-server"},
+                    {"Key": "Environment", "Value": "test"},
+                ],
+            }
+        ],
     )[0]
 
     iam = boto3.client("iam", region_name=region)
@@ -48,19 +51,24 @@ def _populate_aws(region: str = "us-east-1") -> dict:
     return {"instance_id": instance.id}
 
 
-_LAMBDA_TRUST_POLICY = json.dumps({
-    "Version": "2012-10-17",
-    "Statement": [{
-        "Effect": "Allow",
-        "Principal": {"Service": "lambda.amazonaws.com"},
-        "Action": "sts:AssumeRole",
-    }],
-})
+_LAMBDA_TRUST_POLICY = json.dumps(
+    {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {"Service": "lambda.amazonaws.com"},
+                "Action": "sts:AssumeRole",
+            }
+        ],
+    }
+)
 
 _ACCOUNT_ID = "123456789012"
 
 
 # ─── Sprint 1: basic discovery ────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 class TestAWSDiscoveryTask:
@@ -195,6 +203,7 @@ class TestAWSDiscoveryTask:
 
 # ─── Sprint 2: expanded discovery ─────────────────────────────────────────────
 
+
 @pytest.mark.integration
 class TestAWSExpandedDiscovery:
     """discover_aws — full service coverage. moto mocks, real ArangoDB stores results."""
@@ -234,10 +243,12 @@ class TestAWSExpandedDiscovery:
             sg_id = sg["GroupId"]
             ec2.authorize_security_group_ingress(
                 GroupId=sg_id,
-                IpPermissions=[{
-                    "IpProtocol": "-1",
-                    "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
-                }],
+                IpPermissions=[
+                    {
+                        "IpProtocol": "-1",
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                    }
+                ],
             )
             init_tenant_schema(db_tenant_a)
             discover_aws.apply(args=[TEST_TENANT_A, ["us-east-1"], _ACCOUNT_ID]).get()
@@ -344,6 +355,7 @@ class TestAWSExpandedDiscovery:
 
 # ─── Sprint 2: relationship edges ─────────────────────────────────────────────
 
+
 @pytest.mark.integration
 class TestRelationshipEdgeCreation:
     """discover_aws creates relationship edges between AWS resources."""
@@ -360,7 +372,9 @@ class TestRelationshipEdgeCreation:
 
             ec2_resource = boto3.resource("ec2", region_name="us-east-1")
             _instance = ec2_resource.create_instances(
-                ImageId="ami-00000001", MinCount=1, MaxCount=1,
+                ImageId="ami-00000001",
+                MinCount=1,
+                MaxCount=1,
             )[0]
 
             init_tenant_schema(db_tenant_a)
@@ -392,7 +406,8 @@ class TestRelationshipEdgeCreation:
             ec2_resource = boto3.resource("ec2", region_name="us-east-1")
             ec2_resource.create_instances(
                 ImageId="ami-00000001",
-                MinCount=1, MaxCount=1,
+                MinCount=1,
+                MaxCount=1,
                 SecurityGroupIds=[sg_id],
             )
 

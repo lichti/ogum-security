@@ -18,10 +18,15 @@ def _ensure_collection(db: StandardDatabase) -> None:
         db.create_collection("tenant_config")
 
 
-_SECRET_FIELDS = frozenset({
-    "aws_access_key_id", "aws_secret_access_key",
-    "azure_client_secret", "gcp_service_account_json", "kubeconfig",
-})
+_SECRET_FIELDS = frozenset(
+    {
+        "aws_access_key_id",
+        "aws_secret_access_key",
+        "azure_client_secret",
+        "gcp_service_account_json",
+        "kubeconfig",
+    }
+)
 
 
 def _doc_to_config(doc: dict) -> ProviderConfig:
@@ -61,11 +66,7 @@ def register_provider(
 ) -> ProviderConfig:
     """Persist provider config in tenant_config. Credentials are never stored here."""
     identifier = (
-        request.account_id
-        or request.subscription_id
-        or request.project_id
-        or request.cluster_name
-        or "default"
+        request.account_id or request.subscription_id or request.project_id or request.cluster_name or "default"
     )
     key = _make_key(request.provider, identifier)
 
@@ -192,9 +193,14 @@ def update_provider(
 
 _VERTEX_COLLECTIONS = ["resources", "identities", "data_assets", "network_endpoints"]
 _EDGE_COLLECTIONS = [
-    "EXPOSED_TO", "ASSUMES_ROLE", "CONTAINS_BUG",
-    "STORES_SENSITIVE_DATA", "ROUTES_TRAFFIC",
-    "BELONGS_TO", "ATTACHED_TO", "MEMBER_OF",
+    "EXPOSED_TO",
+    "ASSUMES_ROLE",
+    "CONTAINS_BUG",
+    "STORES_SENSITIVE_DATA",
+    "ROUTES_TRAFFIC",
+    "BELONGS_TO",
+    "ATTACHED_TO",
+    "MEMBER_OF",
 ]
 
 
@@ -274,9 +280,11 @@ def delete_provider(db: StandardDatabase, provider_id: str) -> tuple[bool, dict[
 def update_provider_last_discovery(db: StandardDatabase, provider_id: str, job_id: str) -> None:
     if not db.has_collection("tenant_config"):
         return
-    db.collection("tenant_config").update({
-        "_key": provider_id,
-        "last_discovery_at": datetime.now(UTC).isoformat(),
-        "last_discovery_job_id": job_id,
-        "status": "active",
-    })
+    db.collection("tenant_config").update(
+        {
+            "_key": provider_id,
+            "last_discovery_at": datetime.now(UTC).isoformat(),
+            "last_discovery_job_id": job_id,
+            "status": "active",
+        }
+    )

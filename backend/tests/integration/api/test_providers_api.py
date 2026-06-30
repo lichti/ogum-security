@@ -5,6 +5,7 @@ Rules:
 - AWS validation calls: mocked with moto
 - Celery discover tasks: mocked via mocker.patch
 """
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -45,6 +46,7 @@ def _register_aws(api_client, mocker, account_id="111111111111", job_id="job-001
 # ──────────────────────────────────────────────────────────────────────────────
 # POST /api/v1/providers
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 class TestProvidersRegisterEndpoint:
@@ -154,6 +156,7 @@ class TestProvidersRegisterEndpoint:
 # GET /api/v1/providers
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.integration
 class TestProvidersListEndpoint:
     def test_list_returns_empty_for_new_tenant(self, api_client):
@@ -186,6 +189,7 @@ class TestProvidersListEndpoint:
 # GET /api/v1/providers/{provider_id}
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.integration
 class TestProvidersGetEndpoint:
     def test_get_existing_provider(self, api_client, mocker):
@@ -210,6 +214,7 @@ class TestProvidersGetEndpoint:
 # ──────────────────────────────────────────────────────────────────────────────
 # PATCH /api/v1/providers/{provider_id}
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 class TestProvidersUpdateEndpoint:
@@ -276,6 +281,7 @@ class TestProvidersUpdateEndpoint:
 # POST /api/v1/providers/{provider_id}/discover
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.integration
 class TestProvidersTriggerDiscoveryEndpoint:
     def test_trigger_discovery_queues_job(self, api_client, mocker):
@@ -311,6 +317,7 @@ class TestProvidersTriggerDiscoveryEndpoint:
 # DELETE /api/v1/providers/{provider_id}
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.integration
 class TestProvidersDeleteEndpoint:
     def test_delete_existing_provider(self, api_client, mocker):
@@ -331,6 +338,7 @@ class TestProvidersDeleteEndpoint:
 # ──────────────────────────────────────────────────────────────────────────────
 # GET /api/v1/inventory/export
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 class TestInventoryExportEndpoint:
@@ -368,6 +376,7 @@ class TestInventoryExportEndpoint:
 
     def test_csv_export_with_resources_contains_data_rows(self, api_client, db_tenant_a):
         from app.models.inventory import AWSResource
+
         db_tenant_a.collection("resources").insert(
             AWSResource(
                 tenant_id=TEST_TENANT_A,

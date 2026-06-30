@@ -6,6 +6,7 @@ provider-specific tasks. Each provider task acquires and releases its own Redis
 distributed lock to prevent concurrent runs when the beat interval is shorter
 than the discovery duration.
 """
+
 from __future__ import annotations
 
 import logging
@@ -57,9 +58,7 @@ def trigger_all_discoveries(tenant_id: str, provider: str, **kwargs: Any) -> dic
     elif provider == Provider.K8S:
         discover_k8s.apply_async(kwargs={"tenant_id": tenant_id, **kwargs})
     else:
-        logger.warning(
-            "Unknown provider '%s' for tenant=%s — task not dispatched", provider, tenant_id
-        )
+        logger.warning("Unknown provider '%s' for tenant=%s — task not dispatched", provider, tenant_id)
         return {"dispatched": False, "reason": f"unknown_provider:{provider}"}
 
     logger.info("Dispatched %s discovery for tenant=%s", provider, tenant_id)

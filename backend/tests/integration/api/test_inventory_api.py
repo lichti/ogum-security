@@ -5,6 +5,7 @@ Rules:
 - Cloud APIs: not involved here — inventory API reads from ArangoDB only
 - Celery discover endpoint: discover_aws.delay is mocked (we're testing the HTTP layer, not the task)
 """
+
 import pytest
 from fastapi.testclient import TestClient
 

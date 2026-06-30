@@ -2,6 +2,7 @@
 Unit tests for the retry_with_backoff decorator.
 No external dependencies — all tests run in-process.
 """
+
 import pytest
 from botocore.exceptions import ClientError
 

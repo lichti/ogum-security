@@ -5,6 +5,7 @@ Azure SDK calls are mocked at the SDK class level in tests via pytest-mock.
 ArangoDB upserts are idempotent: re-running discovery never duplicates resources.
 Resources absent from the current scan are soft-deleted (status: "deleted").
 """
+
 from __future__ import annotations
 
 import logging
@@ -44,6 +45,7 @@ _ALL_AZURE_RESOURCE_TYPES = [
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
+
 def _extract_rg_and_name(azure_id: str) -> tuple[str, str]:
     """Parse Azure resource path → (resource_group, resource_name)."""
     parts = azure_id.split("/")
@@ -63,6 +65,7 @@ def _compact_id(subscription_id: str, azure_id: str) -> str:
 
 
 # ─── Resource list helpers ────────────────────────────────────────────────────
+
 
 def _list_vms(
     compute_client: ComputeManagementClient,
@@ -264,6 +267,7 @@ def _list_key_vaults(
 
 # ─── Celery task ──────────────────────────────────────────────────────────────
 
+
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def discover_azure(
     self: Any,
@@ -349,7 +353,10 @@ def discover_azure(
 
         logger.info(
             "Azure discovery complete [tenant=%s sub=%s]: discovered=%d deleted=%d",
-            tenant_id, subscription_id, len(resource_keys), deleted,
+            tenant_id,
+            subscription_id,
+            len(resource_keys),
+            deleted,
         )
         _set_provider_status(db, provider_key, "active")
         return {
