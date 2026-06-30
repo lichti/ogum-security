@@ -33,7 +33,7 @@ google-auth = "^2.35.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.0"
-pytest-asyncio = "^0.24.0"
+pytest-asyncio = "^1.0.0"
 pytest-cov = "^6.0.0"
 pytest-mock = "^3.14.0"
 moto = { extras = ["ec2", "iam", "s3", "rds", "lambda", "eks", "kms", "secretsmanager"], version = "^5.0.0" }
