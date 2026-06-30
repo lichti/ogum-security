@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { RefreshCw, Trash2, Power, PowerOff, ChevronRight } from 'lucide-react'
+import { RefreshCw, Trash2, Power, PowerOff, ChevronRight, Pencil } from 'lucide-react'
 import type { ProviderConfig, ProviderStatus } from '@/lib/types'
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -41,12 +41,13 @@ function relativeTime(iso: string | null | undefined): string {
 
 interface ProvidersTableProps {
   providers: ProviderConfig[]
+  onEdit: (provider: ProviderConfig) => void
   onToggle: (id: string, enabled: boolean) => Promise<unknown>
   onDiscover: (id: string) => Promise<unknown>
   onDelete: (id: string) => Promise<unknown>
 }
 
-export function ProvidersTable({ providers, onToggle, onDiscover, onDelete }: ProvidersTableProps) {
+export function ProvidersTable({ providers, onEdit, onToggle, onDiscover, onDelete }: ProvidersTableProps) {
   const [busy, setBusy] = useState<Record<string, boolean>>({})
 
   const withBusy = (id: string, fn: () => Promise<unknown>) => async (): Promise<void> => {
@@ -103,6 +104,13 @@ export function ProvidersTable({ providers, onToggle, onDiscover, onDelete }: Pr
                 <td className="py-3 px-4">
                   <div className="flex items-center justify-end gap-1">
                     <button
+                      title="Edit provider"
+                      onClick={() => onEdit(p)}
+                      className="p-1.5 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       title="Re-trigger discovery"
                       disabled={isBusy || !p.enabled}
                       onClick={withBusy(p.key, () => onDiscover(p.key))}
@@ -141,12 +149,13 @@ export function ProvidersTable({ providers, onToggle, onDiscover, onDelete }: Pr
 
 interface ProviderCardProps {
   provider: ProviderConfig
+  onEdit: (provider: ProviderConfig) => void
   onToggle: (id: string, enabled: boolean) => Promise<unknown>
   onDiscover: (id: string) => Promise<unknown>
   onDelete: (id: string) => Promise<unknown>
 }
 
-export function ProviderCard({ provider: p, onToggle, onDiscover, onDelete }: ProviderCardProps) {
+export function ProviderCard({ provider: p, onEdit, onToggle, onDiscover, onDelete }: ProviderCardProps) {
   const [busy, setBusy] = useState(false)
   const status = STATUS_BADGE[p.status ?? 'pending']
 
@@ -181,6 +190,13 @@ export function ProviderCard({ provider: p, onToggle, onDiscover, onDelete }: Pr
       </div>
 
       <div className="flex items-center gap-2">
+        <button
+          onClick={() => onEdit(p)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-600 transition-colors"
+        >
+          <Pencil className="w-3 h-3" />
+          Edit
+        </button>
         <button
           disabled={busy || !p.enabled}
           onClick={withBusy(() => onDiscover(p.key))}

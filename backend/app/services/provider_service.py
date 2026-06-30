@@ -128,6 +128,13 @@ def update_provider(
     if update.enabled is not None:
         patch["enabled"] = update.enabled
         patch["status"] = "disabled" if not update.enabled else "active"
+    # Non-secret credential metadata — empty string clears the field (stores None)
+    if update.role_arn is not None:
+        patch["role_arn"] = update.role_arn or None
+    if update.azure_tenant_id is not None:
+        patch["azure_tenant_id"] = update.azure_tenant_id or None
+    if update.azure_client_id is not None:
+        patch["azure_client_id"] = update.azure_client_id or None
     try:
         db.collection("tenant_config").update(patch)
         return get_provider(db, provider_id)

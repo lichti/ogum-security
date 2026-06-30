@@ -9,6 +9,7 @@ import type {
   ProviderRegisterRequest,
   ProviderRegisterResponse,
   ProviderUpdateRequest,
+  DiscoverRequest,
   DiscoverResponse,
 } from './types'
 
@@ -77,8 +78,11 @@ export const providersApi = {
   update: (providerId: string, data: ProviderUpdateRequest) =>
     apiClient.patch<ApiResponse<ProviderConfig>>(`/api/v1/providers/${providerId}`, data),
 
-  triggerDiscovery: (providerId: string) =>
-    apiClient.post<ApiResponse<DiscoverResponse>>(`/api/v1/providers/${providerId}/discover`),
+  triggerDiscovery: (providerId: string, body?: DiscoverRequest) =>
+    apiClient.post<ApiResponse<DiscoverResponse>>(
+      `/api/v1/providers/${providerId}/discover`,
+      body ?? null,
+    ),
 
   delete: (providerId: string) =>
     apiClient.delete<ApiResponse<{ deleted: boolean }>>(`/api/v1/providers/${providerId}`),

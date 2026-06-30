@@ -109,6 +109,17 @@ export interface ProviderUpdateRequest {
   display_name?: string
   regions?: string[]
   enabled?: boolean
+  role_arn?: string | null
+  azure_tenant_id?: string | null
+  azure_client_id?: string | null
+}
+
+export interface DiscoverRequest {
+  aws_access_key_id?: string
+  aws_secret_access_key?: string
+  azure_client_secret?: string
+  gcp_service_account_json?: Record<string, unknown>
+  kubeconfig?: Record<string, unknown>
 }
 
 export interface ProviderRegisterResponse {

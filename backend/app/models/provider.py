@@ -64,6 +64,10 @@ class ProviderUpdateRequest(BaseModel):
     display_name: str | None = None
     regions: list[str] | None = None
     enabled: bool | None = None
+    # Non-secret credential metadata — safe to store in tenant_config
+    role_arn: str | None = None          # AWS cross-account role ARN (empty string clears it)
+    azure_tenant_id: str | None = None   # Azure AAD tenant ID
+    azure_client_id: str | None = None   # Azure App Registration client ID
 
 
 class ProviderRegisterResponse(BaseModel):

@@ -4,13 +4,16 @@ import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { providersApi } from '@/lib/api'
+import type { ProviderConfig } from '@/lib/types'
 import { ProvidersTable } from '@/components/providers/ProvidersTable'
 import { ConnectWizard } from '@/components/providers/ConnectWizard'
+import { EditProviderModal } from '@/components/providers/EditProviderModal'
 
 export default function ProvidersPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [showWizard, setShowWizard] = useState(false)
+  const [editingProvider, setEditingProvider] = useState<ProviderConfig | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({
@@ -79,6 +82,7 @@ export default function ProvidersPage() {
               </div>
               <ProvidersTable
                 providers={providers}
+                onEdit={(p) => setEditingProvider(p)}
                 onToggle={(id, enabled) => toggleMutation.mutateAsync({ id, enabled })}
                 onDiscover={(id) => discoverMutation.mutateAsync(id)}
                 onDelete={(id) => deleteMutation.mutateAsync(id)}
@@ -96,6 +100,17 @@ export default function ProvidersPage() {
             router.push('/inventory')
           }}
           onCancel={() => setShowWizard(false)}
+        />
+      )}
+
+      {editingProvider && (
+        <EditProviderModal
+          provider={editingProvider}
+          onSave={() => {
+            setEditingProvider(null)
+            invalidate()
+          }}
+          onCancel={() => setEditingProvider(null)}
         />
       )}
     </div>

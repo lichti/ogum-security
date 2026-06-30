@@ -15,6 +15,18 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Added
+
+- **Edit provider**: `PATCH /api/v1/providers/{id}` now accepts `role_arn`, `azure_tenant_id`,
+  and `azure_client_id` updates (non-secret, safe to persist); `EditProviderModal` component
+  pre-fills current config values and supports optionally re-triggering discovery with new
+  ephemeral credentials (API keys, client secret, SA JSON, kubeconfig) that are forwarded to
+  the worker and never stored.
+- **`DiscoverRequest` type** exported from `@/lib/types`; `providersApi.triggerDiscovery` now
+  accepts an optional `DiscoverRequest` body for re-trigger with static credentials.
+- **Edit button** (Pencil icon) added to `ProvidersTable` and `ProviderCard` — opens
+  `EditProviderModal` with current provider values pre-filled.
+
 ### Fixed
 
 - **Re-trigger discovery with static credentials**: `POST /{id}/discover` now accepts an optional
