@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from arango.database import StandardDatabase
 from fastapi import APIRouter, Depends, Header, HTTPException
 
@@ -49,7 +51,7 @@ def _validate_aws(
         ec2 = session.client("ec2", region_name=region)
         ec2.describe_regions(RegionNames=regions[:1])
         sts = session.client("sts", region_name=region)
-        return sts.get_caller_identity().get("Account", "")
+        return str(sts.get_caller_identity().get("Account", ""))
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"AWS validation failed: {exc}")
 
@@ -271,11 +273,11 @@ async def trigger_discovery_endpoint(
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-@router.delete("/{provider_id}", response_model=ApiResponse[dict])
+@router.delete("/{provider_id}", response_model=ApiResponse[dict[str, Any]])
 async def delete_provider_endpoint(
     provider_id: str,
     db: StandardDatabase = Depends(get_tenant_db),
-) -> ApiResponse[dict]:
+) -> ApiResponse[dict[str, Any]]:
     ok, purge_counts = delete_provider(db, provider_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Provider not found")

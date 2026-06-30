@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from arango.database import StandardDatabase
 
@@ -29,7 +30,7 @@ _SECRET_FIELDS = frozenset(
 )
 
 
-def _doc_to_config(doc: dict) -> ProviderConfig:
+def _doc_to_config(doc: dict[str, Any]) -> ProviderConfig:
     """Map ArangoDB document to ProviderConfig, stripping credential secrets."""
     return ProviderConfig(
         key=doc["_key"],
@@ -110,11 +111,11 @@ def register_provider(
     db.collection("tenant_config").insert(doc, overwrite=True)
     return ProviderConfig(
         key=key,
-        **{k: v for k, v in doc.items() if k not in ("_key",) and k not in _SECRET_FIELDS},
+        **{k: v for k, v in doc.items() if k not in ("_key",) and k not in _SECRET_FIELDS},  # type: ignore[arg-type]
     )
 
 
-def get_provider_credentials(db: StandardDatabase, provider_id: str) -> dict:
+def get_provider_credentials(db: StandardDatabase, provider_id: str) -> dict[str, Any]:
     """Return stored credential secrets for a provider.
 
     These fields are intentionally excluded from ProviderConfig and never
@@ -158,7 +159,7 @@ def update_provider(
     update: ProviderUpdateRequest,
 ) -> ProviderConfig | None:
     _ensure_collection(db)
-    patch: dict = {"_key": provider_id}
+    patch: dict[str, Any] = {"_key": provider_id}
     if update.display_name is not None:
         patch["display_name"] = update.display_name
     if update.regions is not None:

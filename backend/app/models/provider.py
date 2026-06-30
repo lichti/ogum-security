@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -55,9 +55,9 @@ class ProviderRegisterRequest(BaseModel):
     azure_client_id: str | None = None
     azure_client_secret: str | None = None
     # GCP Service Account JSON (NOT stored — ephemeral)
-    gcp_service_account_json: dict | None = None
+    gcp_service_account_json: dict[str, Any] | None = None
     # Kubernetes external cluster kubeconfig (NOT stored — ephemeral)
-    kubeconfig: dict | None = None
+    kubeconfig: dict[str, Any] | None = None
 
 
 class ProviderUpdateRequest(BaseModel):
@@ -72,8 +72,8 @@ class ProviderUpdateRequest(BaseModel):
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
     azure_client_secret: str | None = None
-    gcp_service_account_json: dict | None = None
-    kubeconfig: dict | None = None
+    gcp_service_account_json: dict[str, Any] | None = None
+    kubeconfig: dict[str, Any] | None = None
 
 
 class ProviderRegisterResponse(BaseModel):
@@ -94,8 +94,8 @@ class DiscoverRequest(BaseModel):
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
     azure_client_secret: str | None = None
-    gcp_service_account_json: dict | None = None
-    kubeconfig: dict | None = None
+    gcp_service_account_json: dict[str, Any] | None = None
+    kubeconfig: dict[str, Any] | None = None
 
 
 class DiscoverResponse(BaseModel):

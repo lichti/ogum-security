@@ -52,6 +52,9 @@ select = ["E", "F", "I", "N", "W", "UP"]
 python_version = "3.12"
 strict = true
 ignore_missing_imports = true
+# python-arango stubs return overly broad unions (Cursor | AsyncJob | BatchJob | None)
+# causing false positives throughout the codebase; disable until stubs improve
+disable_error_code = ["union-attr"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
