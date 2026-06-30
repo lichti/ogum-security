@@ -1028,8 +1028,11 @@ def discover_aws(
             aws_secret_access_key=aws_secret_access_key,
         )
         sts = session.client("sts", region_name="us-east-1")
+        # Always call STS to validate credentials — even when account_id is already known.
+        # This ensures NoCredentialsError is caught here, not mid-discovery inside _list_vpcs.
+        resolved = sts.get_caller_identity().get("Account", "")
         if not account_id:
-            account_id = sts.get_caller_identity().get("Account", "")
+            account_id = resolved
     except NoCredentialsError:
         logger.error(
             "AWS discovery failed for tenant %s: no credentials found. "

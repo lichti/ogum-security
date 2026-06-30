@@ -15,6 +15,13 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Fixed
+
+- **AWS discovery credential guard**: `NoCredentialsError` was not caught when `account_id` was
+  already provided at registration — the `sts:GetCallerIdentity` call was skipped, so missing
+  credentials were only detected mid-discovery inside `_list_vpcs`. Fixed by always calling STS
+  upfront to validate credentials regardless of whether `account_id` is known.
+
 ### Added
 
 - **Multi-method credential support for all providers**:
