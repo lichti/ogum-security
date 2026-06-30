@@ -17,6 +17,12 @@ Commit types that trigger version bumps:
 
 ### Fixed
 
+- **Re-trigger discovery with static credentials**: `POST /{id}/discover` now accepts an optional
+  `DiscoverRequest` body so providers registered with `credential_type: static`,
+  `service_principal`, `service_account`, or `kubeconfig` can re-provide their ephemeral
+  credentials without re-registering the provider.
+- **`discover_aws` diagnostic log**: the task now logs `has_role_arn` and `has_static_keys` at
+  INFO level on start, making it easy to verify whether credentials reached the Celery worker.
 - **AWS discovery credential guard**: `NoCredentialsError` was not caught when `account_id` was
   already provided at registration — the `sts:GetCallerIdentity` call was skipped, so missing
   credentials were only detected mid-discovery inside `_list_vpcs`. Fixed by always calling STS

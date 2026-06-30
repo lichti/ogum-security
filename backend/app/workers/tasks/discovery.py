@@ -1021,6 +1021,14 @@ def discover_aws(
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
 
+    logger.info(
+        "discover_aws start [tenant=%s regions=%s account_id=%s "
+        "has_role_arn=%s has_static_keys=%s]",
+        tenant_id, regions, account_id,
+        bool(role_arn),
+        bool(aws_access_key_id and aws_secret_access_key),
+    )
+
     try:
         session = _get_aws_session(
             role_arn, external_id,
@@ -1035,10 +1043,14 @@ def discover_aws(
             account_id = resolved
     except NoCredentialsError:
         logger.error(
-            "AWS discovery failed for tenant %s: no credentials found. "
-            "Provide a role_arn in the provider config or set AWS_ACCESS_KEY_ID / "
-            "AWS_SECRET_ACCESS_KEY in the worker environment.",
+            "AWS discovery failed [tenant=%s]: no credentials. "
+            "role_arn=%s static_keys=%s ambient=False. "
+            "Options: (1) provide role_arn when registering the provider, "
+            "(2) provide aws_access_key_id + aws_secret_access_key in the wizard, "
+            "(3) set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in the worker environment.",
             tenant_id,
+            bool(role_arn),
+            bool(aws_access_key_id and aws_secret_access_key),
         )
         _set_provider_status(db, provider_key, "error")
         return {"status": "failed", "reason": "no_credentials", "resources": 0}

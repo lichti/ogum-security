@@ -72,6 +72,21 @@ class ProviderRegisterResponse(BaseModel):
     message: str
 
 
+class DiscoverRequest(BaseModel):
+    """Optional body for POST /{id}/discover.
+
+    Allows re-providing ephemeral credentials for providers registered with
+    credential_type='static' / 'service_principal' / 'service_account' / 'kubeconfig'.
+    Credentials passed here are forwarded to the task and never stored.
+    Omit the body (or all fields) to use ambient worker credentials / stored role_arn.
+    """
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
+    azure_client_secret: str | None = None
+    gcp_service_account_json: dict | None = None
+    kubeconfig: dict | None = None
+
+
 class DiscoverResponse(BaseModel):
     provider_id: str
     discovery_job_id: str

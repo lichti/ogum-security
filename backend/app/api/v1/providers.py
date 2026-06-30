@@ -6,6 +6,7 @@ from arango.database import StandardDatabase
 from app.api.v1.inventory import get_tenant_db
 from app.models.api_responses import ApiResponse
 from app.models.provider import (
+    DiscoverRequest,
     DiscoverResponse,
     ProviderConfig,
     ProviderRegisterRequest,
@@ -201,6 +202,7 @@ async def update_provider_endpoint(
 @router.post("/{provider_id}/discover", response_model=ApiResponse[DiscoverResponse])
 async def trigger_discovery_endpoint(
     provider_id: str,
+    body: DiscoverRequest | None = None,
     db: StandardDatabase = Depends(get_tenant_db),
     x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
 ) -> ApiResponse[DiscoverResponse]:
@@ -210,8 +212,9 @@ async def trigger_discovery_endpoint(
     if not config.enabled:
         raise HTTPException(status_code=409, detail="Provider is disabled. Enable it before triggering discovery.")
 
-    # Sensitive credentials are not stored — stub request uses ambient fallback.
-    # For AWS the stored role_arn is passed so STS AssumeRole still works.
+    creds = body or DiscoverRequest()
+    # Sensitive credentials not stored — re-provided in body or fall back to ambient.
+    # Non-secret Azure IDs are re-hydrated from stored config.
     from app.models.provider import ProviderRegisterRequest as _Req
     stub = _Req(
         provider=config.provider,
@@ -222,9 +225,13 @@ async def trigger_discovery_endpoint(
         cluster_name=config.cluster_name,
         regions=config.regions,
         validate_connection=False,
-        # Azure IDs re-hydrated from stored config (non-secret, safe to re-use)
         azure_tenant_id=config.azure_tenant_id,
         azure_client_id=config.azure_client_id,
+        aws_access_key_id=creds.aws_access_key_id,
+        aws_secret_access_key=creds.aws_secret_access_key,
+        azure_client_secret=creds.azure_client_secret,
+        gcp_service_account_json=creds.gcp_service_account_json,
+        kubeconfig=creds.kubeconfig,
     )
     job_id = _dispatch_discovery(
         config.provider, x_tenant_id, provider_id, stub, db,
