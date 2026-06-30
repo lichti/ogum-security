@@ -11,7 +11,7 @@ import functools
 import logging
 import random
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import boto3
@@ -170,7 +170,7 @@ def _upsert_edge(
     extra: dict[str, Any] | None = None,
 ) -> None:
     """Idempotent edge upsert keyed on (_from, _to)."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     doc = {
         "_from": from_id,
         "_to": to_id,
@@ -212,7 +212,7 @@ def _mark_stale_deleted(
     Only affects the (provider, type_values, regions) scope that was scanned,
     so a partial discovery of us-east-1 does not delete resources in us-west-2.
     """
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     region_clause = "FILTER doc.region IN @regions" if regions is not None else ""
     bind_vars: dict[str, Any] = {
         "@collection": collection,

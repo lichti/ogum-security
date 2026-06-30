@@ -13,7 +13,6 @@ from typing import Any
 
 from redis import Redis
 
-from app.core.config import settings
 from app.models.inventory import Provider
 from app.workers.celery_app import celery_app
 
@@ -43,8 +42,8 @@ def trigger_all_discoveries(tenant_id: str, provider: str, **kwargs: Any) -> dic
     runs are skipped rather than stacked.
     """
     # Lazy imports prevent circular dependencies at module load time.
-    from app.workers.tasks.discovery import discover_aws
     from app.workers.tasks.azure_discovery import discover_azure
+    from app.workers.tasks.discovery import discover_aws
     from app.workers.tasks.gcp_discovery import discover_gcp
     from app.workers.tasks.k8s_discovery import discover_k8s
 

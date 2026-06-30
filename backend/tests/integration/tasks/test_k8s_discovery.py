@@ -7,8 +7,9 @@ Rules:
 - Redis lock: mocked so tests focus on discovery logic
 - Celery: task.apply() runs synchronously — no broker required
 """
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from app.db.init import init_tenant_schema
 from app.workers.tasks.k8s_discovery import discover_k8s

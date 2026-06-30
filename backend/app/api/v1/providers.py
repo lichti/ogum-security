@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, HTTPException
 from arango.database import StandardDatabase
+from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.api.v1.inventory import get_tenant_db
 from app.models.api_responses import ApiResponse

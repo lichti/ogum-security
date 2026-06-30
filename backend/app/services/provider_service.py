@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from arango.database import StandardDatabase
 
@@ -102,7 +102,7 @@ def register_provider(
         "kubeconfig": request.kubeconfig,
         "last_discovery_at": None,
         "last_discovery_job_id": None,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
 
     _ensure_collection(db)
@@ -276,7 +276,7 @@ def update_provider_last_discovery(db: StandardDatabase, provider_id: str, job_i
         return
     db.collection("tenant_config").update({
         "_key": provider_id,
-        "last_discovery_at": datetime.now(timezone.utc).isoformat(),
+        "last_discovery_at": datetime.now(UTC).isoformat(),
         "last_discovery_job_id": job_id,
         "status": "active",
     })

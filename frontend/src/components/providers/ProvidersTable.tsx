@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { RefreshCw, Trash2, Power, PowerOff, ChevronRight, Pencil } from 'lucide-react'
+import { RefreshCw, Trash2, Power, PowerOff, Pencil } from 'lucide-react'
 import type { ProviderConfig, ProviderStatus } from '@/lib/types'
 
 const PROVIDER_LABELS: Record<string, string> = {

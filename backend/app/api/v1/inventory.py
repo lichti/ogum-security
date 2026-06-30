@@ -3,12 +3,12 @@ from __future__ import annotations
 import csv
 import io
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from fastapi.responses import StreamingResponse
 from arango import ArangoClient
 from arango.database import StandardDatabase
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from app.core.config import settings
 from app.db.init import init_tenant_schema
@@ -129,7 +129,7 @@ def _export_csv(items: list[ResourceSummary], tenant_id: str) -> StreamingRespon
             "last_scanned_at": item.last_scanned_at or "",
         })
     buf.seek(0)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     filename = f"ogum_inventory_{tenant_id}_{ts}.csv"
     return StreamingResponse(
         iter([buf.getvalue()]),
@@ -146,7 +146,7 @@ def _export_json(items: list[ResourceSummary], tenant_id: str, total: int) -> St
         "class_name": "Resource Inventory",
         "metadata": {
             "tenant_id": tenant_id,
-            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
             "total_resources": total,
             "product": {"name": "Ogum Security", "version": "0.1.0"},
         },
@@ -169,7 +169,7 @@ def _export_json(items: list[ResourceSummary], tenant_id: str, total: int) -> St
         ],
     }
     content = json.dumps(doc, indent=2, default=str)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     filename = f"ogum_inventory_{tenant_id}_{ts}.json"
     return StreamingResponse(
         iter([content]),

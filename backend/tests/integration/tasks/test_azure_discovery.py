@@ -7,8 +7,9 @@ Rules:
 - Redis lock: mocked so tests focus on discovery logic
 - Celery: task.apply() runs synchronously — no broker required
 """
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from app.db.init import init_tenant_schema
 from app.workers.tasks.azure_discovery import discover_azure
@@ -95,7 +96,7 @@ class TestAzureDiscoveryTask:
     def test_discovery_is_idempotent(self, db_tenant_a, mocker) -> None:
         """Running discovery twice must not duplicate resources in ArangoDB."""
         vm = _make_mock_vm("idempotent-vm", "rg-test")
-        mock_compute = _patch_azure_clients(mocker, db_tenant_a, vms=[vm])
+        _patch_azure_clients(mocker, db_tenant_a, vms=[vm])
         init_tenant_schema(db_tenant_a)
 
         discover_azure.apply(kwargs=_AZURE_KWARGS).get()

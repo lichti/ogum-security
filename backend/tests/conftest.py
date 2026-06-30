@@ -8,9 +8,9 @@ Rules enforced here:
 - Celery: EAGER mode in unit/security tests; real worker in integration/tasks
 """
 import os
+
 import pytest
 from arango import ArangoClient
-from fastapi.testclient import TestClient
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 

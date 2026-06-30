@@ -140,12 +140,19 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install Poetry
+        run: pip install poetry==1.8.3
+
       - name: Install pip-audit
         run: pip install pip-audit
 
+      - name: Install dependencies
+        working-directory: backend
+        run: poetry install --no-root
+
       - name: Audit dependencies
         working-directory: backend
-        run: pip-audit --requirement <(pip install poetry && poetry export --without-hashes)
+        run: poetry run pip-audit
 
   frontend-check:
     name: Frontend — Lint, Type Check & Component Tests
@@ -188,8 +195,18 @@ jobs:
 
       - name: Go vet
         working-directory: agent
-        run: go vet ./...
+        run: |
+          if [ -n "$(find . -name '*.go')" ]; then
+            go vet ./...
+          else
+            echo "No Go source files yet — skipping vet"
+          fi
 
       - name: Build
         working-directory: agent
-        run: go build ./...
+        run: |
+          if [ -n "$(find . -name '*.go')" ]; then
+            go build ./...
+          else
+            echo "No Go source files yet — skipping build"
+          fi

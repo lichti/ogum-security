@@ -9,7 +9,7 @@ import pytest
 from arango.database import StandardDatabase as ArangoDatabase
 
 from app.db.init import init_tenant_schema
-from tests.conftest import TEST_TENANT_A, TEST_TENANT_B
+from tests.conftest import TEST_TENANT_A
 
 
 @pytest.mark.integration

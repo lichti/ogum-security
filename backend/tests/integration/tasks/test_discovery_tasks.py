@@ -8,15 +8,16 @@ Rules:
 - _get_tenant_db is patched to return the fixture DB directly
 """
 import json
-import pytest
+
 import boto3
+import pytest
 from botocore.exceptions import ClientError
 from moto import mock_aws
 
 from app.db.init import init_tenant_schema
+from app.workers.tasks.discovery import discover_aws, discover_aws_basic
 
 TEST_TENANT_A = "test-tenant-aaa"
-from app.workers.tasks.discovery import discover_aws_basic, discover_aws
 
 
 def _populate_aws(region: str = "us-east-1") -> dict:
@@ -355,10 +356,10 @@ class TestRelationshipEdgeCreation:
             ec2_client = boto3.client("ec2", region_name="us-east-1")
             # Describe the default VPC so we know what to expect
             vpcs = ec2_client.describe_vpcs(Filters=[{"Name": "isDefault", "Values": ["true"]}])
-            default_vpc_id = vpcs["Vpcs"][0]["VpcId"]
+            _default_vpc_id = vpcs["Vpcs"][0]["VpcId"]
 
             ec2_resource = boto3.resource("ec2", region_name="us-east-1")
-            instance = ec2_resource.create_instances(
+            _instance = ec2_resource.create_instances(
                 ImageId="ami-00000001", MinCount=1, MaxCount=1,
             )[0]
 

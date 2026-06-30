@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -33,7 +33,7 @@ class ProviderConfig(BaseModel):
     azure_client_id: str | None = None
     last_discovery_at: str | None = None
     last_discovery_job_id: str | None = None
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class ProviderRegisterRequest(BaseModel):

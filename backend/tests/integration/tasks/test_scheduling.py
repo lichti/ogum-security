@@ -4,6 +4,7 @@ Integration tests for the distributed Redis lock in scheduling.py.
 Redis: real instance via Docker — never mocked (per CLAUDE.md).
 """
 import os
+
 import pytest
 from redis import Redis
 
