@@ -78,27 +78,40 @@ def retry_with_backoff(
 def _get_aws_session(
     role_arn: str | None = None,
     external_id: str | None = None,
+    aws_access_key_id: str | None = None,
+    aws_secret_access_key: str | None = None,
 ) -> boto3.Session:
-    """Return a boto3 Session. Uses STS AssumeRole when role_arn is provided."""
-    if not role_arn:
-        return boto3.Session()
+    """Return a boto3 Session.
 
-    sts = boto3.client("sts", region_name="us-east-1")
-    assume_kwargs: dict[str, Any] = {
-        "RoleArn": role_arn,
-        "RoleSessionName": "ogum-discovery",
-        "DurationSeconds": 3600,
-    }
-    if external_id:
-        assume_kwargs["ExternalId"] = external_id
+    Priority:
+    1. STS AssumeRole when role_arn is provided (preferred — cross-account)
+    2. Static keys when aws_access_key_id + aws_secret_access_key are provided (dev only)
+    3. Ambient credentials from the worker environment (instance profile / env vars)
+    """
+    if role_arn:
+        sts = boto3.client("sts", region_name="us-east-1")
+        assume_kwargs: dict[str, Any] = {
+            "RoleArn": role_arn,
+            "RoleSessionName": "ogum-discovery",
+            "DurationSeconds": 3600,
+        }
+        if external_id:
+            assume_kwargs["ExternalId"] = external_id
+        resp = sts.assume_role(**assume_kwargs)
+        creds = resp["Credentials"]
+        return boto3.Session(
+            aws_access_key_id=creds["AccessKeyId"],
+            aws_secret_access_key=creds["SecretAccessKey"],
+            aws_session_token=creds["SessionToken"],
+        )
 
-    resp = sts.assume_role(**assume_kwargs)
-    creds = resp["Credentials"]
-    return boto3.Session(
-        aws_access_key_id=creds["AccessKeyId"],
-        aws_secret_access_key=creds["SecretAccessKey"],
-        aws_session_token=creds["SessionToken"],
-    )
+    if aws_access_key_id and aws_secret_access_key:
+        return boto3.Session(
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+        )
+
+    return boto3.Session()
 
 
 def _set_provider_status(db: Any, provider_key: str | None, status: str) -> None:
@@ -985,6 +998,8 @@ def discover_aws(
     role_arn: str | None = None,
     external_id: str | None = None,
     provider_key: str | None = None,
+    aws_access_key_id: str | None = None,
+    aws_secret_access_key: str | None = None,
 ) -> dict[str, int | str]:
     """
     Full AWS discovery: all services + relationship edges.
@@ -1000,12 +1015,18 @@ def discover_aws(
         role_arn: Cross-account IAM Role ARN to assume (preferred credential model).
         external_id: External ID for the AssumeRole call (confused deputy protection).
         provider_key: ArangoDB key of the provider config for status updates.
+        aws_access_key_id: Static access key (dev only — never stored in ArangoDB).
+        aws_secret_access_key: Static secret key (dev only — never stored in ArangoDB).
     """
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
 
     try:
-        session = _get_aws_session(role_arn, external_id)
+        session = _get_aws_session(
+            role_arn, external_id,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+        )
         sts = session.client("sts", region_name="us-east-1")
         if not account_id:
             account_id = sts.get_caller_identity().get("Account", "")

@@ -17,6 +17,25 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Multi-method credential support for all providers**:
+  - **AWS**: IAM Role (`role_arn` via `sts:AssumeRole`) and static API keys
+    (`aws_access_key_id` / `aws_secret_access_key`, dev only) are both supported in the UI
+    and API; ambient worker credentials remain the fallback when neither is provided
+  - **Azure**: Service Principal (`azure_tenant_id` + `azure_client_id` + `azure_client_secret`)
+    and `DefaultAzureCredential` (Managed Identity / ADC) are both selectable in the wizard
+  - **GCP**: Service Account JSON and Application Default Credentials (ADC) are both supported
+  - **Kubernetes**: external kubeconfig (JSON) and in-cluster ServiceAccount are both selectable
+- **`credential_type` field** on `ProviderConfig`: records which credential method was used
+  at registration time (`role`, `static`, `ambient`, `service_principal`, `managed_identity`,
+  `service_account`, `adc`, `kubeconfig`, `incluster`) — no secrets stored
+- **`azure_tenant_id` / `azure_client_id`** stored on `ProviderConfig` (non-secret, safe to
+  persist) so re-triggered discovery can restore Azure credential context
+- **`provider_key` threading** in `discover_azure` and `discover_gcp`: both tasks now accept
+  and propagate the `provider_key` parameter so ArangoDB status updates work correctly
+- **Status updates for Azure and GCP**: `_set_provider_status(db, provider_key, "active"|"error")`
+  now called on task success and failure, consistent with AWS behavior
+- **`MethodSelector` UI component** in `ConnectWizard`: segmented control for choosing
+  credential method per provider — no separate page or modal required
 - **Provider Management API** (`/api/v1/providers`): new endpoints `GET /{id}`, `PATCH /{id}`,
   and `POST /{id}/discover` for fetching, updating, and re-triggering discovery on a specific provider
 - **Provider `status` field**: `ProviderConfig` now tracks `pending | active | error | disabled` state;

@@ -11,6 +11,7 @@ const makeProvider = (overrides: Partial<ProviderConfig> = {}): ProviderConfig =
   regions: ['us-east-1', 'eu-west-1'],
   enabled: true,
   status: 'active',
+  credential_type: 'role',
   last_discovery_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
   created_at: new Date().toISOString(),
   ...overrides,

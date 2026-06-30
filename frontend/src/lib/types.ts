@@ -73,6 +73,10 @@ export interface ProviderConfig {
   regions: string[]
   enabled: boolean
   status: ProviderStatus
+  credential_type: string
+  role_arn?: string | null
+  azure_tenant_id?: string | null
+  azure_client_id?: string | null
   last_discovery_at?: string | null
   last_discovery_job_id?: string | null
   created_at: string
@@ -82,12 +86,23 @@ export interface ProviderRegisterRequest {
   provider: ProviderType
   display_name: string
   account_id?: string
-  role_arn?: string
-  subscription_id?: string
-  project_id?: string
-  cluster_name?: string
   regions?: string[]
   validate_connection?: boolean
+  // AWS
+  role_arn?: string
+  aws_access_key_id?: string
+  aws_secret_access_key?: string
+  // Azure
+  subscription_id?: string
+  azure_tenant_id?: string
+  azure_client_id?: string
+  azure_client_secret?: string
+  // GCP
+  project_id?: string
+  gcp_service_account_json?: Record<string, unknown>
+  // Kubernetes
+  cluster_name?: string
+  kubeconfig?: Record<string, unknown>
 }
 
 export interface ProviderUpdateRequest {

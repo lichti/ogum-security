@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import boto3
 from fastapi import APIRouter, Depends, Header, HTTPException
 from arango.database import StandardDatabase
 
@@ -21,21 +20,32 @@ from app.services.provider_service import (
     update_provider,
     update_provider_last_discovery,
 )
-from app.workers.tasks.discovery import discover_aws
 from app.workers.tasks.azure_discovery import discover_azure
+from app.workers.tasks.discovery import _get_aws_session, discover_aws
 from app.workers.tasks.gcp_discovery import discover_gcp
 from app.workers.tasks.k8s_discovery import discover_k8s
 
 router = APIRouter(prefix="/api/v1/providers", tags=["providers"])
 
 
-def _validate_aws(regions: list[str]) -> str:
+def _validate_aws(
+    regions: list[str],
+    role_arn: str | None = None,
+    external_id: str | None = None,
+    aws_access_key_id: str | None = None,
+    aws_secret_access_key: str | None = None,
+) -> str:
     """Validate AWS credentials via ec2:DescribeRegions + sts:GetCallerIdentity."""
     try:
+        session = _get_aws_session(
+            role_arn, external_id,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+        )
         region = regions[0] if regions else "us-east-1"
-        ec2 = boto3.client("ec2", region_name=region)
+        ec2 = session.client("ec2", region_name=region)
         ec2.describe_regions(RegionNames=regions[:1])
-        sts = boto3.client("sts", region_name=region)
+        sts = session.client("sts", region_name=region)
         return sts.get_caller_identity().get("Account", "")
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"AWS validation failed: {exc}")
@@ -50,7 +60,16 @@ def _dispatch_discovery(
     role_arn: str | None = None,
     external_id: str | None = None,
 ) -> str | None:
-    """Dispatch discovery task for the given provider. Returns job_id or None."""
+    """Dispatch discovery task for the given provider. Returns job_id or None.
+
+    Sensitive credentials (aws_secret_access_key, azure_client_secret,
+    gcp_service_account_json, kubeconfig) are passed as task kwargs and are
+    ephemeral — they live only in the Celery message broker and worker memory,
+    never in ArangoDB or application logs.
+
+    For re-triggered discovery (POST /{id}/discover), credentials are not
+    available (not stored). The task falls back to ambient worker credentials.
+    """
     job_id: str | None = None
     try:
         if provider == "aws":
@@ -61,13 +80,32 @@ def _dispatch_discovery(
                 role_arn=role_arn,
                 external_id=external_id,
                 provider_key=config_key,
+                aws_access_key_id=request.aws_access_key_id,
+                aws_secret_access_key=request.aws_secret_access_key,
             ).id
         elif provider == "azure":
-            job_id = discover_azure.delay(tenant_id, request.subscription_id or "").id
+            job_id = discover_azure.delay(
+                tenant_id,
+                request.subscription_id or "",
+                client_id=request.azure_client_id,
+                client_secret=request.azure_client_secret,
+                azure_tenant_id=request.azure_tenant_id,
+                provider_key=config_key,
+            ).id
         elif provider == "gcp":
-            job_id = discover_gcp.delay(tenant_id, request.project_id or "").id
+            job_id = discover_gcp.delay(
+                tenant_id,
+                request.project_id or "",
+                service_account_info=request.gcp_service_account_json,
+                provider_key=config_key,
+            ).id
         elif provider == "k8s":
-            job_id = discover_k8s.delay(tenant_id, request.cluster_name or "").id
+            job_id = discover_k8s.delay(
+                tenant_id,
+                request.cluster_name or "",
+                kubeconfig=request.kubeconfig,
+                provider_key=config_key,
+            ).id
 
         if job_id:
             update_provider_last_discovery(db, config_key, job_id)
@@ -87,7 +125,13 @@ async def register_provider_endpoint(
     x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
 ) -> ApiResponse[ProviderRegisterResponse]:
     if request.validate_connection and request.provider == "aws":
-        detected = _validate_aws(request.regions)
+        detected = _validate_aws(
+            request.regions,
+            role_arn=request.role_arn,
+            external_id=None,
+            aws_access_key_id=request.aws_access_key_id,
+            aws_secret_access_key=request.aws_secret_access_key,
+        )
         if not request.account_id and detected:
             request = request.model_copy(update={"account_id": detected})
 
@@ -166,6 +210,8 @@ async def trigger_discovery_endpoint(
     if not config.enabled:
         raise HTTPException(status_code=409, detail="Provider is disabled. Enable it before triggering discovery.")
 
+    # Sensitive credentials are not stored — stub request uses ambient fallback.
+    # For AWS the stored role_arn is passed so STS AssumeRole still works.
     from app.models.provider import ProviderRegisterRequest as _Req
     stub = _Req(
         provider=config.provider,
@@ -176,6 +222,9 @@ async def trigger_discovery_endpoint(
         cluster_name=config.cluster_name,
         regions=config.regions,
         validate_connection=False,
+        # Azure IDs re-hydrated from stored config (non-secret, safe to re-use)
+        azure_tenant_id=config.azure_tenant_id,
+        azure_client_id=config.azure_client_id,
     )
     job_id = _dispatch_discovery(
         config.provider, x_tenant_id, provider_id, stub, db,

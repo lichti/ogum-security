@@ -25,6 +25,28 @@ def _doc_to_config(doc: dict) -> ProviderConfig:
     )
 
 
+def _infer_credential_type(provider: str, request: ProviderRegisterRequest) -> str:
+    if provider == "aws":
+        if request.role_arn:
+            return "role"
+        if request.aws_access_key_id and request.aws_secret_access_key:
+            return "static"
+        return "ambient"
+    if provider == "azure":
+        if request.azure_client_id and request.azure_client_secret and request.azure_tenant_id:
+            return "service_principal"
+        return "managed_identity"
+    if provider == "gcp":
+        if request.gcp_service_account_json:
+            return "service_account"
+        return "adc"
+    if provider == "k8s":
+        if request.kubeconfig:
+            return "kubeconfig"
+        return "incluster"
+    return "ambient"
+
+
 def register_provider(
     db: StandardDatabase,
     tenant_id: str,
@@ -47,6 +69,8 @@ def register_provider(
     if existing:
         existing_external_id = existing.get("external_id")
 
+    credential_type = _infer_credential_type(request.provider, request)
+
     doc = {
         "_key": key,
         "provider": request.provider,
@@ -58,8 +82,12 @@ def register_provider(
         "regions": request.regions,
         "enabled": True,
         "status": "pending",
+        "credential_type": credential_type,
         "role_arn": request.role_arn,
         "external_id": existing_external_id or str(uuid.uuid4()),
+        # Azure IDs are not secrets — safe to store for display/informational purposes
+        "azure_tenant_id": request.azure_tenant_id,
+        "azure_client_id": request.azure_client_id,
         "last_discovery_at": None,
         "last_discovery_job_id": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
