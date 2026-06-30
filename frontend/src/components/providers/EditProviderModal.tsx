@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { providersApi } from '@/lib/api'
-import type { ProviderConfig, DiscoverRequest } from '@/lib/types'
+import type { ProviderConfig } from '@/lib/types'
 
 const INPUT_CLASS =
   'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-orange-500 font-mono'
@@ -35,38 +35,6 @@ export function EditProviderModal({ provider, onSave, onCancel }: EditProviderMo
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const hasEphemeralCreds = (): boolean => {
-    if (provider.provider === 'aws') return !!(awsKeyId && awsKeySecret)
-    if (provider.provider === 'azure') return !!azureClientSecret
-    if (provider.provider === 'gcp') return !!gcpJson.trim()
-    if (provider.provider === 'k8s') return !!kubeconfig.trim()
-    return false
-  }
-
-  const buildDiscoverRequest = (): DiscoverRequest | null => {
-    if (provider.provider === 'aws' && awsKeyId && awsKeySecret) {
-      return { aws_access_key_id: awsKeyId, aws_secret_access_key: awsKeySecret }
-    }
-    if (provider.provider === 'azure' && azureClientSecret) {
-      return { azure_client_secret: azureClientSecret }
-    }
-    if (provider.provider === 'gcp' && gcpJson.trim()) {
-      try {
-        return { gcp_service_account_json: JSON.parse(gcpJson) }
-      } catch {
-        throw new Error('Invalid JSON in Service Account field.')
-      }
-    }
-    if (provider.provider === 'k8s' && kubeconfig.trim()) {
-      try {
-        return { kubeconfig: JSON.parse(kubeconfig) }
-      } catch {
-        throw new Error('Invalid JSON in Kubeconfig field.')
-      }
-    }
-    return null
-  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -246,9 +214,9 @@ export function EditProviderModal({ provider, onSave, onCancel }: EditProviderMo
             {showCredSection && (
               <div className="px-4 pb-4 border-t border-slate-700 pt-3 space-y-3">
                 <p className="text-xs text-slate-500">
-                  Credentials provided here are passed directly to the discovery worker and are{' '}
-                  <strong className="text-slate-400">not stored</strong>. Filling in these fields
-                  will trigger a re-discovery after saving.
+                  Credentials provided here are <strong className="text-slate-400">stored securely</strong>{' '}
+                  so that scheduled discovery jobs can always run. They are never returned in API responses.
+                  Leave empty to keep the current stored value.
                 </p>
 
                 {/* AWS static keys */}
