@@ -17,6 +17,10 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Provider delete purges all associated resources**: `DELETE /api/v1/providers/{id}` now
+  hard-deletes all documents in `resources`, `identities`, `data_assets`, and
+  `network_endpoints` scoped to the provider's account, then sweeps orphaned edges from all
+  eight edge collections. The response includes a `purged` map with per-collection delete counts.
 - **Scan all regions by default**: `regions: []` (empty list) now means "scan all enabled regions"
   across all providers. For AWS, the task calls `ec2:DescribeRegions` to resolve the full list
   at runtime. Azure, GCP, and Kubernetes already scanned all resources regardless of region.

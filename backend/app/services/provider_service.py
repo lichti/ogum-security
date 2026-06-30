@@ -190,14 +190,85 @@ def update_provider(
         return None
 
 
-def delete_provider(db: StandardDatabase, provider_id: str) -> bool:
+_VERTEX_COLLECTIONS = ["resources", "identities", "data_assets", "network_endpoints"]
+_EDGE_COLLECTIONS = [
+    "EXPOSED_TO", "ASSUMES_ROLE", "CONTAINS_BUG",
+    "STORES_SENSITIVE_DATA", "ROUTES_TRAFFIC",
+    "BELONGS_TO", "ATTACHED_TO", "MEMBER_OF",
+]
+
+
+def _purge_provider_resources(db: StandardDatabase, config: ProviderConfig) -> dict[str, int]:
+    """Hard-delete all graph data owned by a provider.
+
+    Vertices are deleted first by (provider, account_id/cluster_name) scope,
+    then orphaned edges are swept from all edge collections.
+    Returns a dict of {collection_name: deleted_count}.
+    """
+    counts: dict[str, int] = {}
+
+    # K8s resources don't have account_id — they use cluster_name
+    if config.provider == "k8s":
+        scope_filter = "FILTER doc.provider == @provider AND doc.cluster_name == @identifier"
+        identifier = config.cluster_name or ""
+    else:
+        scope_filter = "FILTER doc.provider == @provider AND doc.account_id == @identifier"
+        identifier = config.account_id or config.subscription_id or config.project_id or ""
+
+    for coll in _VERTEX_COLLECTIONS:
+        if not db.has_collection(coll):
+            counts[coll] = 0
+            continue
+        cursor = db.aql.execute(
+            f"""
+            FOR doc IN @@coll
+              {scope_filter}
+              REMOVE doc IN @@coll
+              COLLECT WITH COUNT INTO n
+              RETURN n
+            """,
+            bind_vars={"@coll": coll, "provider": config.provider, "identifier": identifier},
+        )
+        result = list(cursor)
+        counts[coll] = result[0] if result else 0
+
+    # Remove orphaned edges (both endpoints must still exist)
+    for edge_coll in _EDGE_COLLECTIONS:
+        if not db.has_collection(edge_coll):
+            counts[edge_coll] = 0
+            continue
+        cursor = db.aql.execute(
+            """
+            FOR e IN @@coll
+              FILTER DOCUMENT(e._from) == null OR DOCUMENT(e._to) == null
+              REMOVE e IN @@coll
+              COLLECT WITH COUNT INTO n
+              RETURN n
+            """,
+            bind_vars={"@coll": edge_coll},
+        )
+        result = list(cursor)
+        counts[edge_coll] = result[0] if result else 0
+
+    return counts
+
+
+def delete_provider(db: StandardDatabase, provider_id: str) -> tuple[bool, dict[str, int]]:
+    """Delete a provider config and all its associated graph resources.
+
+    Returns (success, purge_counts) where purge_counts maps collection → deleted count.
+    """
     if not db.has_collection("tenant_config"):
-        return False
+        return False, {}
+    config = get_provider(db, provider_id)
+    if not config:
+        return False, {}
     try:
+        purge_counts = _purge_provider_resources(db, config)
         db.collection("tenant_config").delete(provider_id)
-        return True
+        return True, purge_counts
     except Exception:
-        return False
+        return False, {}
 
 
 def update_provider_last_discovery(db: StandardDatabase, provider_id: str, job_id: str) -> None:

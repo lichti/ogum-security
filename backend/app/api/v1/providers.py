@@ -260,6 +260,11 @@ async def delete_provider_endpoint(
     provider_id: str,
     db: StandardDatabase = Depends(get_tenant_db),
 ) -> ApiResponse[dict]:
-    if not delete_provider(db, provider_id):
+    ok, purge_counts = delete_provider(db, provider_id)
+    if not ok:
         raise HTTPException(status_code=404, detail="Provider not found")
-    return ApiResponse(data={"deleted": True, "provider_id": provider_id})
+    return ApiResponse(data={
+        "deleted": True,
+        "provider_id": provider_id,
+        "purged": purge_counts,
+    })
