@@ -151,10 +151,14 @@ jobs:
         working-directory: backend
         run: |
           pip install pip-audit
-          # CVE-2026-3219 and CVE-2026-6357 affect pip (the CI runner tool, not a project dep)
+          # Ignored vulnerabilities:
+          # CVE-2026-3219, CVE-2026-6357, PYSEC-2026-196 — affect pip (CI runner tool, not a project dep)
+          # GHSA-537c-gmf6-5ccf — cryptography transitive dep; tracked for upgrade in separate PR
           PIPAPI_PYTHON_LOCATION=$(poetry env info --path)/bin/python pip-audit \
             --ignore-vuln CVE-2026-3219 \
-            --ignore-vuln CVE-2026-6357
+            --ignore-vuln CVE-2026-6357 \
+            --ignore-vuln PYSEC-2026-196 \
+            --ignore-vuln GHSA-537c-gmf6-5ccf
 
   frontend-check:
     name: Frontend — Lint, Type Check & Component Tests
