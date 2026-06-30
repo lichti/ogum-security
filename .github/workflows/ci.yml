@@ -143,16 +143,15 @@ jobs:
       - name: Install Poetry
         run: pip install poetry==1.8.3
 
-      - name: Install pip-audit
-        run: pip install pip-audit
-
       - name: Install dependencies
         working-directory: backend
         run: poetry install --no-root
 
       - name: Audit dependencies
         working-directory: backend
-        run: poetry run pip-audit
+        run: |
+          pip install pip-audit
+          PIPAPI_PYTHON_LOCATION=$(poetry env info --path)/bin/python pip-audit
 
   frontend-check:
     name: Frontend — Lint, Type Check & Component Tests

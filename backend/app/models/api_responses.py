@@ -17,7 +17,7 @@ class Meta(BaseModel):
     offset: int | None = None
 
 
-class ApiResponse(BaseModel, Generic[T]):
+class ApiResponse(BaseModel, Generic[T]):  # noqa: UP046
     data: T
     meta: Meta = Field(default_factory=Meta)
     error: str | None = None
