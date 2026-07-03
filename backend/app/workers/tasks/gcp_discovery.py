@@ -1,5 +1,5 @@
 """
-GCP discovery task — Compute instances, GCS buckets, GKE clusters.
+GCP discovery task — Compute instances, Firewall Rules, VPC Networks, GCS buckets, GKE clusters.
 
 GCP SDK calls are mocked at the SDK class level in tests via pytest-mock.
 ArangoDB upserts are idempotent: re-running discovery never duplicates resources.
@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from google.cloud.compute_v1 import InstancesClient
+from google.cloud.compute_v1 import FirewallsClient, InstancesClient, NetworksClient
 from google.cloud.container_v1 import ClusterManagerClient
 from google.cloud.storage import Client as GCSClient
 from google.oauth2.service_account import Credentials as SACredentials
@@ -35,6 +35,8 @@ _GCP_SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
 
 _ALL_GCP_RESOURCE_TYPES = [
     "compute_instance",
+    "firewall_rule",
+    "vpc_network",
     "gcs_bucket",
     "gke_cluster",
 ]
@@ -80,6 +82,71 @@ def _list_compute_instances(
                 )
             )
     return instances
+
+
+def _list_firewall_rules(
+    firewalls_client: FirewallsClient,
+    tenant_id: str,
+    project_id: str,
+) -> list[GCPResource]:
+    rules: list[GCPResource] = []
+    for fw in firewalls_client.list(project=project_id):
+        source_ranges = list(fw.source_ranges or [])
+        is_public = "0.0.0.0/0" in source_ranges and fw.direction == "INGRESS"
+        allowed = [{"protocol": a.I_p_protocol, "ports": list(a.ports or [])} for a in (fw.allowed or [])]
+        denied = [{"protocol": d.I_p_protocol, "ports": list(d.ports or [])} for d in (fw.denied or [])]
+        rules.append(
+            GCPResource(
+                tenant_id=tenant_id,
+                resource_type="firewall_rule",
+                resource_id=f"{project_id}_{fw.name}",
+                name=fw.name,
+                region="global",
+                account_id=project_id,
+                project_id=project_id,
+                is_public=is_public,
+                raw_metadata={
+                    "direction": fw.direction,
+                    "priority": fw.priority,
+                    "disabled": fw.disabled,
+                    "allowed": allowed,
+                    "denied": denied,
+                    "target_tags": list(fw.target_tags or []),
+                    "source_ranges": source_ranges,
+                },
+            )
+        )
+    return rules
+
+
+def _list_vpc_networks(
+    networks_client: NetworksClient,
+    tenant_id: str,
+    project_id: str,
+) -> list[GCPResource]:
+    networks: list[GCPResource] = []
+    for net in networks_client.list(project=project_id):
+        subnetwork_count = len(list(net.subnetworks or []))
+        routing_mode = None
+        if net.routing_config:
+            routing_mode = str(net.routing_config.routing_mode)
+        networks.append(
+            GCPResource(
+                tenant_id=tenant_id,
+                resource_type="vpc_network",
+                resource_id=f"{project_id}_{net.name}",
+                name=net.name,
+                region="global",
+                account_id=project_id,
+                project_id=project_id,
+                raw_metadata={
+                    "auto_create_subnetworks": net.auto_create_subnetworks,
+                    "routing_mode": routing_mode,
+                    "subnetwork_count": subnetwork_count,
+                },
+            )
+        )
+    return networks
 
 
 def _list_gcs_buckets(
@@ -175,6 +242,8 @@ def discover_gcp(
         # When credentials=None the GCP client libraries use ADC automatically
 
         instances_client = InstancesClient(credentials=credentials)
+        firewalls_client = FirewallsClient(credentials=credentials)
+        networks_client = NetworksClient(credentials=credentials)
         storage_client = GCSClient(project=project_id, credentials=credentials)
         cluster_client = ClusterManagerClient(credentials=credentials)
 
@@ -183,6 +252,14 @@ def discover_gcp(
         resource_keys: set[str] = set()
 
         for resource in _list_compute_instances(instances_client, tenant_id, project_id):
+            _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
+            resource_keys.add(resource.arango_key())
+
+        for resource in _list_firewall_rules(firewalls_client, tenant_id, project_id):
+            _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
+            resource_keys.add(resource.arango_key())
+
+        for resource in _list_vpc_networks(networks_client, tenant_id, project_id):
             _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
             resource_keys.add(resource.arango_key())
 

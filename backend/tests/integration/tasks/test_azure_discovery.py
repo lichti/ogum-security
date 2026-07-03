@@ -44,7 +44,20 @@ def _make_mock_vm(
     return vm
 
 
-def _patch_azure_clients(mocker, db, vms=None, vnets=None, nsgs=None, storage=None, aks=None, vaults=None):
+def _patch_azure_clients(
+    mocker,
+    db,
+    vms=None,
+    disks=None,
+    vnets=None,
+    nsgs=None,
+    public_ips=None,
+    load_balancers=None,
+    storage=None,
+    blob_containers=None,
+    aks=None,
+    vaults=None,
+):
     mocker.patch("app.workers.tasks.azure_discovery._get_tenant_db", return_value=db)
     mocker.patch("app.workers.tasks.azure_discovery.acquire_lock", return_value=True)
     mocker.patch("app.workers.tasks.azure_discovery.release_lock")
@@ -52,15 +65,19 @@ def _patch_azure_clients(mocker, db, vms=None, vnets=None, nsgs=None, storage=No
 
     mock_compute = MagicMock()
     mock_compute.virtual_machines.list_all.return_value = vms if vms is not None else []
+    mock_compute.disks.list_all.return_value = disks if disks is not None else []
     mocker.patch("app.workers.tasks.azure_discovery.ComputeManagementClient", return_value=mock_compute)
 
     mock_network = MagicMock()
     mock_network.virtual_networks.list_all.return_value = vnets if vnets is not None else []
     mock_network.network_security_groups.list_all.return_value = nsgs if nsgs is not None else []
+    mock_network.public_ip_addresses.list_all.return_value = public_ips if public_ips is not None else []
+    mock_network.load_balancers.list_all.return_value = load_balancers if load_balancers is not None else []
     mocker.patch("app.workers.tasks.azure_discovery.NetworkManagementClient", return_value=mock_network)
 
     mock_storage = MagicMock()
     mock_storage.storage_accounts.list.return_value = storage if storage is not None else []
+    mock_storage.blob_containers.list.return_value = blob_containers if blob_containers is not None else []
     mocker.patch("app.workers.tasks.azure_discovery.StorageManagementClient", return_value=mock_storage)
 
     mock_container = MagicMock()
@@ -159,3 +176,95 @@ class TestAzureDiscoveryTask:
         result = discover_azure.apply(kwargs=_AZURE_KWARGS).get()
 
         assert result["skipped"] is True
+
+    def test_managed_disks_persisted(self, db_tenant_a, mocker) -> None:
+        """Discovered managed disks must appear as resources in ArangoDB."""
+        disk = MagicMock()
+        disk.id = f"/subscriptions/{SUB_ID}/resourceGroups/rg-test/providers/Microsoft.Compute/disks/os-disk"
+        disk.name = "os-disk"
+        disk.location = "eastus"
+        disk.tags = {}
+        disk.disk_size_gb = 128
+        disk.os_type = "Linux"
+        disk.sku.name = "Premium_LRS"
+        disk.provisioning_state = "Succeeded"
+        _patch_azure_clients(mocker, db_tenant_a, disks=[disk])
+        init_tenant_schema(db_tenant_a)
+
+        result = discover_azure.apply(kwargs=_AZURE_KWARGS).get()
+
+        assert result["discovered"] >= 1
+        resources = list(db_tenant_a.collection("resources").all())
+        assert any(r["resource_type"] == "managed_disk" for r in resources)
+        assert any(r["name"] == "os-disk" for r in resources)
+
+    def test_public_ips_persisted(self, db_tenant_a, mocker) -> None:
+        """Discovered public IPs must appear as resources in ArangoDB with is_public=True."""
+        ip = MagicMock()
+        ip.id = f"/subscriptions/{SUB_ID}/resourceGroups/rg-test/providers/Microsoft.Network/publicIPAddresses/my-pip"
+        ip.name = "my-pip"
+        ip.location = "westeurope"
+        ip.tags = {}
+        ip.ip_address = "1.2.3.4"
+        ip.public_ip_allocation_method = "Static"
+        ip.provisioning_state = "Succeeded"
+        _patch_azure_clients(mocker, db_tenant_a, public_ips=[ip])
+        init_tenant_schema(db_tenant_a)
+
+        result = discover_azure.apply(kwargs=_AZURE_KWARGS).get()
+
+        assert result["discovered"] >= 1
+        resources = list(db_tenant_a.collection("resources").all())
+        pip = next((r for r in resources if r["resource_type"] == "public_ip_address"), None)
+        assert pip is not None
+        assert pip["name"] == "my-pip"
+        assert pip["is_public"] is True
+
+    def test_load_balancers_persisted(self, db_tenant_a, mocker) -> None:
+        """Discovered load balancers must appear as resources in ArangoDB."""
+        lb = MagicMock()
+        lb.id = f"/subscriptions/{SUB_ID}/resourceGroups/rg-test/providers/Microsoft.Network/loadBalancers/my-lb"
+        lb.name = "my-lb"
+        lb.location = "eastus"
+        lb.tags = {}
+        lb.sku.name = "Standard"
+        lb.frontend_ip_configurations = [MagicMock()]
+        lb.provisioning_state = "Succeeded"
+        _patch_azure_clients(mocker, db_tenant_a, load_balancers=[lb])
+        init_tenant_schema(db_tenant_a)
+
+        result = discover_azure.apply(kwargs=_AZURE_KWARGS).get()
+
+        assert result["discovered"] >= 1
+        resources = list(db_tenant_a.collection("resources").all())
+        assert any(r["resource_type"] == "load_balancer" for r in resources)
+        assert any(r["name"] == "my-lb" for r in resources)
+
+    def test_blob_containers_persisted(self, db_tenant_a, mocker) -> None:
+        """Blob containers under a storage account must be discovered and persisted."""
+        acct = MagicMock()
+        acct.id = f"/subscriptions/{SUB_ID}/resourceGroups/rg-test/providers/Microsoft.Storage/storageAccounts/myacct"
+        acct.name = "myacct"
+        acct.location = "eastus"
+        acct.tags = {}
+        acct.sku.name = "Standard_LRS"
+        acct.kind = "StorageV2"
+        acct.access_tier = "Hot"
+        acct.enable_https_traffic_only = True
+        acct.allow_blob_public_access = False
+        acct.public_network_access = "Enabled"
+
+        container = MagicMock()
+        container.name = "logs-container"
+        container.public_access = None
+        container.last_modified_time = None
+
+        _patch_azure_clients(mocker, db_tenant_a, storage=[acct], blob_containers=[container])
+        init_tenant_schema(db_tenant_a)
+
+        result = discover_azure.apply(kwargs=_AZURE_KWARGS).get()
+
+        assert result["discovered"] >= 1
+        resources = list(db_tenant_a.collection("resources").all())
+        assert any(r["resource_type"] == "blob_container" for r in resources)
+        assert any(r["name"] == "logs-container" for r in resources)

@@ -1,5 +1,6 @@
 """
-Azure discovery task — VMs, VNets, NSGs, Storage Accounts, AKS clusters, Key Vaults.
+Azure discovery task — VMs, Managed Disks, VNets, NSGs, Public IPs, Load Balancers,
+Storage Accounts, Blob Containers, AKS clusters, Key Vaults.
 
 Azure SDK calls are mocked at the SDK class level in tests via pytest-mock.
 ArangoDB upserts are idempotent: re-running discovery never duplicates resources.
@@ -35,9 +36,13 @@ logger = logging.getLogger(__name__)
 
 _ALL_AZURE_RESOURCE_TYPES = [
     "virtual_machine",
+    "managed_disk",
     "virtual_network",
     "network_security_group",
+    "public_ip_address",
+    "load_balancer",
     "storage_account",
+    "blob_container",
     "aks_cluster",
     "key_vault",
 ]
@@ -98,6 +103,38 @@ def _list_vms(
             )
         )
     return vms
+
+
+def _list_managed_disks(
+    compute_client: ComputeManagementClient,
+    tenant_id: str,
+    subscription_id: str,
+) -> list[AzureResource]:
+    disks: list[AzureResource] = []
+    for disk in compute_client.disks.list_all():
+        if disk.id is None or disk.name is None:
+            continue
+        tags = {k: v for k, v in (disk.tags or {}).items()}
+        disks.append(
+            AzureResource(
+                tenant_id=tenant_id,
+                resource_type="managed_disk",
+                resource_id=_compact_id(subscription_id, disk.id),
+                name=disk.name,
+                region=disk.location,
+                account_id=subscription_id,
+                subscription_id=subscription_id,
+                tags=tags,
+                raw_metadata={
+                    "azure_resource_id": disk.id,
+                    "disk_size_gb": getattr(disk, "disk_size_gb", None),
+                    "os_type": str(disk.os_type) if disk.os_type else None,
+                    "sku": getattr(disk.sku, "name", None) if disk.sku else None,
+                    "provisioning_state": disk.provisioning_state,
+                },
+            )
+        )
+    return disks
 
 
 def _list_vnets(
@@ -171,6 +208,72 @@ def _list_nsgs(
     return nsgs
 
 
+def _list_public_ips(
+    network_client: NetworkManagementClient,
+    tenant_id: str,
+    subscription_id: str,
+) -> list[AzureResource]:
+    ips: list[AzureResource] = []
+    for ip in network_client.public_ip_addresses.list_all():
+        if ip.id is None or ip.name is None:
+            continue
+        tags = {k: v for k, v in (ip.tags or {}).items()}
+        ips.append(
+            AzureResource(
+                tenant_id=tenant_id,
+                resource_type="public_ip_address",
+                resource_id=_compact_id(subscription_id, ip.id),
+                name=ip.name,
+                region=ip.location,
+                account_id=subscription_id,
+                subscription_id=subscription_id,
+                tags=tags,
+                is_public=True,
+                raw_metadata={
+                    "azure_resource_id": ip.id,
+                    "ip_address": getattr(ip, "ip_address", None),
+                    "allocation_method": str(ip.public_ip_allocation_method)
+                    if ip.public_ip_allocation_method
+                    else None,
+                    "provisioning_state": ip.provisioning_state,
+                },
+            )
+        )
+    return ips
+
+
+def _list_load_balancers(
+    network_client: NetworkManagementClient,
+    tenant_id: str,
+    subscription_id: str,
+) -> list[AzureResource]:
+    lbs: list[AzureResource] = []
+    for lb in network_client.load_balancers.list_all():
+        if lb.id is None or lb.name is None:
+            continue
+        tags = {k: v for k, v in (lb.tags or {}).items()}
+        frontend_count = len(list(lb.frontend_ip_configurations or []))
+        lbs.append(
+            AzureResource(
+                tenant_id=tenant_id,
+                resource_type="load_balancer",
+                resource_id=_compact_id(subscription_id, lb.id),
+                name=lb.name,
+                region=lb.location,
+                account_id=subscription_id,
+                subscription_id=subscription_id,
+                tags=tags,
+                raw_metadata={
+                    "azure_resource_id": lb.id,
+                    "sku": getattr(lb.sku, "name", None) if lb.sku else None,
+                    "frontend_ip_count": frontend_count,
+                    "provisioning_state": lb.provisioning_state,
+                },
+            )
+        )
+    return lbs
+
+
 def _list_storage_accounts(
     storage_client: StorageManagementClient,
     tenant_id: str,
@@ -206,6 +309,54 @@ def _list_storage_accounts(
             )
         )
     return accounts
+
+
+def _list_blob_containers(
+    storage_client: StorageManagementClient,
+    tenant_id: str,
+    subscription_id: str,
+    storage_account_ids: list[str],
+) -> list[AzureResource]:
+    containers: list[AzureResource] = []
+    for azure_id in storage_account_ids:
+        parts = azure_id.split("/")
+        try:
+            rg_idx = next(i for i, p in enumerate(parts) if p.lower() == "resourcegroups")
+            rg = parts[rg_idx + 1]
+        except StopIteration:
+            continue
+        account_name = parts[-1]
+        try:
+            for container in storage_client.blob_containers.list(resource_group_name=rg, account_name=account_name):
+                if container.name is None:
+                    continue
+                public_access = getattr(container, "public_access", None)
+                is_public = public_access is not None and str(public_access).lower() not in ("none", "null", "")
+                containers.append(
+                    AzureResource(
+                        tenant_id=tenant_id,
+                        resource_type="blob_container",
+                        resource_id=f"{subscription_id[:8]}_{rg}_{account_name}_{container.name}",
+                        name=container.name,
+                        region=None,
+                        account_id=subscription_id,
+                        subscription_id=subscription_id,
+                        is_public=is_public,
+                        raw_metadata={
+                            "storage_account": account_name,
+                            "resource_group": rg,
+                            "public_access": str(public_access) if public_access else None,
+                            "last_modified_time": (
+                                container.last_modified_time.isoformat()
+                                if getattr(container, "last_modified_time", None)
+                                else None
+                            ),
+                        },
+                    )
+                )
+        except Exception:
+            logger.warning("Failed to list blob containers for account=%s rg=%s — skipping", account_name, rg)
+    return containers
 
 
 def _list_aks_clusters(
@@ -324,6 +475,10 @@ def discover_azure(
             _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
             resource_keys.add(resource.arango_key())
 
+        for resource in _list_managed_disks(compute_client, tenant_id, subscription_id):
+            _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
+            resource_keys.add(resource.arango_key())
+
         for resource in _list_vnets(network_client, tenant_id, subscription_id):
             _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
             resource_keys.add(resource.arango_key())
@@ -332,7 +487,21 @@ def discover_azure(
             _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
             resource_keys.add(resource.arango_key())
 
+        for resource in _list_public_ips(network_client, tenant_id, subscription_id):
+            _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
+            resource_keys.add(resource.arango_key())
+
+        for resource in _list_load_balancers(network_client, tenant_id, subscription_id):
+            _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
+            resource_keys.add(resource.arango_key())
+
+        storage_account_ids: list[str] = []
         for resource in _list_storage_accounts(storage_client, tenant_id, subscription_id):
+            _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
+            resource_keys.add(resource.arango_key())
+            storage_account_ids.append(resource.raw_metadata["azure_resource_id"])
+
+        for resource in _list_blob_containers(storage_client, tenant_id, subscription_id, storage_account_ids):
             _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
             resource_keys.add(resource.arango_key())
 
