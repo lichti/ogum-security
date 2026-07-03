@@ -107,6 +107,8 @@ def _list_vnets(
 ) -> list[AzureResource]:
     vnets: list[AzureResource] = []
     for vnet in network_client.virtual_networks.list_all():
+        if vnet.id is None or vnet.name is None:
+            continue
         tags = {k: v for k, v in (vnet.tags or {}).items()}
         prefixes: list[str] = []
         if vnet.address_space and vnet.address_space.address_prefixes:
@@ -138,6 +140,8 @@ def _list_nsgs(
 ) -> list[AzureResource]:
     nsgs: list[AzureResource] = []
     for nsg in network_client.network_security_groups.list_all():
+        if nsg.id is None or nsg.name is None:
+            continue
         tags = {k: v for k, v in (nsg.tags or {}).items()}
         rules = list(nsg.security_rules or [])
         is_public = any(

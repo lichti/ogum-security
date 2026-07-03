@@ -53,12 +53,14 @@ python_version = "3.12"
 ignore_missing_imports = true
 # strict = true is the goal; disabled for now because:
 # - Celery @app.task decorator is untyped → untyped-decorator on every task file
-# - python-arango stubs return Cursor | AsyncJob | BatchJob | None → union-attr everywhere
 # - GCP SDK has no stubs → no-untyped-call
 # Enabling strict incrementally as stubs and annotations are added
 warn_return_any = true
 warn_unused_configs = true
 disallow_redundant_casts = true
+# python-arango stubs return overly broad unions (Cursor | AsyncJob | BatchJob | None)
+# causing false positives for union-attr, arg-type and index throughout the codebase
+disable_error_code = ["union-attr", "arg-type", "index"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
