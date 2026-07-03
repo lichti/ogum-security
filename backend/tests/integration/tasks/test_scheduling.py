@@ -3,7 +3,9 @@ Integration tests for the distributed Redis lock in scheduling.py.
 
 Redis: real instance via Docker — never mocked (per CLAUDE.md).
 """
+
 import os
+
 import pytest
 from redis import Redis
 
@@ -64,9 +66,7 @@ class TestTriggerAllDiscoveries:
         mock_apply_async.assert_called_once()
 
     def test_returns_error_for_unknown_provider(self) -> None:
-        result = trigger_all_discoveries.apply(
-            kwargs={"tenant_id": "t1", "provider": "unknown"}
-        ).get()
+        result = trigger_all_discoveries.apply(kwargs={"tenant_id": "t1", "provider": "unknown"}).get()
 
         assert result["dispatched"] is False
         assert "unknown_provider" in result["reason"]

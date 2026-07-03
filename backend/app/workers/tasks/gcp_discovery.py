@@ -5,6 +5,7 @@ GCP SDK calls are mocked at the SDK class level in tests via pytest-mock.
 ArangoDB upserts are idempotent: re-running discovery never duplicates resources.
 Resources absent from the current scan are soft-deleted (status: "deleted").
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,7 +21,12 @@ from app.core.config import settings
 from app.db.init import init_tenant_schema
 from app.models.inventory import GCPResource, Provider
 from app.workers.celery_app import celery_app
-from app.workers.tasks.discovery import _get_tenant_db, _mark_stale_deleted, _upsert
+from app.workers.tasks.discovery import (
+    _get_tenant_db,
+    _mark_stale_deleted,
+    _set_provider_status,
+    _upsert,
+)
 from app.workers.tasks.scheduling import acquire_lock, release_lock
 
 logger = logging.getLogger(__name__)
@@ -35,6 +41,7 @@ _ALL_GCP_RESOURCE_TYPES = [
 
 
 # ─── Resource list helpers ────────────────────────────────────────────────────
+
 
 def _list_compute_instances(
     instances_client: InstancesClient,
@@ -135,12 +142,14 @@ def _list_gke_clusters(
 
 # ─── Celery task ──────────────────────────────────────────────────────────────
 
+
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def discover_gcp(
     self: Any,
     tenant_id: str,
     project_id: str,
-    service_account_info: dict[str, Any],
+    service_account_info: dict[str, Any] | None = None,
+    provider_key: str | None = None,
 ) -> dict[str, Any]:
     """
     Discover all GCP resources in a project and persist them to ArangoDB.
@@ -148,23 +157,27 @@ def discover_gcp(
     Args:
         tenant_id: Ogum tenant identifier.
         project_id: GCP project ID.
-        service_account_info: Service account JSON as a dict (never stored — used only for auth).
+        service_account_info: Service account JSON as a dict (ephemeral — never stored).
+            When None, GCP clients fall back to Application Default Credentials (ADC).
+        provider_key: ArangoDB key of the provider config for status updates.
     """
     redis = Redis.from_url(settings.REDIS_URL)
     if not acquire_lock(redis, tenant_id, "gcp"):
         logger.info("GCP discovery already running for tenant=%s — skipped", tenant_id)
         return {"skipped": True, "tenant_id": tenant_id, "provider": "gcp"}
 
+    db = _get_tenant_db(tenant_id)
+
     try:
-        credentials = SACredentials.from_service_account_info(
-            service_account_info, scopes=_GCP_SCOPES
-        )
+        credentials: SACredentials | None = None
+        if service_account_info:
+            credentials = SACredentials.from_service_account_info(service_account_info, scopes=_GCP_SCOPES)
+        # When credentials=None the GCP client libraries use ADC automatically
 
         instances_client = InstancesClient(credentials=credentials)
         storage_client = GCSClient(project=project_id, credentials=credentials)
         cluster_client = ClusterManagerClient(credentials=credentials)
 
-        db = _get_tenant_db(tenant_id)
         init_tenant_schema(db)
 
         resource_keys: set[str] = set()
@@ -194,8 +207,12 @@ def discover_gcp(
 
         logger.info(
             "GCP discovery complete [tenant=%s project=%s]: discovered=%d deleted=%d",
-            tenant_id, project_id, len(resource_keys), deleted,
+            tenant_id,
+            project_id,
+            len(resource_keys),
+            deleted,
         )
+        _set_provider_status(db, provider_key, "active")
         return {
             "tenant_id": tenant_id,
             "provider": "gcp",
@@ -205,6 +222,7 @@ def discover_gcp(
 
     except Exception as exc:
         logger.exception("GCP discovery failed [tenant=%s]: %s", tenant_id, exc)
+        _set_provider_status(db, provider_key, "error")
         raise self.retry(exc=exc)
 
     finally:

@@ -8,6 +8,9 @@ import type {
   ProviderConfig,
   ProviderRegisterRequest,
   ProviderRegisterResponse,
+  ProviderUpdateRequest,
+  DiscoverRequest,
+  DiscoverResponse,
 } from './types'
 
 const apiClient = axios.create({
@@ -66,8 +69,20 @@ export const providersApi = {
   list: () =>
     apiClient.get<ApiResponse<ProviderConfig[]>>('/api/v1/providers'),
 
+  get: (providerId: string) =>
+    apiClient.get<ApiResponse<ProviderConfig>>(`/api/v1/providers/${providerId}`),
+
   register: (data: ProviderRegisterRequest) =>
     apiClient.post<ApiResponse<ProviderRegisterResponse>>('/api/v1/providers', data),
+
+  update: (providerId: string, data: ProviderUpdateRequest) =>
+    apiClient.patch<ApiResponse<ProviderConfig>>(`/api/v1/providers/${providerId}`, data),
+
+  triggerDiscovery: (providerId: string, body?: DiscoverRequest) =>
+    apiClient.post<ApiResponse<DiscoverResponse>>(
+      `/api/v1/providers/${providerId}/discover`,
+      body ?? null,
+    ),
 
   delete: (providerId: string) =>
     apiClient.delete<ApiResponse<{ deleted: boolean }>>(`/api/v1/providers/${providerId}`),

@@ -7,6 +7,7 @@ access control. A 401 or 403 in the wrong place is a security bug.
 These tests are stubs — uncomment and adapt each case once the FastAPI
 app and auth middleware are implemented (app/main.py, app/core/security.py).
 """
+
 import pytest
 
 # from fastapi.testclient import TestClient

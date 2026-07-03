@@ -15,6 +15,78 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Added
+
+- **Provider delete purges all associated resources**: `DELETE /api/v1/providers/{id}` now
+  hard-deletes all documents in `resources`, `identities`, `data_assets`, and
+  `network_endpoints` scoped to the provider's account, then sweeps orphaned edges from all
+  eight edge collections. The response includes a `purged` map with per-collection delete counts.
+- **Scan all regions by default**: `regions: []` (empty list) now means "scan all enabled regions"
+  across all providers. For AWS, the task calls `ec2:DescribeRegions` to resolve the full list
+  at runtime. Azure, GCP, and Kubernetes already scanned all resources regardless of region.
+  The wizard and edit modal show an empty field by default with a hint explaining the behavior;
+  users can still restrict to specific regions by listing them comma-separated.
+
+- **Edit provider**: `PATCH /api/v1/providers/{id}` now accepts `role_arn`, `azure_tenant_id`,
+  and `azure_client_id` updates (non-secret, safe to persist); `EditProviderModal` component
+  pre-fills current config values and supports optionally re-triggering discovery with new
+  ephemeral credentials (API keys, client secret, SA JSON, kubeconfig) that are forwarded to
+  the worker and never stored.
+- **`DiscoverRequest` type** exported from `@/lib/types`; `providersApi.triggerDiscovery` now
+  accepts an optional `DiscoverRequest` body for re-trigger with static credentials.
+- **Edit button** (Pencil icon) added to `ProvidersTable` and `ProviderCard` — opens
+  `EditProviderModal` with current provider values pre-filled.
+
+### Fixed
+
+- **Re-trigger discovery with static credentials**: `POST /{id}/discover` now accepts an optional
+  `DiscoverRequest` body so providers registered with `credential_type: static`,
+  `service_principal`, `service_account`, or `kubeconfig` can re-provide their ephemeral
+  credentials without re-registering the provider.
+- **`discover_aws` diagnostic log**: the task now logs `has_role_arn` and `has_static_keys` at
+  INFO level on start, making it easy to verify whether credentials reached the Celery worker.
+- **AWS discovery credential guard**: `NoCredentialsError` was not caught when `account_id` was
+  already provided at registration — the `sts:GetCallerIdentity` call was skipped, so missing
+  credentials were only detected mid-discovery inside `_list_vpcs`. Fixed by always calling STS
+  upfront to validate credentials regardless of whether `account_id` is known.
+
+### Added
+
+- **Multi-method credential support for all providers**:
+  - **AWS**: IAM Role (`role_arn` via `sts:AssumeRole`) and static API keys
+    (`aws_access_key_id` / `aws_secret_access_key`, dev only) are both supported in the UI
+    and API; ambient worker credentials remain the fallback when neither is provided
+  - **Azure**: Service Principal (`azure_tenant_id` + `azure_client_id` + `azure_client_secret`)
+    and `DefaultAzureCredential` (Managed Identity / ADC) are both selectable in the wizard
+  - **GCP**: Service Account JSON and Application Default Credentials (ADC) are both supported
+  - **Kubernetes**: external kubeconfig (JSON) and in-cluster ServiceAccount are both selectable
+- **`credential_type` field** on `ProviderConfig`: records which credential method was used
+  at registration time (`role`, `static`, `ambient`, `service_principal`, `managed_identity`,
+  `service_account`, `adc`, `kubeconfig`, `incluster`) — no secrets stored
+- **`azure_tenant_id` / `azure_client_id`** stored on `ProviderConfig` (non-secret, safe to
+  persist) so re-triggered discovery can restore Azure credential context
+- **`provider_key` threading** in `discover_azure` and `discover_gcp`: both tasks now accept
+  and propagate the `provider_key` parameter so ArangoDB status updates work correctly
+- **Status updates for Azure and GCP**: `_set_provider_status(db, provider_key, "active"|"error")`
+  now called on task success and failure, consistent with AWS behavior
+- **`MethodSelector` UI component** in `ConnectWizard`: segmented control for choosing
+  credential method per provider — no separate page or modal required
+- **Provider Management API** (`/api/v1/providers`): new endpoints `GET /{id}`, `PATCH /{id}`,
+  and `POST /{id}/discover` for fetching, updating, and re-triggering discovery on a specific provider
+- **Provider `status` field**: `ProviderConfig` now tracks `pending | active | error | disabled` state;
+  status transitions automatically on discovery dispatch and enable/disable toggle
+- **`ProviderUpdateRequest` model**: supports partial PATCH of `display_name`, `regions`, and `enabled`
+- **`DiscoverResponse` model**: typed response for the re-trigger discovery endpoint
+- **`ProviderType` enum**: provider field is now validated as a literal type (`aws | azure | gcp | k8s`)
+- **`/providers` page** (frontend): connected accounts management page with table showing provider
+  type, display name, account identifier, regions, status badge, last discovery time, and per-row
+  actions (re-discover, enable/disable, delete)
+- **`ProvidersTable` component**: reusable table and card components for provider management,
+  with busy state per row and correct disabled states for actions
+- **`providersApi` client additions**: `get()`, `update()`, and `triggerDiscovery()` methods
+- **`docs/connecting-accounts.md`**: comprehensive guide covering UI wizard, API reference,
+  credential model, discovery schedule, status reference, and troubleshooting
+
 ### Fixed
 
 - `docker/backend.Dockerfile` — base image updated from `python:3.11-slim` to `python:3.13-slim`

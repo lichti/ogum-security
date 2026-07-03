@@ -7,10 +7,11 @@ Rules enforced here:
 - Cloud provider APIs (boto3, azure-sdk, gcp): mocked at SDK level in each test
 - Celery: EAGER mode in unit/security tests; real worker in integration/tasks
 """
+
 import os
+
 import pytest
 from arango import ArangoClient
-from fastapi.testclient import TestClient
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -27,6 +28,7 @@ _DB_NAME_B = f"ogum_{TEST_TENANT_B}"
 
 
 # ─── ArangoDB fixtures ─────────────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="session")
 def arango_client() -> ArangoClient:

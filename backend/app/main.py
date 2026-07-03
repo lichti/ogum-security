@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import settings
 from app.api.v1 import inventory, providers
+from app.core.config import settings
 
 app = FastAPI(
     title="Ogum Security API",

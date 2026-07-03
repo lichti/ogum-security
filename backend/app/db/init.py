@@ -2,6 +2,7 @@
 Tenant database schema initialization.
 Idempotent — safe to run multiple times against the same database.
 """
+
 from arango.database import StandardDatabase
 
 VERTEX_COLLECTIONS = [
@@ -56,8 +57,7 @@ def init_tenant_schema(db: StandardDatabase) -> None:
         col = db.collection(collection_name)
         existing = col.indexes()
         already_exists = any(
-            sorted(idx.get("fields", [])) == sorted(fields) and idx.get("type") == "persistent"
-            for idx in existing
+            sorted(idx.get("fields", [])) == sorted(fields) and idx.get("type") == "persistent" for idx in existing
         )
         if not already_exists:
             col.add_index({"type": "persistent", "fields": fields, "unique": unique})

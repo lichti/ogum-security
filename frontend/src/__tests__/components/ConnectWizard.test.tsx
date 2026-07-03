@@ -35,7 +35,9 @@ describe('ConnectWizard', () => {
   it('shows Azure-specific field when Azure selected', () => {
     render(<ConnectWizard onComplete={onComplete} onCancel={onCancel} />)
     fireEvent.click(screen.getByText('Microsoft Azure'))
-    expect(screen.getByPlaceholderText(/xxxxxxxx-xxxx/)).toBeInTheDocument()
+    expect(screen.getByText('Subscription ID')).toBeInTheDocument()
+    // Multiple UUID-format placeholders appear (subscription, tenant, client IDs)
+    expect(screen.getAllByPlaceholderText(/xxxxxxxx-xxxx/).length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows GCP project field when GCP selected', () => {

@@ -7,8 +7,10 @@ Rules:
 - Redis lock: mocked so tests focus on discovery logic
 - Celery: task.apply() runs synchronously — no broker required
 """
-import pytest
+
 from unittest.mock import MagicMock
+
+import pytest
 
 from app.db.init import init_tenant_schema
 from app.workers.tasks.azure_discovery import discover_azure
@@ -33,10 +35,7 @@ def _make_mock_vm(
     vm = MagicMock()
     vm.name = name
     vm.location = location
-    vm.id = (
-        f"/subscriptions/{SUB_ID}/resourceGroups/{rg}"
-        f"/providers/Microsoft.Compute/virtualMachines/{name}"
-    )
+    vm.id = f"/subscriptions/{SUB_ID}/resourceGroups/{rg}/providers/Microsoft.Compute/virtualMachines/{name}"
     vm.tags = {"env": "test"}
     vm.hardware_profile.vm_size = "Standard_D2s_v3"
     vm.os_profile.computer_name = name
@@ -95,16 +94,13 @@ class TestAzureDiscoveryTask:
     def test_discovery_is_idempotent(self, db_tenant_a, mocker) -> None:
         """Running discovery twice must not duplicate resources in ArangoDB."""
         vm = _make_mock_vm("idempotent-vm", "rg-test")
-        mock_compute = _patch_azure_clients(mocker, db_tenant_a, vms=[vm])
+        _patch_azure_clients(mocker, db_tenant_a, vms=[vm])
         init_tenant_schema(db_tenant_a)
 
         discover_azure.apply(kwargs=_AZURE_KWARGS).get()
         discover_azure.apply(kwargs=_AZURE_KWARGS).get()
 
-        vms_in_db = [
-            r for r in db_tenant_a.collection("resources").all()
-            if r["resource_type"] == "virtual_machine"
-        ]
+        vms_in_db = [r for r in db_tenant_a.collection("resources").all() if r["resource_type"] == "virtual_machine"]
         assert len(vms_in_db) == 1
 
     def test_absent_vms_marked_deleted(self, db_tenant_a, mocker) -> None:
@@ -142,10 +138,7 @@ class TestAzureDiscoveryTask:
 
         # First run: VM is discovered
         discover_azure.apply(kwargs=_AZURE_KWARGS).get()
-        vms_first = [
-            r for r in db_tenant_a.collection("resources").all()
-            if r["resource_type"] == "virtual_machine"
-        ]
+        vms_first = [r for r in db_tenant_a.collection("resources").all() if r["resource_type"] == "virtual_machine"]
         assert len(vms_first) == 1
         assert vms_first[0]["status"] == "active"
 
@@ -153,10 +146,7 @@ class TestAzureDiscoveryTask:
         result = discover_azure.apply(kwargs=_AZURE_KWARGS).get()
 
         assert result["deleted"] >= 1
-        vms_after = [
-            r for r in db_tenant_a.collection("resources").all()
-            if r["resource_type"] == "virtual_machine"
-        ]
+        vms_after = [r for r in db_tenant_a.collection("resources").all() if r["resource_type"] == "virtual_machine"]
         assert len(vms_after) == 1
         assert vms_after[0]["status"] == "deleted"
 

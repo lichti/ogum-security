@@ -5,12 +5,13 @@ Azure SDK calls are mocked at the SDK class level in tests via pytest-mock.
 ArangoDB upserts are idempotent: re-running discovery never duplicates resources.
 Resources absent from the current scan are soft-deleted (status: "deleted").
 """
+
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-from azure.identity import ClientSecretCredential
+from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.containerservice import ContainerServiceClient
 from azure.mgmt.keyvault import KeyVaultManagementClient
@@ -22,7 +23,12 @@ from app.core.config import settings
 from app.db.init import init_tenant_schema
 from app.models.inventory import AzureResource, Provider
 from app.workers.celery_app import celery_app
-from app.workers.tasks.discovery import _get_tenant_db, _mark_stale_deleted, _upsert
+from app.workers.tasks.discovery import (
+    _get_tenant_db,
+    _mark_stale_deleted,
+    _set_provider_status,
+    _upsert,
+)
 from app.workers.tasks.scheduling import acquire_lock, release_lock
 
 logger = logging.getLogger(__name__)
@@ -38,6 +44,7 @@ _ALL_AZURE_RESOURCE_TYPES = [
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _extract_rg_and_name(azure_id: str) -> tuple[str, str]:
     """Parse Azure resource path → (resource_group, resource_name)."""
@@ -58,6 +65,7 @@ def _compact_id(subscription_id: str, azure_id: str) -> str:
 
 
 # ─── Resource list helpers ────────────────────────────────────────────────────
+
 
 def _list_vms(
     compute_client: ComputeManagementClient,
@@ -99,6 +107,8 @@ def _list_vnets(
 ) -> list[AzureResource]:
     vnets: list[AzureResource] = []
     for vnet in network_client.virtual_networks.list_all():
+        if vnet.id is None or vnet.name is None:
+            continue
         tags = {k: v for k, v in (vnet.tags or {}).items()}
         prefixes: list[str] = []
         if vnet.address_space and vnet.address_space.address_prefixes:
@@ -130,6 +140,8 @@ def _list_nsgs(
 ) -> list[AzureResource]:
     nsgs: list[AzureResource] = []
     for nsg in network_client.network_security_groups.list_all():
+        if nsg.id is None or nsg.name is None:
+            continue
         tags = {k: v for k, v in (nsg.tags or {}).items()}
         rules = list(nsg.security_rules or [])
         is_public = any(
@@ -259,14 +271,16 @@ def _list_key_vaults(
 
 # ─── Celery task ──────────────────────────────────────────────────────────────
 
+
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def discover_azure(
     self: Any,
     tenant_id: str,
     subscription_id: str,
-    client_id: str,
-    client_secret: str,
-    azure_tenant_id: str,
+    client_id: str | None = None,
+    client_secret: str | None = None,
+    azure_tenant_id: str | None = None,
+    provider_key: str | None = None,
 ) -> dict[str, Any]:
     """
     Discover all Azure resources for a subscription and persist them to ArangoDB.
@@ -274,28 +288,34 @@ def discover_azure(
     Args:
         tenant_id: Ogum tenant identifier.
         subscription_id: Azure subscription ID.
-        client_id: Azure service principal client ID.
-        client_secret: Azure service principal client secret.
-        azure_tenant_id: Azure Active Directory tenant ID.
+        client_id: Azure service principal client ID (optional — uses DefaultAzureCredential if absent).
+        client_secret: Azure service principal client secret (ephemeral — never stored).
+        azure_tenant_id: Azure Active Directory tenant ID (optional with Service Principal).
+        provider_key: ArangoDB key of the provider config for status updates.
     """
     redis = Redis.from_url(settings.REDIS_URL)
     if not acquire_lock(redis, tenant_id, "azure"):
         logger.info("Azure discovery already running for tenant=%s — skipped", tenant_id)
         return {"skipped": True, "tenant_id": tenant_id, "provider": "azure"}
 
+    db = _get_tenant_db(tenant_id)
+
     try:
-        credential = ClientSecretCredential(
-            tenant_id=azure_tenant_id,
-            client_id=client_id,
-            client_secret=client_secret,
-        )
+        if client_id and client_secret and azure_tenant_id:
+            credential: ClientSecretCredential | DefaultAzureCredential = ClientSecretCredential(
+                tenant_id=azure_tenant_id,
+                client_id=client_id,
+                client_secret=client_secret,
+            )
+        else:
+            credential = DefaultAzureCredential()
+
         compute_client = ComputeManagementClient(credential, subscription_id)
         network_client = NetworkManagementClient(credential, subscription_id)
         storage_client = StorageManagementClient(credential, subscription_id)
         container_client = ContainerServiceClient(credential, subscription_id)
         keyvault_client = KeyVaultManagementClient(credential, subscription_id)
 
-        db = _get_tenant_db(tenant_id)
         init_tenant_schema(db)
 
         resource_keys: set[str] = set()
@@ -337,8 +357,12 @@ def discover_azure(
 
         logger.info(
             "Azure discovery complete [tenant=%s sub=%s]: discovered=%d deleted=%d",
-            tenant_id, subscription_id, len(resource_keys), deleted,
+            tenant_id,
+            subscription_id,
+            len(resource_keys),
+            deleted,
         )
+        _set_provider_status(db, provider_key, "active")
         return {
             "tenant_id": tenant_id,
             "provider": "azure",
@@ -348,6 +372,7 @@ def discover_azure(
 
     except Exception as exc:
         logger.exception("Azure discovery failed [tenant=%s]: %s", tenant_id, exc)
+        _set_provider_status(db, provider_key, "error")
         raise self.retry(exc=exc)
 
     finally:

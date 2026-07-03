@@ -59,9 +59,12 @@ export interface InventoryFilters {
   offset: number
 }
 
+export type ProviderType = 'aws' | 'azure' | 'gcp' | 'k8s'
+export type ProviderStatus = 'pending' | 'active' | 'error' | 'disabled'
+
 export interface ProviderConfig {
   key: string
-  provider: string
+  provider: ProviderType
   display_name: string
   account_id?: string | null
   subscription_id?: string | null
@@ -69,24 +72,70 @@ export interface ProviderConfig {
   cluster_name?: string | null
   regions: string[]
   enabled: boolean
+  status: ProviderStatus
+  credential_type: string
+  role_arn?: string | null
+  azure_tenant_id?: string | null
+  azure_client_id?: string | null
   last_discovery_at?: string | null
   last_discovery_job_id?: string | null
   created_at: string
 }
 
 export interface ProviderRegisterRequest {
-  provider: string
+  provider: ProviderType
   display_name: string
   account_id?: string
-  subscription_id?: string
-  project_id?: string
-  cluster_name?: string
   regions?: string[]
   validate_connection?: boolean
+  // AWS
+  role_arn?: string
+  aws_access_key_id?: string
+  aws_secret_access_key?: string
+  // Azure
+  subscription_id?: string
+  azure_tenant_id?: string
+  azure_client_id?: string
+  azure_client_secret?: string
+  // GCP
+  project_id?: string
+  gcp_service_account_json?: Record<string, unknown>
+  // Kubernetes
+  cluster_name?: string
+  kubeconfig?: Record<string, unknown>
+}
+
+export interface ProviderUpdateRequest {
+  display_name?: string
+  regions?: string[]
+  enabled?: boolean
+  role_arn?: string | null
+  azure_tenant_id?: string | null
+  azure_client_id?: string | null
+  // Secrets stored for scheduled jobs — never returned in API responses
+  aws_access_key_id?: string | null
+  aws_secret_access_key?: string | null
+  azure_client_secret?: string | null
+  gcp_service_account_json?: Record<string, unknown> | null
+  kubeconfig?: Record<string, unknown> | null
+}
+
+export interface DiscoverRequest {
+  aws_access_key_id?: string
+  aws_secret_access_key?: string
+  azure_client_secret?: string
+  gcp_service_account_json?: Record<string, unknown>
+  kubeconfig?: Record<string, unknown>
 }
 
 export interface ProviderRegisterResponse {
   provider_id: string
   discovery_job_id: string | null
+  message: string
+}
+
+export interface DiscoverResponse {
+  provider_id: string
+  discovery_job_id: string
   message: string
 }

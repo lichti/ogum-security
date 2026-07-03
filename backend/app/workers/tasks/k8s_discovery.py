@@ -5,6 +5,7 @@ K8s SDK calls are mocked at the API class level in tests via pytest-mock.
 ArangoDB upserts are idempotent: re-running discovery never duplicates resources.
 Resources absent from the current scan are soft-deleted (status: "deleted").
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,7 +19,12 @@ from app.core.config import settings
 from app.db.init import init_tenant_schema
 from app.models.inventory import K8sResource, Provider
 from app.workers.celery_app import celery_app
-from app.workers.tasks.discovery import _get_tenant_db, _mark_stale_deleted, _upsert
+from app.workers.tasks.discovery import (
+    _get_tenant_db,
+    _mark_stale_deleted,
+    _set_provider_status,
+    _upsert,
+)
 from app.workers.tasks.scheduling import acquire_lock, release_lock
 
 logger = logging.getLogger(__name__)
@@ -33,6 +39,7 @@ _ALL_K8S_RESOURCE_TYPES = [
 
 
 # ─── Resource list helpers ────────────────────────────────────────────────────
+
 
 def _list_pods(
     core_v1: CoreV1Api,
@@ -103,10 +110,11 @@ def _list_services(
         spec = svc.spec
         svc_type = spec.type if spec else None
         is_public = svc_type == "LoadBalancer"
-        ports = [
-            {"port": p.port, "protocol": p.protocol, "target_port": str(p.target_port)}
-            for p in (spec.ports or [])
-        ] if spec else []
+        ports = (
+            [{"port": p.port, "protocol": p.protocol, "target_port": str(p.target_port)} for p in (spec.ports or [])]
+            if spec
+            else []
+        )
         services.append(
             K8sResource(
                 tenant_id=tenant_id,
@@ -182,12 +190,14 @@ def _list_namespaces(
 
 # ─── Celery task ──────────────────────────────────────────────────────────────
 
+
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def discover_k8s(
     self: Any,
     tenant_id: str,
     cluster_name: str,
     kubeconfig: dict[str, Any] | None = None,
+    provider_key: str | None = None,
 ) -> dict[str, Any]:
     """
     Discover all Kubernetes resources in a cluster and persist them to ArangoDB.
@@ -195,12 +205,16 @@ def discover_k8s(
     Args:
         tenant_id: Ogum tenant identifier.
         cluster_name: Logical cluster name (used as part of ArangoDB key).
-        kubeconfig: Kubeconfig dict for remote clusters. None → in-cluster config.
+        kubeconfig: Kubeconfig dict for remote clusters (ephemeral — never stored).
+            None → in-cluster config (ServiceAccount mounted by Kubernetes).
+        provider_key: ArangoDB key of the provider config for status updates.
     """
     redis = Redis.from_url(settings.REDIS_URL)
     if not acquire_lock(redis, tenant_id, "k8s"):
         logger.info("K8s discovery already running for tenant=%s — skipped", tenant_id)
         return {"skipped": True, "tenant_id": tenant_id, "provider": "k8s"}
+
+    db = _get_tenant_db(tenant_id)
 
     try:
         if kubeconfig:
@@ -211,7 +225,6 @@ def discover_k8s(
         core_v1 = CoreV1Api()
         apps_v1 = AppsV1Api()
 
-        db = _get_tenant_db(tenant_id)
         init_tenant_schema(db)
 
         resource_keys: set[str] = set()
@@ -249,8 +262,12 @@ def discover_k8s(
 
         logger.info(
             "K8s discovery complete [tenant=%s cluster=%s]: discovered=%d deleted=%d",
-            tenant_id, cluster_name, len(resource_keys), deleted,
+            tenant_id,
+            cluster_name,
+            len(resource_keys),
+            deleted,
         )
+        _set_provider_status(db, provider_key, "active")
         return {
             "tenant_id": tenant_id,
             "provider": "k8s",
@@ -261,6 +278,7 @@ def discover_k8s(
 
     except Exception as exc:
         logger.exception("K8s discovery failed [tenant=%s cluster=%s]: %s", tenant_id, cluster_name, exc)
+        _set_provider_status(db, provider_key, "error")
         raise self.retry(exc=exc)
 
     finally:

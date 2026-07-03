@@ -7,8 +7,10 @@ Rules:
 - Redis lock: mocked so tests focus on discovery logic
 - Celery: task.apply() runs synchronously — no broker required
 """
-import pytest
+
 from unittest.mock import MagicMock
+
+import pytest
 
 from app.db.init import init_tenant_schema
 from app.workers.tasks.gcp_discovery import discover_gcp
@@ -98,8 +100,7 @@ class TestGCPDiscoveryTask:
         discover_gcp.apply(kwargs=_GCP_KWARGS).get()
 
         instances_in_db = [
-            r for r in db_tenant_a.collection("resources").all()
-            if r["resource_type"] == "compute_instance"
+            r for r in db_tenant_a.collection("resources").all() if r["resource_type"] == "compute_instance"
         ]
         assert len(instances_in_db) == 1
 
@@ -144,8 +145,7 @@ class TestGCPDiscoveryTask:
 
         assert result["deleted"] >= 1
         instances_in_db = [
-            r for r in db_tenant_a.collection("resources").all()
-            if r["resource_type"] == "compute_instance"
+            r for r in db_tenant_a.collection("resources").all() if r["resource_type"] == "compute_instance"
         ]
         assert len(instances_in_db) == 1
         assert instances_in_db[0]["status"] == "deleted"
