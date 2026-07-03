@@ -152,6 +152,14 @@ class TestGCPDiscoveryTask:
             return_value=empty_clusters,
         )
 
+        empty_firewalls = MagicMock()
+        empty_firewalls.list.return_value = []
+        mocker.patch("app.workers.tasks.gcp_discovery.FirewallsClient", return_value=empty_firewalls)
+
+        empty_networks = MagicMock()
+        empty_networks.list.return_value = []
+        mocker.patch("app.workers.tasks.gcp_discovery.NetworksClient", return_value=empty_networks)
+
         init_tenant_schema(db_tenant_a)
 
         discover_gcp.apply(kwargs=_GCP_KWARGS).get()
