@@ -43,7 +43,7 @@ def _make_mock_instance(name: str = "test-vm", zone: str = "us-central1-a") -> M
     return inst
 
 
-def _patch_gcp_clients(mocker, db, instances=None, buckets=None, clusters=None):
+def _patch_gcp_clients(mocker, db, instances=None, buckets=None, clusters=None, firewalls=None, networks=None):
     mocker.patch("app.workers.tasks.gcp_discovery._get_tenant_db", return_value=db)
     mocker.patch("app.workers.tasks.gcp_discovery.acquire_lock", return_value=True)
     mocker.patch("app.workers.tasks.gcp_discovery.release_lock")
@@ -57,6 +57,20 @@ def _patch_gcp_clients(mocker, db, instances=None, buckets=None, clusters=None):
     mocker.patch(
         "app.workers.tasks.gcp_discovery.InstancesClient",
         return_value=mock_instances_client,
+    )
+
+    mock_firewalls_client = MagicMock()
+    mock_firewalls_client.list.return_value = firewalls if firewalls is not None else []
+    mocker.patch(
+        "app.workers.tasks.gcp_discovery.FirewallsClient",
+        return_value=mock_firewalls_client,
+    )
+
+    mock_networks_client = MagicMock()
+    mock_networks_client.list.return_value = networks if networks is not None else []
+    mocker.patch(
+        "app.workers.tasks.gcp_discovery.NetworksClient",
+        return_value=mock_networks_client,
     )
 
     mock_storage = MagicMock()
@@ -159,3 +173,43 @@ class TestGCPDiscoveryTask:
         result = discover_gcp.apply(kwargs=_GCP_KWARGS).get()
 
         assert result["skipped"] is True
+
+    def test_firewall_rules_persisted(self, db_tenant_a, mocker) -> None:
+        """Discovered firewall rules must appear as resources in ArangoDB."""
+        fw = MagicMock()
+        fw.name = "allow-http"
+        fw.direction = "INGRESS"
+        fw.priority = 1000
+        fw.disabled = False
+        fw.source_ranges = ["0.0.0.0/0"]
+        fw.allowed = []
+        fw.denied = []
+        fw.target_tags = ["web"]
+        _patch_gcp_clients(mocker, db_tenant_a, firewalls=[fw])
+        init_tenant_schema(db_tenant_a)
+
+        result = discover_gcp.apply(kwargs=_GCP_KWARGS).get()
+
+        assert result["discovered"] >= 1
+        resources = list(db_tenant_a.collection("resources").all())
+        rule = next((r for r in resources if r["resource_type"] == "firewall_rule"), None)
+        assert rule is not None
+        assert rule["name"] == "allow-http"
+        assert rule["is_public"] is True
+
+    def test_vpc_networks_persisted(self, db_tenant_a, mocker) -> None:
+        """Discovered VPC networks must appear as resources in ArangoDB."""
+        net = MagicMock()
+        net.name = "default"
+        net.auto_create_subnetworks = True
+        net.routing_config = None
+        net.subnetworks = ["sub1", "sub2"]
+        _patch_gcp_clients(mocker, db_tenant_a, networks=[net])
+        init_tenant_schema(db_tenant_a)
+
+        result = discover_gcp.apply(kwargs=_GCP_KWARGS).get()
+
+        assert result["discovered"] >= 1
+        resources = list(db_tenant_a.collection("resources").all())
+        assert any(r["resource_type"] == "vpc_network" for r in resources)
+        assert any(r["name"] == "default" for r in resources)
