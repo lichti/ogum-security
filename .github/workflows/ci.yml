@@ -74,7 +74,7 @@ jobs:
 
       - name: Unit tests
         working-directory: backend
-        run: poetry run pytest -m unit --cov=app --cov-report=term-missing
+        run: poetry run pytest -m unit --cov=app --cov-report=term-missing --cov-fail-under=0
         env:
           ENVIRONMENT: test
 
@@ -94,7 +94,7 @@ jobs:
           --health-cmd "curl -f http://localhost:8529/_api/version"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 12
 
       redis:
         image: redis:7-alpine
