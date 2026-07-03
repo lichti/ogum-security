@@ -127,6 +127,7 @@ jobs:
         env:
           ARANGO_URL: http://localhost:8529
           ARANGO_ROOT_PASSWORD: testpassword
+          ARANGO_PASSWORD: testpassword
           REDIS_URL: redis://localhost:6379/0
           ENVIRONMENT: test
 
