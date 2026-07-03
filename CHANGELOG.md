@@ -17,6 +17,18 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **CSPM scan engine (Ogum.Static Sprint 1)**: Prowler v5 programmatic integration via
+  `ProwlerService`. `POST /api/v1/scans` triggers a Celery task (`run_cspm_scan`) that
+  executes Prowler checks, normalizes results to OCSF-aligned `Finding` objects, and persists
+  them in ArangoDB with idempotent upserts (`check_id + resource_id + tenant_id` as key).
+  `GET /api/v1/scans/{job_id}` and `GET /api/v1/scans` expose job status and history.
+- **`findings` and `scan_jobs` vertex collections** added to tenant schema (`init_tenant_schema`).
+  `HAS_FINDING` edge collection links `resources → findings`.
+  Persistent indexes on `tenant_id`, `severity`, `status`, `provider`, and `check_id`.
+- **`Finding` and `ScanJob` Pydantic models** (`app/models/finding.py`): OCSF-aligned severity
+  levels (CRITICAL/HIGH/MEDIUM/LOW/INFORMATIONAL), finding status (FAIL/PASS/MUTED/ACCEPTED),
+  framework mapping list, remediation text and code, scan job lifecycle tracking.
+
 - **Provider delete purges all associated resources**: `DELETE /api/v1/providers/{id}` now
   hard-deletes all documents in `resources`, `identities`, `data_assets`, and
   `network_endpoints` scoped to the provider's account, then sweeps orphaned edges from all

@@ -12,6 +12,8 @@ VERTEX_COLLECTIONS = [
     "network_endpoints",
     "data_assets",
     "tenant_config",
+    "findings",
+    "scan_jobs",
 ]
 
 EDGE_COLLECTIONS = [
@@ -23,6 +25,7 @@ EDGE_COLLECTIONS = [
     "BELONGS_TO",
     "ATTACHED_TO",
     "MEMBER_OF",
+    "HAS_FINDING",
 ]
 
 # (collection_name, fields, unique)
@@ -40,6 +43,13 @@ PERSISTENT_INDEXES: list[tuple[str, list[str], bool]] = [
     ("data_assets", ["arn"], False),
     ("vulnerabilities", ["tenant_id"], False),
     ("vulnerabilities", ["tenant_id", "check_id"], False),
+    ("findings", ["tenant_id"], False),
+    ("findings", ["tenant_id", "severity"], False),
+    ("findings", ["tenant_id", "status"], False),
+    ("findings", ["tenant_id", "provider"], False),
+    ("findings", ["check_id"], False),
+    ("scan_jobs", ["tenant_id"], False),
+    ("scan_jobs", ["tenant_id", "status"], False),
 ]
 
 
