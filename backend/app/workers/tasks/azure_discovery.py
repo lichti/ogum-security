@@ -232,7 +232,9 @@ def _list_public_ips(
                 raw_metadata={
                     "azure_resource_id": ip.id,
                     "ip_address": getattr(ip, "ip_address", None),
-                    "allocation_method": str(ip.public_ip_allocation_method) if ip.public_ip_allocation_method else None,
+                    "allocation_method": str(ip.public_ip_allocation_method)
+                    if ip.public_ip_allocation_method
+                    else None,
                     "provisioning_state": ip.provisioning_state,
                 },
             )
