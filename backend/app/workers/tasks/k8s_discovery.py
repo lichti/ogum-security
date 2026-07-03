@@ -1,5 +1,7 @@
 """
-Kubernetes discovery task — Pods, Deployments, Services, Nodes, Namespaces.
+Kubernetes discovery task — Pods, Deployments, DaemonSets, StatefulSets, Services,
+Ingresses, NetworkPolicies, ServiceAccounts, ClusterRoles, ClusterRoleBindings,
+Nodes, Namespaces, PersistentVolumes.
 
 K8s SDK calls are mocked at the API class level in tests via pytest-mock.
 ArangoDB upserts are idempotent: re-running discovery never duplicates resources.
@@ -12,7 +14,7 @@ import logging
 from typing import Any
 
 from kubernetes import config as k8s_config
-from kubernetes.client import AppsV1Api, CoreV1Api
+from kubernetes.client import AppsV1Api, CoreV1Api, NetworkingV1Api, RbacAuthorizationV1Api
 from redis import Redis
 
 from app.core.config import settings
@@ -32,9 +34,17 @@ logger = logging.getLogger(__name__)
 _ALL_K8S_RESOURCE_TYPES = [
     "pod",
     "deployment",
+    "daemon_set",
+    "stateful_set",
     "service",
+    "ingress",
+    "network_policy",
+    "service_account_k8s",
+    "cluster_role",
+    "cluster_role_binding",
     "node",
     "namespace",
+    "persistent_volume",
 ]
 
 
@@ -99,6 +109,63 @@ def _list_deployments(
     return deployments
 
 
+def _list_daemon_sets(
+    apps_v1: AppsV1Api,
+    tenant_id: str,
+    cluster_name: str,
+) -> list[K8sResource]:
+    daemon_sets: list[K8sResource] = []
+    for ds in apps_v1.list_daemon_set_for_all_namespaces().items:
+        meta = ds.metadata
+        status = ds.status
+        daemon_sets.append(
+            K8sResource(
+                tenant_id=tenant_id,
+                resource_type="daemon_set",
+                resource_id=meta.uid,
+                name=meta.name,
+                cluster_name=cluster_name,
+                namespace=meta.namespace,
+                tags={k: v for k, v in (meta.labels or {}).items()},
+                raw_metadata={
+                    "desired_number_scheduled": status.desired_number_scheduled if status else None,
+                    "number_ready": status.number_ready if status else None,
+                    "number_available": status.number_available if status else None,
+                },
+            )
+        )
+    return daemon_sets
+
+
+def _list_stateful_sets(
+    apps_v1: AppsV1Api,
+    tenant_id: str,
+    cluster_name: str,
+) -> list[K8sResource]:
+    stateful_sets: list[K8sResource] = []
+    for ss in apps_v1.list_stateful_set_for_all_namespaces().items:
+        meta = ss.metadata
+        spec = ss.spec
+        status = ss.status
+        stateful_sets.append(
+            K8sResource(
+                tenant_id=tenant_id,
+                resource_type="stateful_set",
+                resource_id=meta.uid,
+                name=meta.name,
+                cluster_name=cluster_name,
+                namespace=meta.namespace,
+                tags={k: v for k, v in (meta.labels or {}).items()},
+                raw_metadata={
+                    "replicas": spec.replicas if spec else None,
+                    "ready_replicas": status.ready_replicas if status else None,
+                    "service_name": spec.service_name if spec else None,
+                },
+            )
+        )
+    return stateful_sets
+
+
 def _list_services(
     core_v1: CoreV1Api,
     tenant_id: str,
@@ -133,6 +200,151 @@ def _list_services(
             )
         )
     return services
+
+
+def _list_ingresses(
+    networking_v1: NetworkingV1Api,
+    tenant_id: str,
+    cluster_name: str,
+) -> list[K8sResource]:
+    ingresses: list[K8sResource] = []
+    for ing in networking_v1.list_ingress_for_all_namespaces().items:
+        meta = ing.metadata
+        spec = ing.spec
+        rules = list(spec.rules or []) if spec else []
+        has_tls = bool(spec.tls) if spec else False
+        hostnames = [r.host for r in rules if r.host]
+        ingresses.append(
+            K8sResource(
+                tenant_id=tenant_id,
+                resource_type="ingress",
+                resource_id=meta.uid,
+                name=meta.name,
+                cluster_name=cluster_name,
+                namespace=meta.namespace,
+                is_public=bool(rules),
+                tags={k: v for k, v in (meta.labels or {}).items()},
+                raw_metadata={
+                    "hostnames": hostnames,
+                    "has_tls": has_tls,
+                    "rule_count": len(rules),
+                    "ingress_class": getattr(spec, "ingress_class_name", None) if spec else None,
+                },
+            )
+        )
+    return ingresses
+
+
+def _list_network_policies(
+    networking_v1: NetworkingV1Api,
+    tenant_id: str,
+    cluster_name: str,
+) -> list[K8sResource]:
+    policies: list[K8sResource] = []
+    for np in networking_v1.list_network_policy_for_all_namespaces().items:
+        meta = np.metadata
+        spec = np.spec
+        policy_types = list(spec.policy_types or []) if spec else []
+        policies.append(
+            K8sResource(
+                tenant_id=tenant_id,
+                resource_type="network_policy",
+                resource_id=meta.uid,
+                name=meta.name,
+                cluster_name=cluster_name,
+                namespace=meta.namespace,
+                tags={k: v for k, v in (meta.labels or {}).items()},
+                raw_metadata={
+                    "policy_types": policy_types,
+                    "pod_selector": str(spec.pod_selector) if spec and spec.pod_selector else None,
+                },
+            )
+        )
+    return policies
+
+
+def _list_k8s_service_accounts(
+    core_v1: CoreV1Api,
+    tenant_id: str,
+    cluster_name: str,
+) -> list[K8sResource]:
+    service_accounts: list[K8sResource] = []
+    for sa in core_v1.list_service_account_for_all_namespaces().items:
+        meta = sa.metadata
+        secret_count = len(list(sa.secrets or []))
+        automount = getattr(sa, "automount_service_account_token", None)
+        service_accounts.append(
+            K8sResource(
+                tenant_id=tenant_id,
+                resource_type="service_account_k8s",
+                resource_id=meta.uid,
+                name=meta.name,
+                cluster_name=cluster_name,
+                namespace=meta.namespace,
+                tags={k: v for k, v in (meta.labels or {}).items()},
+                raw_metadata={
+                    "secret_count": secret_count,
+                    "automount_service_account_token": automount,
+                },
+            )
+        )
+    return service_accounts
+
+
+def _list_cluster_roles(
+    rbac_v1: RbacAuthorizationV1Api,
+    tenant_id: str,
+    cluster_name: str,
+) -> list[K8sResource]:
+    cluster_roles: list[K8sResource] = []
+    for cr in rbac_v1.list_cluster_role().items:
+        meta = cr.metadata
+        resource_id = meta.uid if meta.uid else meta.name
+        rule_count = len(list(cr.rules or []))
+        is_builtin = meta.name.startswith("system:") if meta.name else False
+        cluster_roles.append(
+            K8sResource(
+                tenant_id=tenant_id,
+                resource_type="cluster_role",
+                resource_id=resource_id,
+                name=meta.name,
+                cluster_name=cluster_name,
+                tags={k: v for k, v in (meta.labels or {}).items()},
+                raw_metadata={
+                    "rule_count": rule_count,
+                    "is_builtin": is_builtin,
+                },
+            )
+        )
+    return cluster_roles
+
+
+def _list_cluster_role_bindings(
+    rbac_v1: RbacAuthorizationV1Api,
+    tenant_id: str,
+    cluster_name: str,
+) -> list[K8sResource]:
+    bindings: list[K8sResource] = []
+    for crb in rbac_v1.list_cluster_role_binding().items:
+        meta = crb.metadata
+        resource_id = meta.uid if meta.uid else meta.name
+        subject_count = len(list(crb.subjects or []))
+        role_ref_name = crb.role_ref.name if crb.role_ref else None
+        bindings.append(
+            K8sResource(
+                tenant_id=tenant_id,
+                resource_type="cluster_role_binding",
+                resource_id=resource_id,
+                name=meta.name,
+                cluster_name=cluster_name,
+                tags={k: v for k, v in (meta.labels or {}).items()},
+                raw_metadata={
+                    "role_ref": role_ref_name,
+                    "subject_count": subject_count,
+                },
+            )
+        )
+    return bindings
 
 
 def _list_nodes(
@@ -188,6 +400,38 @@ def _list_namespaces(
     return nss
 
 
+def _list_persistent_volumes(
+    core_v1: CoreV1Api,
+    tenant_id: str,
+    cluster_name: str,
+) -> list[K8sResource]:
+    pvs: list[K8sResource] = []
+    for pv in core_v1.list_persistent_volume().items:
+        meta = pv.metadata
+        spec = pv.spec
+        status = pv.status
+        capacity = dict(spec.capacity) if spec and spec.capacity else {}
+        access_modes = list(spec.access_modes or []) if spec else []
+        pvs.append(
+            K8sResource(
+                tenant_id=tenant_id,
+                resource_type="persistent_volume",
+                resource_id=meta.uid,
+                name=meta.name,
+                cluster_name=cluster_name,
+                tags={k: v for k, v in (meta.labels or {}).items()},
+                raw_metadata={
+                    "capacity": capacity,
+                    "access_modes": access_modes,
+                    "storage_class": spec.storage_class_name if spec else None,
+                    "phase": status.phase if status else None,
+                    "reclaim_policy": spec.persistent_volume_reclaim_policy if spec else None,
+                },
+            )
+        )
+    return pvs
+
+
 # ─── Celery task ──────────────────────────────────────────────────────────────
 
 
@@ -224,6 +468,8 @@ def discover_k8s(
 
         core_v1 = CoreV1Api()
         apps_v1 = AppsV1Api()
+        networking_v1 = NetworkingV1Api()
+        rbac_v1 = RbacAuthorizationV1Api()
 
         init_tenant_schema(db)
 
@@ -237,7 +483,35 @@ def discover_k8s(
             _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
             resource_keys.add(resource.arango_key())
 
+        for resource in _list_daemon_sets(apps_v1, tenant_id, cluster_name):
+            _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
+            resource_keys.add(resource.arango_key())
+
+        for resource in _list_stateful_sets(apps_v1, tenant_id, cluster_name):
+            _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
+            resource_keys.add(resource.arango_key())
+
         for resource in _list_services(core_v1, tenant_id, cluster_name):
+            _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
+            resource_keys.add(resource.arango_key())
+
+        for resource in _list_ingresses(networking_v1, tenant_id, cluster_name):
+            _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
+            resource_keys.add(resource.arango_key())
+
+        for resource in _list_network_policies(networking_v1, tenant_id, cluster_name):
+            _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
+            resource_keys.add(resource.arango_key())
+
+        for resource in _list_k8s_service_accounts(core_v1, tenant_id, cluster_name):
+            _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
+            resource_keys.add(resource.arango_key())
+
+        for resource in _list_cluster_roles(rbac_v1, tenant_id, cluster_name):
+            _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
+            resource_keys.add(resource.arango_key())
+
+        for resource in _list_cluster_role_bindings(rbac_v1, tenant_id, cluster_name):
             _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
             resource_keys.add(resource.arango_key())
 
@@ -246,6 +520,10 @@ def discover_k8s(
             resource_keys.add(resource.arango_key())
 
         for resource in _list_namespaces(core_v1, tenant_id, cluster_name):
+            _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
+            resource_keys.add(resource.arango_key())
+
+        for resource in _list_persistent_volumes(core_v1, tenant_id, cluster_name):
             _upsert(db, "resources", resource.to_arango_doc(), resource.to_arango_update())
             resource_keys.add(resource.arango_key())
 
