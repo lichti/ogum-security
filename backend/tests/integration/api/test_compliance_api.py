@@ -116,8 +116,10 @@ def test_compliance_summary_threat_score_max_when_all_pass(api_client_a, db_tena
 
 @pytest.mark.integration
 def test_compliance_summary_tenant_isolation(api_client_b, db_tenant_a) -> None:
+    # db_tenant_a schema may not be initialized; init it explicitly before seeding
+    init_tenant_schema(db_tenant_a)
     _seed(db_tenant_a, TEST_TENANT_A, "check_a", "Finding A", "CRITICAL", "FAIL", ["CIS-AWS-2.0"])
-    # tenant-b has no findings — api_client_b is scoped to tenant-b
+    # tenant-b has no findings — api_client_b is scoped to tenant-b's database
     resp = api_client_b.get("/api/v1/compliance/summary", headers=HEADERS_B)
     assert resp.status_code == 200
     assert resp.json()["data"]["frameworks"] == []
