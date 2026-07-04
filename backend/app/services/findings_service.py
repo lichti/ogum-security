@@ -19,7 +19,8 @@ def _encode_cursor(detected_at: str, key: str) -> str:
 
 def _decode_cursor(cursor: str) -> dict[str, str] | None:
     try:
-        return json.loads(base64.urlsafe_b64decode(cursor.encode()).decode())
+        result = json.loads(base64.urlsafe_b64decode(cursor.encode()).decode())
+        return result if isinstance(result, dict) else None
     except Exception:
         return None
 
@@ -115,7 +116,7 @@ def get_finding(
         doc = db.collection("findings").get(finding_key)
     except Exception:
         return None
-    if doc is None or doc.get("tenant_id") != tenant_id:
+    if not isinstance(doc, dict) or doc.get("tenant_id") != tenant_id:
         return None
 
     # Strip ArangoDB internal fields
@@ -150,7 +151,7 @@ def update_finding_status(
     reason: str | None = None,
 ) -> dict[str, Any] | None:
     doc = db.collection("findings").get(finding_key)
-    if doc is None or doc.get("tenant_id") != tenant_id:
+    if not isinstance(doc, dict) or doc.get("tenant_id") != tenant_id:
         return None
 
     if new_status not in (FindingStatus.MUTED, FindingStatus.ACCEPTED):
