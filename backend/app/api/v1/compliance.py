@@ -1,0 +1,18 @@
+from arango.database import StandardDatabase
+from fastapi import APIRouter, Depends, Header, HTTPException
+
+from app.api.v1.inventory import get_tenant_db
+from app.services import compliance_service
+
+router = APIRouter(prefix="/api/v1/compliance", tags=["compliance"])
+
+
+@router.get("/summary")
+def compliance_summary(
+    x_tenant_id: str = Header(..., alias="X-Tenant-Id"),
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> dict:
+    try:
+        return {"data": compliance_service.get_compliance_summary(db, x_tenant_id)}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

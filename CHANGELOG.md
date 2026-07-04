@@ -17,6 +17,27 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Findings UI (Ogum.Static Sprint 3)**: `/findings` page with a full-featured `FindingsTable`
+  component — severity badge column, MUTED/ACCEPTED/PASS/FAIL status, provider badge,
+  keyset cursor pagination (Previous/Next). `FindingFilters` bar with debounced search, six
+  dropdown filters (severity, status, provider, framework, source), and active-filter chips
+  with individual clear and "Clear all". `FindingDetailPanel` slide-in (440px) showing resource
+  metadata, risk description, remediation steps, CLI command with copy-to-clipboard, framework
+  badges, mute modal with required reason field, and a placeholder "Generate PR ✨" (Ogum.AI,
+  Epic 05). Panel closes on Escape key or backdrop click.
+- **Compliance dashboard** (`/compliance`): framework score sidebar with pass/fail counts and
+  progress bar, main panel with detailed scores, ThreatScore gauge (0–100 weighted by severity
+  of open FAIL findings), top-10 failing controls ordered by occurrence count.
+- **`GET /api/v1/compliance/summary`**: AQL-powered aggregation endpoint returning per-framework
+  pass/fail/total/score, global ThreatScore, and top-10 failing checks by count — all scoped to
+  the requesting tenant.
+- **`SeverityBadge` component** (`components/ui/SeverityBadge.tsx`): dedicated wrapper around
+  `Badge` that maps `SeverityLevel` enum to the correct variant — reused across findings table,
+  detail panel, and compliance page.
+- **Frontend types and API client** extended with `Finding`, `FindingDetail`, `PagedFindings`,
+  `FindingsFilter`, `ComplianceSummary`, `FrameworkScore` types; `findingsApi` (list, get, mute,
+  accept) and `complianceApi` (summary) added to `lib/api.ts`.
+
 - **Findings API (Ogum.Static Sprint 2)**: `GET /api/v1/findings` with server-side filtering
   (provider, severity, status, framework, region, account_id, resource_type, source, full-text `q`)
   and keyset cursor pagination (stable across large datasets). `GET /api/v1/findings/{key}` returns

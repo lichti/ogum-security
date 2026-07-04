@@ -59,6 +59,87 @@ export interface InventoryFilters {
   offset: number
 }
 
+// ─── Findings ─────────────────────────────────────────────────────────────────
+
+export type SeverityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFORMATIONAL'
+export type FindingStatus = 'FAIL' | 'PASS' | 'MUTED' | 'ACCEPTED'
+export type FindingSource = 'cspm' | 'iac'
+
+export interface Finding {
+  _key: string
+  finding_id: string
+  tenant_id: string
+  check_id: string
+  title: string
+  description: string
+  resource_id: string
+  resource_arn: string | null
+  resource_type: string
+  severity: SeverityLevel
+  status: FindingStatus
+  provider: string
+  region: string | null
+  account_id: string
+  framework_mapping: string[]
+  remediation: string | null
+  remediation_code: string | null
+  source: FindingSource
+  detected_at: string
+  updated_at: string
+  mute_reason: string | null
+  scan_job_id: string | null
+}
+
+export interface FindingDetail extends Finding {
+  resource: {
+    name: string | null
+    arn: string | null
+    resource_type: string
+    region: string | null
+    account_id: string | null
+  } | null
+  attack_paths: unknown[]
+  cli_command: string | null
+}
+
+export interface PagedFindings {
+  items: Finding[]
+  next_cursor: string | null
+  count: number
+}
+
+export interface FindingsFilter {
+  provider?: string
+  severity?: SeverityLevel
+  status?: FindingStatus
+  framework?: string
+  region?: string
+  account_id?: string
+  resource_type?: string
+  source?: FindingSource
+  q?: string
+  limit: number
+  cursor?: string
+}
+
+// ─── Compliance ────────────────────────────────────────────────────────────────
+
+export interface FrameworkScore {
+  id: string
+  pass: number
+  fail: number
+  total: number
+  score: number
+}
+
+export interface ComplianceSummary {
+  frameworks: FrameworkScore[]
+  threat_score: number
+  top_failing: { check_id: string; title: string; severity: SeverityLevel; count: number }[]
+}
+
+// ─── Providers ────────────────────────────────────────────────────────────────
+
 export type ProviderType = 'aws' | 'azure' | 'gcp' | 'k8s'
 export type ProviderStatus = 'pending' | 'active' | 'error' | 'disabled'
 
