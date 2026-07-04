@@ -17,6 +17,19 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Findings API (Ogum.Static Sprint 2)**: `GET /api/v1/findings` with server-side filtering
+  (provider, severity, status, framework, region, account_id, resource_type, source, full-text `q`)
+  and keyset cursor pagination (stable across large datasets). `GET /api/v1/findings/{key}` returns
+  the full finding enriched with linked resource metadata, attack path placeholders (Epic 02), and
+  the best available CLI remediation command. `PATCH /api/v1/findings/{key}` mutates status to
+  `MUTED` (requires `reason`) or `ACCEPTED`; every change is written to the `audit_log` collection.
+- **`audit_log` vertex collection** added to tenant schema with indexes on `tenant_id` and
+  `(tenant_id, finding_key)` — stores every finding status mutation with actor, reason, and timestamp.
+- **`app/services/cli_command.py`**: provider-aware CLI command builder. Priority: stored
+  `remediation_code` from Prowler → known resource-type template → provider fallback.
+  Supports AWS, Azure, GCP, and Kubernetes. ARN-style resource IDs are simplified to the last
+  segment for ergonomic CLI output.
+
 - **CSPM scan engine (Ogum.Static Sprint 1)**: Prowler v5 programmatic integration via
   `ProwlerService`. `POST /api/v1/scans` triggers a Celery task (`run_cspm_scan`) that
   executes Prowler checks, normalizes results to OCSF-aligned `Finding` objects, and persists

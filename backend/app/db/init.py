@@ -14,6 +14,7 @@ VERTEX_COLLECTIONS = [
     "tenant_config",
     "findings",
     "scan_jobs",
+    "audit_log",
 ]
 
 EDGE_COLLECTIONS = [
@@ -50,6 +51,8 @@ PERSISTENT_INDEXES: list[tuple[str, list[str], bool]] = [
     ("findings", ["check_id"], False),
     ("scan_jobs", ["tenant_id"], False),
     ("scan_jobs", ["tenant_id", "status"], False),
+    ("audit_log", ["tenant_id"], False),
+    ("audit_log", ["tenant_id", "finding_key"], False),
 ]
 
 

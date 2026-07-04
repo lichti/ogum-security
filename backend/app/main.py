@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import inventory, providers, scans
+from app.api.v1 import findings, inventory, providers, scans
 from app.core.config import settings
 
 app = FastAPI(
@@ -29,6 +29,7 @@ async def health() -> dict:
 app.include_router(inventory.router)
 app.include_router(providers.router)
 app.include_router(scans.router)
+app.include_router(findings.router)
 
 # Routers registered here as modules are built
 # from app.api.v1 import findings, graph, compliance, auth
