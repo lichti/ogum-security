@@ -100,7 +100,7 @@ def list_findings(
 
     next_cursor: str | None = None
     if len(rows) == limit + 1:
-        last = rows[limit]
+        last = rows[limit - 1]  # last item actually returned, not the overflow item
         next_cursor = _encode_cursor(last["detected_at"], last["_key"])
         rows = rows[:limit]
 

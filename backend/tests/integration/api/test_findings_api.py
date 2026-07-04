@@ -122,7 +122,15 @@ class TestListFindings:
 
     def test_text_search_by_title(self, api_client, db_tenant_a):
         _seed_finding(db_tenant_a, "s3-001", title="Public S3 Bucket")
-        _seed_finding(db_tenant_a, "sg-001", title="Overly Permissive Security Group")
+        # Override check_id and resource_arn so they don't contain "s3" and pollute the search
+        _seed_finding(
+            db_tenant_a,
+            "sg-001",
+            title="Overly Permissive Security Group",
+            check_id="check_sg_overly_permissive",
+            resource_id="arn:aws:ec2:us-east-1:123456789012:security-group/sg-12345",
+            resource_arn="arn:aws:ec2:us-east-1:123456789012:security-group/sg-12345",
+        )
 
         resp = api_client.get("/api/v1/findings?q=s3", headers=HEADERS)
 
