@@ -79,9 +79,7 @@ def test_compliance_summary_threat_score_zero_when_all_pass(client: TestClient, 
 
 
 @pytest.mark.integration
-def test_compliance_summary_tenant_isolation(
-    client: TestClient, db_tenant_a, db_tenant_b
-) -> None:
+def test_compliance_summary_tenant_isolation(client: TestClient, db_tenant_a, db_tenant_b) -> None:
     _seed(db_tenant_a, "tenant-a", "check_a", "Finding A", "CRITICAL", "FAIL", ["CIS-AWS-2.0"])
     # tenant-b has no findings
     resp = client.get("/api/v1/compliance/summary", headers={"X-Tenant-Id": "tenant-b"})
