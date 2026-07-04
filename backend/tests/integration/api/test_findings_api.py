@@ -158,9 +158,7 @@ class TestListFindings:
         assert data1["count"] == 1
         assert data1["next_cursor"] is not None
 
-        resp2 = api_client.get(
-            f"/api/v1/findings?limit=1&cursor={data1['next_cursor']}", headers=HEADERS
-        )
+        resp2 = api_client.get(f"/api/v1/findings?limit=1&cursor={data1['next_cursor']}", headers=HEADERS)
         data2 = resp2.json()["data"]
         assert data2["count"] == 1
         assert data2["next_cursor"] is None
@@ -276,10 +274,6 @@ class TestUpdateFindingStatus:
             headers=HEADERS,
         )
 
-        logs = list(
-            db_tenant_a.aql.execute(
-                "FOR l IN audit_log FILTER l.finding_key == 'audit-me' RETURN l"
-            )
-        )
+        logs = list(db_tenant_a.aql.execute("FOR l IN audit_log FILTER l.finding_key == 'audit-me' RETURN l"))
         assert len(logs) == 1
         assert logs[0]["action"] == "status_changed_to_MUTED"
