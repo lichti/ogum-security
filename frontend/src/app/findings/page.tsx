@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FindingsTable } from '@/components/findings/FindingsTable'
 import { FindingFilters } from '@/components/findings/FindingFilters'
+import { ExportButton } from '@/components/findings/ExportButton'
 import { FindingDetailPanel } from '@/components/findings/FindingDetailPanel'
 import { SeverityBadge } from '@/components/ui/SeverityBadge'
 import { findingsApi } from '@/lib/api'
@@ -61,7 +62,10 @@ export default function FindingsPage() {
             <h1 className="text-2xl font-bold text-slate-100">Findings</h1>
             <p className="text-slate-500 text-sm mt-1">CSPM and IaC security findings across all providers</p>
           </div>
-          {/* Severity summary chips */}
+          {/* Actions + severity summary chips */}
+          <div className="flex items-center gap-4">
+            <ExportButton filters={filters} />
+          </div>
           <div className="flex gap-2">
             {SEVERITY_ORDER.filter((s) => severityCounts[s]).map((s) => (
               <button

@@ -17,6 +17,27 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **IaC scanning (Ogum.Static Sprint 4)**: `POST /api/v1/scans/iac` triggers a Celery task that
+  shallow-clones a Git repository, runs Checkov across Terraform, CloudFormation, and Kubernetes
+  manifests, and persists findings with `source: iac`. Repository tokens are injected into the
+  HTTPS URL at clone time and never stored or logged. Cloned repos are cleaned up in a `finally`
+  block after each scan.
+- **`CheckovService`** (`app/services/checkov_service.py`): wraps Checkov's programmatic API
+  (`TFRunner`, `CFNRunner`, `K8sRunner`), normalizes check results to `Finding` objects with
+  OCSF-aligned severity levels, and maps resource IDs to cloud provider (`aws`, `azure`, `gcp`,
+  `iac`). Raises a graceful `[]` result on `ImportError` (checkov optional dependency).
+- **`GET /api/v1/findings/export`**: streams all findings matching the active filter set as CSV
+  or JSON (OCSF-aligned). Streaming uses a generator with keyset cursor pagination internally —
+  safe for exports of 100k+ findings without loading all rows into memory. The `/export` route is
+  registered before `/{finding_key}` to prevent FastAPI treating the literal "export" as a path
+  parameter.
+- **Export button** (`components/findings/ExportButton.tsx`): dropdown with CSV and JSON (OCSF)
+  options; triggers a browser `Blob` download with the current filter set applied. Appears in the
+  Findings page header next to the severity counter chips.
+- **`docs/scanning.md`**: public documentation covering CSPM scan trigger and polling, supported
+  compliance frameworks, IaC scan parameters (including token security notes), export formats and
+  filter options, and CSV field reference.
+
 - **Findings UI (Ogum.Static Sprint 3)**: `/findings` page with a full-featured `FindingsTable`
   component — severity badge column, MUTED/ACCEPTED/PASS/FAIL status, provider badge,
   keyset cursor pagination (Previous/Next). `FindingFilters` bar with debounced search, six

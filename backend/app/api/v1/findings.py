@@ -1,11 +1,16 @@
-"""Findings API — list, detail, and status mutation endpoints."""
+"""Findings API — list, detail, status mutation, and export endpoints."""
 
 from __future__ import annotations
 
-from typing import Any
+import csv
+import io
+import json
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 from arango.database import StandardDatabase
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, model_validator
 
 from app.api.v1.inventory import get_tenant_db
@@ -76,6 +81,111 @@ async def list_findings_endpoint(
     )
 
     return ApiResponse(data=PagedFindings(items=items, next_cursor=next_cursor, count=len(items)))
+
+
+_EXPORT_FIELDS = [
+    "check_id",
+    "title",
+    "severity",
+    "status",
+    "provider",
+    "resource_type",
+    "resource_id",
+    "resource_arn",
+    "account_id",
+    "region",
+    "source",
+    "framework_mapping",
+    "remediation",
+    "detected_at",
+    "updated_at",
+]
+
+
+def _findings_stream(
+    db: StandardDatabase,
+    tenant_id: str,
+    filters: dict[str, Any],
+    export_format: Literal["csv", "json"],
+) -> Any:
+    """Generator that streams findings rows in the requested format."""
+    page_limit = 500
+    cursor: str | None = None
+
+    if export_format == "csv":
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=_EXPORT_FIELDS, extrasaction="ignore", lineterminator="\n")
+        writer.writeheader()
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate()
+
+        while True:
+            rows, next_cursor = list_findings(db, tenant_id, **filters, limit=page_limit, cursor=cursor)
+            for row in rows:
+                if isinstance(row.get("framework_mapping"), list):
+                    row = {**row, "framework_mapping": "|".join(row["framework_mapping"])}
+                writer.writerow(row)
+                yield buf.getvalue()
+                buf.seek(0)
+                buf.truncate()
+            if not next_cursor:
+                break
+            cursor = next_cursor
+
+    else:  # json
+        first = True
+        yield '{"data":['
+        while True:
+            rows, next_cursor = list_findings(db, tenant_id, **filters, limit=page_limit, cursor=cursor)
+            for row in rows:
+                if not first:
+                    yield ","
+                yield json.dumps(row, default=str)
+                first = False
+            if not next_cursor:
+                break
+            cursor = next_cursor
+        yield "]}"
+
+
+@router.get("/export")
+def export_findings_endpoint(
+    x_tenant_id: str = Header(..., alias="X-Tenant-Id"),
+    db: StandardDatabase = Depends(get_tenant_db),
+    format: Literal["csv", "json"] = Query(default="csv"),
+    provider: str | None = Query(default=None),
+    severity: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    framework: str | None = Query(default=None),
+    region: str | None = Query(default=None),
+    account_id: str | None = Query(default=None),
+    resource_type: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+) -> StreamingResponse:
+    """Stream findings as CSV or OCSF-aligned JSON with active filters applied."""
+    date_str = datetime.now(UTC).strftime("%Y%m%d")
+    filename = f"findings_{date_str}.{format}"
+
+    filters: dict[str, Any] = {
+        "provider": provider,
+        "severity": severity,
+        "status": status,
+        "framework": framework,
+        "region": region,
+        "account_id": account_id,
+        "resource_type": resource_type,
+        "source": source,
+        "q": q,
+    }
+
+    media_type = "text/csv" if format == "csv" else "application/json"
+    return StreamingResponse(
+        _findings_stream(db, x_tenant_id, filters, format),
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{finding_key}", response_model=ApiResponse[dict[str, Any]])
