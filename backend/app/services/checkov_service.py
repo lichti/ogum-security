@@ -102,7 +102,7 @@ class CheckovService:
             logger.error("checkov package not available; IaC scan skipped")
             return []
 
-        runners = [TFRunner(), CFNRunner(), K8sRunner()]
+        runners: list[Any] = [TFRunner(), CFNRunner(), K8sRunner()]
         findings: list[Finding] = []
 
         for runner in runners:
