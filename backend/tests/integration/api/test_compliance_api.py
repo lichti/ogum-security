@@ -1,10 +1,46 @@
 """Integration tests for GET /api/v1/compliance/summary."""
 
+from __future__ import annotations
+
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.v1.inventory import get_tenant_db
+from app.db.init import init_tenant_schema
+from app.main import app
+from tests.conftest import TEST_TENANT_A, TEST_TENANT_B
 
-def _seed(db, tenant_id: str, check_id: str, title: str, severity: str, status: str, frameworks: list[str]) -> None:
+HEADERS_A = {"X-Tenant-Id": TEST_TENANT_A}
+HEADERS_B = {"X-Tenant-Id": TEST_TENANT_B}
+
+
+@pytest.fixture
+def api_client_a(db_tenant_a):
+    init_tenant_schema(db_tenant_a)
+    app.dependency_overrides[get_tenant_db] = lambda: db_tenant_a
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def api_client_b(db_tenant_b):
+    init_tenant_schema(db_tenant_b)
+    app.dependency_overrides[get_tenant_db] = lambda: db_tenant_b
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
+
+
+def _seed(
+    db,
+    tenant_id: str,
+    check_id: str,
+    title: str,
+    severity: str,
+    status: str,
+    frameworks: list[str],
+) -> None:
     db.collection("findings").insert(
         {
             "tenant_id": tenant_id,
@@ -33,8 +69,8 @@ def _seed(db, tenant_id: str, check_id: str, title: str, severity: str, status: 
 
 
 @pytest.mark.integration
-def test_compliance_summary_empty(client: TestClient, db_tenant_a) -> None:
-    resp = client.get("/api/v1/compliance/summary", headers={"X-Tenant-Id": "tenant-a"})
+def test_compliance_summary_empty(api_client_a) -> None:
+    resp = api_client_a.get("/api/v1/compliance/summary", headers=HEADERS_A)
     assert resp.status_code == 200
     body = resp.json()["data"]
     assert body["frameworks"] == []
@@ -43,12 +79,12 @@ def test_compliance_summary_empty(client: TestClient, db_tenant_a) -> None:
 
 
 @pytest.mark.integration
-def test_compliance_summary_with_findings(client: TestClient, db_tenant_a) -> None:
-    _seed(db_tenant_a, "tenant-a", "check_s3_public", "S3 Public", "CRITICAL", "FAIL", ["CIS-AWS-2.0", "PCI_DSS"])
-    _seed(db_tenant_a, "tenant-a", "check_sg_open", "Open SG", "HIGH", "FAIL", ["CIS-AWS-2.0"])
-    _seed(db_tenant_a, "tenant-a", "check_mfa", "MFA Enabled", "MEDIUM", "PASS", ["CIS-AWS-2.0"])
+def test_compliance_summary_with_findings(api_client_a, db_tenant_a) -> None:
+    _seed(db_tenant_a, TEST_TENANT_A, "check_s3_public", "S3 Public", "CRITICAL", "FAIL", ["CIS-AWS-2.0", "PCI_DSS"])
+    _seed(db_tenant_a, TEST_TENANT_A, "check_sg_open", "Open SG", "HIGH", "FAIL", ["CIS-AWS-2.0"])
+    _seed(db_tenant_a, TEST_TENANT_A, "check_mfa", "MFA Enabled", "MEDIUM", "PASS", ["CIS-AWS-2.0"])
 
-    resp = client.get("/api/v1/compliance/summary", headers={"X-Tenant-Id": "tenant-a"})
+    resp = api_client_a.get("/api/v1/compliance/summary", headers=HEADERS_A)
     assert resp.status_code == 200
     body = resp.json()["data"]
 
@@ -70,18 +106,18 @@ def test_compliance_summary_with_findings(client: TestClient, db_tenant_a) -> No
 
 
 @pytest.mark.integration
-def test_compliance_summary_threat_score_zero_when_all_pass(client: TestClient, db_tenant_a) -> None:
-    _seed(db_tenant_a, "tenant-a", "check_all_pass", "All Good", "LOW", "PASS", ["SOC2"])
-    resp = client.get("/api/v1/compliance/summary", headers={"X-Tenant-Id": "tenant-a"})
+def test_compliance_summary_threat_score_max_when_all_pass(api_client_a, db_tenant_a) -> None:
+    _seed(db_tenant_a, TEST_TENANT_A, "check_all_pass", "All Good", "LOW", "PASS", ["SOC2"])
+    resp = api_client_a.get("/api/v1/compliance/summary", headers=HEADERS_A)
     assert resp.status_code == 200
     # No FAIL findings → threat_score should be 100 (max)
     assert resp.json()["data"]["threat_score"] == 100
 
 
 @pytest.mark.integration
-def test_compliance_summary_tenant_isolation(client: TestClient, db_tenant_a, db_tenant_b) -> None:
-    _seed(db_tenant_a, "tenant-a", "check_a", "Finding A", "CRITICAL", "FAIL", ["CIS-AWS-2.0"])
-    # tenant-b has no findings
-    resp = client.get("/api/v1/compliance/summary", headers={"X-Tenant-Id": "tenant-b"})
+def test_compliance_summary_tenant_isolation(api_client_b, db_tenant_a) -> None:
+    _seed(db_tenant_a, TEST_TENANT_A, "check_a", "Finding A", "CRITICAL", "FAIL", ["CIS-AWS-2.0"])
+    # tenant-b has no findings — api_client_b is scoped to tenant-b
+    resp = api_client_b.get("/api/v1/compliance/summary", headers=HEADERS_B)
     assert resp.status_code == 200
     assert resp.json()["data"]["frameworks"] == []
