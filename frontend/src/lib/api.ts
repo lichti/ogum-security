@@ -1,6 +1,10 @@
 import axios from 'axios'
 import type {
   ApiResponse,
+  ComplianceSummary,
+  FindingDetail,
+  FindingsFilter,
+  PagedFindings,
   ResourceSummary,
   ResourceDetail,
   InventoryStats,
@@ -86,4 +90,45 @@ export const providersApi = {
 
   delete: (providerId: string) =>
     apiClient.delete<ApiResponse<{ deleted: boolean }>>(`/api/v1/providers/${providerId}`),
+}
+
+export const findingsApi = {
+  list: (filters: FindingsFilter) =>
+    apiClient.get<ApiResponse<PagedFindings>>('/api/v1/findings', {
+      params: {
+        provider: filters.provider || undefined,
+        severity: filters.severity || undefined,
+        status: filters.status || undefined,
+        framework: filters.framework || undefined,
+        region: filters.region || undefined,
+        account_id: filters.account_id || undefined,
+        resource_type: filters.resource_type || undefined,
+        source: filters.source || undefined,
+        q: filters.q || undefined,
+        limit: filters.limit,
+        cursor: filters.cursor || undefined,
+      },
+    }),
+
+  get: (findingKey: string) =>
+    apiClient.get<ApiResponse<FindingDetail>>(`/api/v1/findings/${findingKey}`),
+
+  mute: (findingKey: string, reason: string) =>
+    apiClient.patch<ApiResponse<FindingDetail>>(`/api/v1/findings/${findingKey}`, {
+      status: 'MUTED',
+      reason,
+    }),
+
+  accept: (findingKey: string, reason?: string) =>
+    apiClient.patch<ApiResponse<FindingDetail>>(`/api/v1/findings/${findingKey}`, {
+      status: 'ACCEPTED',
+      reason,
+    }),
+}
+
+export const complianceApi = {
+  summary: (tenantId?: string) =>
+    apiClient.get<ApiResponse<ComplianceSummary>>('/api/v1/compliance/summary', {
+      params: tenantId ? { tenant_id: tenantId } : undefined,
+    }),
 }
