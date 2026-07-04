@@ -80,10 +80,7 @@ def list_findings(
     if cursor:
         c = _decode_cursor(cursor)
         if c:
-            cursor_clause = (
-                "FILTER (f.detected_at < @cur_date) OR "
-                "(f.detected_at == @cur_date AND f._key < @cur_key)"
-            )
+            cursor_clause = "FILTER (f.detected_at < @cur_date) OR (f.detected_at == @cur_date AND f._key < @cur_key)"
             bind["cur_date"] = c["detected_at"]
             bind["cur_key"] = c["_key"]
 
