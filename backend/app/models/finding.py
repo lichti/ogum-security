@@ -98,6 +98,7 @@ class ScanJob(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error_message: str | None = None
+    iac_config: dict[str, Any] | None = None
     created_at: datetime = Field(default_factory=_utcnow)
 
     def to_arango_doc(self) -> dict[str, Any]:

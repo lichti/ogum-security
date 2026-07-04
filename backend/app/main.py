@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import compliance, findings, inventory, providers, scans
+from app.api.v1 import compliance, findings, iac_scans, inventory, providers, scans
 from app.core.config import settings
 
 app = FastAPI(
@@ -31,3 +31,4 @@ app.include_router(providers.router)
 app.include_router(scans.router)
 app.include_router(findings.router)
 app.include_router(compliance.router)
+app.include_router(iac_scans.router)

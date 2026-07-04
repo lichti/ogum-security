@@ -17,7 +17,7 @@ import type {
   DiscoverResponse,
 } from './types'
 
-const apiClient = axios.create({
+export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000',
   headers: {
     'Content-Type': 'application/json',
