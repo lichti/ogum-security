@@ -15,6 +15,10 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Fixed
+
+- **CSPM scan import path**: corrected `prowler.providers.aws.provider` → `prowler.providers.aws.aws_provider` — the module was renamed in prowler v5 and the worker was failing with `ModuleNotFoundError` on every scan trigger.
+
 ### Added
 
 - **Dev seed endpoint (F0.1)**: `POST /api/v1/dev/seed` inserts 19 realistic demo findings (CRITICAL/HIGH/MEDIUM/LOW, mix of FAIL/PASS/MUTED) into ArangoDB without requiring real cloud credentials. Only available when `DEV_MODE=true`. Endpoint is idempotent. Complementary `DELETE /api/v1/dev/seed` clears findings and scan_jobs. Standalone script `backend/scripts/seed_demo.py` and `make seed` / `make seed-clear` Makefile targets for local use. `DEV_MODE` setting added to `config.py` and `.env.example`.

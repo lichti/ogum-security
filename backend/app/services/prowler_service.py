@@ -55,7 +55,7 @@ class ProwlerService:
         """
         try:
             from prowler.lib.check.check import execute, recover_checks_from_provider  # noqa: PLC0415
-            from prowler.providers.aws.provider import AwsProvider  # noqa: PLC0415
+            from prowler.providers.aws.aws_provider import AwsProvider  # noqa: PLC0415
         except ImportError as exc:
             raise RuntimeError("prowler-core is not installed") from exc
 
