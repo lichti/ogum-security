@@ -53,13 +53,15 @@ def complete_discovery_job(db: Any, job_id: str, resources_discovered: int) -> N
     """Update scan_job to status=completed with resource count."""
     try:
         if db.has_collection("scan_jobs"):
-            db.collection("scan_jobs").update({
-                "_key": job_id,
-                "status": "completed",
-                "checks_total": resources_discovered,
-                "checks_completed": resources_discovered,
-                "completed_at": datetime.now(UTC).isoformat(),
-            })
+            db.collection("scan_jobs").update(
+                {
+                    "_key": job_id,
+                    "status": "completed",
+                    "checks_total": resources_discovered,
+                    "checks_completed": resources_discovered,
+                    "completed_at": datetime.now(UTC).isoformat(),
+                }
+            )
     except Exception:
         logger.debug("Failed to complete discovery job record job_id=%s", job_id)
 
@@ -68,11 +70,13 @@ def fail_discovery_job(db: Any, job_id: str, error_message: str) -> None:
     """Update scan_job to status=failed with error message."""
     try:
         if db.has_collection("scan_jobs"):
-            db.collection("scan_jobs").update({
-                "_key": job_id,
-                "status": "failed",
-                "error_message": error_message[:2000],
-                "completed_at": datetime.now(UTC).isoformat(),
-            })
+            db.collection("scan_jobs").update(
+                {
+                    "_key": job_id,
+                    "status": "failed",
+                    "error_message": error_message[:2000],
+                    "completed_at": datetime.now(UTC).isoformat(),
+                }
+            )
     except Exception:
         logger.debug("Failed to fail discovery job record job_id=%s", job_id)
