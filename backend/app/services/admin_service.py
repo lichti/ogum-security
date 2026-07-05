@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.db.init import init_admin_schema, init_tenant_schema
 from app.models.admin import AdminAuditEntry, JobDetail, JobSummary, QueueDepth, TaskType, WorkerInfo
 from app.workers.celery_app import celery_app
+from app.workers.tasks.cspm_scan import run_cspm_scan
 
 _KNOWN_QUEUES = ["celery", "default", "discovery", "scanning", "iac"]
 
@@ -158,8 +159,6 @@ def get_job(job_id: str, tenant_id: str) -> JobDetail | None:
 
 def retry_job(job_id: str, tenant_id: str, actor_email: str) -> str | None:
     """Re-enqueue a failed job. Returns the new job_id or None if original not found."""
-    from app.workers.tasks.cspm_scan import run_cspm_scan
-
     job = get_job(job_id, tenant_id)
     if job is None:
         return None
@@ -196,8 +195,6 @@ def trigger_job(
 ) -> str:
     """Dispatch a new job immediately, bypassing the Celery Beat schedule."""
     if task_type == TaskType.CSPM:
-        from app.workers.tasks.cspm_scan import run_cspm_scan
-
         task = run_cspm_scan.delay(
             tenant_id=tenant_id,
             provider_id=provider_id,
