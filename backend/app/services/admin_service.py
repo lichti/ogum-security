@@ -183,7 +183,7 @@ def retry_job(job_id: str, tenant_id: str, actor_email: str) -> str | None:
         tenant_id=tenant_id,
     )
 
-    return task.id
+    return str(task.id)
 
 
 def revoke_job(job_id: str, tenant_id: str, actor_email: str) -> bool:
