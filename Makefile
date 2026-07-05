@@ -127,6 +127,19 @@ test-security: ## Run security/isolation tests (requires ArangoDB running)
 test-ci: ## Run integration + security tests (CI mode — expects services in env)
 	cd backend && poetry run pytest -m "integration or security" --cov=app --cov-report=xml
 
+# ── Dev Seed ──────────────────────────────────────────────────────────────────
+.PHONY: seed
+seed: ## Seed demo findings into dev-tenant (requires ArangoDB running)
+	cd backend && poetry run python scripts/seed_demo.py --tenant dev-tenant
+
+.PHONY: seed-clear
+seed-clear: ## Clear and re-seed demo findings for dev-tenant
+	cd backend && poetry run python scripts/seed_demo.py --tenant dev-tenant --clear
+
+.PHONY: seed-tenant
+seed-tenant: ## Seed a specific tenant: make seed-tenant TENANT=my-tenant
+	cd backend && poetry run python scripts/seed_demo.py --tenant $(TENANT)
+
 # ── Frontend — Code Quality ───────────────────────────────────────────────────
 .PHONY: fe-lint
 fe-lint: ## Run ESLint on frontend

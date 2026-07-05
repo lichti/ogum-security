@@ -17,6 +17,8 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Dev seed endpoint (F0.1)**: `POST /api/v1/dev/seed` inserts 19 realistic demo findings (CRITICAL/HIGH/MEDIUM/LOW, mix of FAIL/PASS/MUTED) into ArangoDB without requiring real cloud credentials. Only available when `DEV_MODE=true`. Endpoint is idempotent. Complementary `DELETE /api/v1/dev/seed` clears findings and scan_jobs. Standalone script `backend/scripts/seed_demo.py` and `make seed` / `make seed-clear` Makefile targets for local use. `DEV_MODE` setting added to `config.py` and `.env.example`.
+
 - **Discovery job tracking (US-10.09)**: all four discovery tasks (`discover_aws`, `discover_azure`,
   `discover_gcp`, `discover_k8s`) now write to the `scan_jobs` ArangoDB collection so runs appear in
   `/admin/jobs`. A new `_job_tracking` helper module (`start_discovery_job`, `complete_discovery_job`,
