@@ -19,11 +19,12 @@ describe('Sidebar', () => {
     expect(screen.getByRole('link', { name: /findings/i })).toHaveAttribute('href', '/findings')
     expect(screen.getByRole('link', { name: /compliance/i })).toHaveAttribute('href', '/compliance')
     expect(screen.getByRole('link', { name: /cloud providers/i })).toHaveAttribute('href', '/providers')
+    expect(screen.getByRole('link', { name: /admin/i })).toHaveAttribute('href', '/admin/jobs')
   })
 
   it('renders disabled items without links for unimplemented pages', () => {
     render(<Sidebar />)
-    const disabledLabels = ['Attack Paths', 'Side Scanning', 'Pulse (NRT)', 'CDR', 'AI Remediation', 'Integrations', 'Agent', 'Admin']
+    const disabledLabels = ['Attack Paths', 'Side Scanning', 'Pulse (NRT)', 'CDR', 'AI Remediation', 'Integrations', 'Agent']
     const allLinks = screen.getAllByRole('link').map(l => l.textContent)
     disabledLabels.forEach(label => {
       expect(allLinks.join(' ')).not.toContain(label)
@@ -34,7 +35,7 @@ describe('Sidebar', () => {
   it('shows "Soon" badge on all disabled items', () => {
     render(<Sidebar />)
     const soonBadges = screen.getAllByText('Soon')
-    expect(soonBadges.length).toBeGreaterThanOrEqual(8)
+    expect(soonBadges.length).toBeGreaterThanOrEqual(7)
   })
 
   it('renders all navigation sections', () => {
