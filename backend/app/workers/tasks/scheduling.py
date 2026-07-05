@@ -1,10 +1,10 @@
 """
 Celery Beat scheduling and distributed discovery locks.
 
-trigger_all_discoveries is the Beat entry point that routes discovery jobs to
-provider-specific tasks. Each provider task acquires and releases its own Redis
-distributed lock to prevent concurrent runs when the beat interval is shorter
-than the discovery duration.
+trigger_all_discoveries routes discovery jobs to provider-specific tasks.
+trigger_all_cspm_scans iterates all tenants and provider configs and dispatches
+run_cspm_scan for each enabled provider. Both use Redis distributed locks to
+prevent concurrent runs.
 """
 
 from __future__ import annotations
@@ -19,7 +19,13 @@ from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
-_LOCK_TTL_SECONDS = 3600 * 7  # 7 hours — upper bound for a full discovery run
+_LOCK_TTL_SECONDS = 3600 * 7  # 7 hours — upper bound for a full discovery or scan run
+
+_DEFAULT_FRAMEWORKS: dict[str, list[str]] = {
+    "aws": ["CIS-AWS-2.0"],
+    "azure": ["CIS-Azure-2.0"],
+    "gcp": ["CIS-GCP-2.0"],
+}
 
 
 def acquire_lock(redis: Redis, tenant_id: str, provider: str) -> bool:
@@ -42,7 +48,6 @@ def trigger_all_discoveries(tenant_id: str, provider: str, **kwargs: Any) -> dic
     Each dispatched discovery task manages its own Redis lock so concurrent
     runs are skipped rather than stacked.
     """
-    # Lazy imports prevent circular dependencies at module load time.
     from app.workers.tasks.azure_discovery import discover_azure
     from app.workers.tasks.discovery import discover_aws
     from app.workers.tasks.gcp_discovery import discover_gcp
@@ -63,3 +68,88 @@ def trigger_all_discoveries(tenant_id: str, provider: str, **kwargs: Any) -> dic
 
     logger.info("Dispatched %s discovery for tenant=%s", provider, tenant_id)
     return {"dispatched": True, "tenant_id": tenant_id, "provider": provider}
+
+
+@celery_app.task(name="app.workers.tasks.scheduling.trigger_all_cspm_scans")
+def trigger_all_cspm_scans() -> dict[str, Any]:
+    """
+    Celery Beat router: dispatches run_cspm_scan for every enabled provider
+    across all tenants.
+
+    Reads tenant list from ArangoDB system DB, then reads each tenant's
+    provider configs (including stored credentials) and dispatches one
+    run_cspm_scan task per enabled provider. Skips providers with no
+    supported CSPM framework (e.g. k8s).
+    """
+    from arango import ArangoClient
+
+    from app.core.config import settings
+    from app.services.provider_service import get_provider_credentials, list_providers
+    from app.workers.tasks.cspm_scan import run_cspm_scan
+
+    client = ArangoClient(hosts=f"http://{settings.ARANGO_HOST}:{settings.ARANGO_PORT}")
+    sys_db = client.db("_system", username=settings.ARANGO_USER, password=settings.ARANGO_PASSWORD)
+
+    tenant_ids = [
+        db_name[len("ogum_") :]
+        for db_name in sys_db.databases()
+        if db_name.startswith("ogum_") and db_name != "ogum_admin"
+    ]
+
+    dispatched = 0
+    skipped = 0
+
+    for tenant_id in tenant_ids:
+        try:
+            tenant_db = client.db(
+                f"ogum_{tenant_id}",
+                username=settings.ARANGO_USER,
+                password=settings.ARANGO_PASSWORD,
+            )
+            providers = list_providers(tenant_db)
+        except Exception:
+            logger.exception("Failed to list providers for tenant=%s", tenant_id)
+            continue
+
+        for cfg in providers:
+            if not cfg.enabled:
+                skipped += 1
+                continue
+            if cfg.provider not in _DEFAULT_FRAMEWORKS:
+                skipped += 1
+                continue
+
+            try:
+                credentials = get_provider_credentials(tenant_db, cfg.key)
+                account_id = cfg.account_id or cfg.subscription_id or cfg.project_id or ""
+                frameworks = _DEFAULT_FRAMEWORKS[cfg.provider]
+
+                run_cspm_scan.apply_async(
+                    kwargs={
+                        "tenant_id": tenant_id,
+                        "provider_id": cfg.key,
+                        "provider": cfg.provider,
+                        "frameworks": frameworks,
+                        "credentials": credentials,
+                        "account_id": account_id,
+                        "regions": cfg.regions or None,
+                    }
+                )
+                dispatched += 1
+                logger.info(
+                    "Dispatched CSPM scan [tenant=%s provider=%s account=%s frameworks=%s]",
+                    tenant_id,
+                    cfg.provider,
+                    account_id,
+                    frameworks,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to dispatch CSPM scan [tenant=%s provider=%s]",
+                    tenant_id,
+                    cfg.key,
+                )
+                skipped += 1
+
+    logger.info("trigger_all_cspm_scans complete: dispatched=%d skipped=%d", dispatched, skipped)
+    return {"dispatched": dispatched, "skipped": skipped}
