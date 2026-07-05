@@ -13,9 +13,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.v1.dev import (
-    DEMO_ACCOUNT_ID,
-    DEMO_PROVIDER_KEY,
     _FINDINGS,
+    DEMO_ACCOUNT_ID,
     seed_findings,
 )
 from app.db.init import init_tenant_schema
