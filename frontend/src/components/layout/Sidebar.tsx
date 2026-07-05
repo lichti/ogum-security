@@ -68,7 +68,7 @@ export function Sidebar() {
         </NavSection>
 
         <NavSection label="Platform">
-          <NavItem icon={Settings2} label="Admin" disabled badge="Soon" />
+          <NavItem icon={Settings2} label="Admin" href="/admin/jobs" />
         </NavSection>
       </div>
     </aside>
