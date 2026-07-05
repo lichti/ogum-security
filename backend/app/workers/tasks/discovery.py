@@ -30,6 +30,7 @@ from app.models.inventory import (
     ResourceStatus,
 )
 from app.workers.celery_app import celery_app
+from app.workers.tasks._job_tracking import complete_discovery_job, fail_discovery_job, start_discovery_job
 
 logger = logging.getLogger(__name__)
 
@@ -1046,6 +1047,8 @@ def discover_aws(
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
 
+    _job_id = start_discovery_job(db, tenant_id, "aws", provider_key, regions)
+
     logger.info(
         "discover_aws start [tenant=%s regions=%s account_id=%s has_role_arn=%s has_static_keys=%s]",
         tenant_id,
@@ -1080,11 +1083,13 @@ def discover_aws(
             bool(aws_access_key_id and aws_secret_access_key),
         )
         _set_provider_status(db, provider_key, "error")
+        fail_discovery_job(db, _job_id, "no_credentials")
         return {"status": "failed", "reason": "no_credentials", "resources": 0}
     except ClientError as exc:
         if "AccessDenied" in str(exc) or "InvalidClientTokenId" in str(exc):
             logger.error("AWS discovery failed for tenant %s: %s", tenant_id, exc)
             _set_provider_status(db, provider_key, "error")
+            fail_discovery_job(db, _job_id, str(exc))
             return {"status": "failed", "reason": str(exc), "resources": 0}
         account_id = account_id or ""
 
@@ -1278,6 +1283,7 @@ def discover_aws(
     )
 
     _set_provider_status(db, provider_key, "active")
+    complete_discovery_job(db, _job_id, total_discovered)
 
     return {
         "tenant_id": tenant_id,
