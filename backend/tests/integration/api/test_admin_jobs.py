@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from app.api.v1.inventory import get_tenant_db
 from app.db.init import init_tenant_schema
 from app.main import app
-from tests.conftest import TEST_TENANT_A, TEST_TENANT_B
+from tests.conftest import TEST_TENANT_A
 
 
 @pytest.fixture
@@ -203,7 +203,8 @@ class TestAdminQueueDepth:
     def test_queue_depth_returns_all_queues(self, api_client, mocker):
         """GET /admin/queue-depth returns depth for each known queue."""
         mock_redis = mocker.MagicMock()
-        mock_redis.llen.side_effect = lambda q: {"celery": 5, "default": 0, "discovery": 2, "scanning": 1, "iac": 0}.get(q, 0)
+        queue_depths = {"celery": 5, "default": 0, "discovery": 2, "scanning": 1, "iac": 0}
+        mock_redis.llen.side_effect = lambda q: queue_depths.get(q, 0)
         mocker.patch("app.services.admin_service.redis_lib.from_url", return_value=mock_redis)
 
         resp = api_client.get("/api/v1/admin/queue-depth")
