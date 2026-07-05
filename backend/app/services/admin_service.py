@@ -11,7 +11,7 @@ from arango.database import StandardDatabase
 
 from app.core.config import settings
 from app.db.init import init_admin_schema, init_tenant_schema
-from app.models.admin import AdminAuditEntry, JobDetail, JobSummary, QueueDepth, WorkerInfo
+from app.models.admin import AdminAuditEntry, JobDetail, JobSummary, QueueDepth, TaskType, WorkerInfo
 from app.workers.celery_app import celery_app
 
 _KNOWN_QUEUES = ["celery", "default", "discovery", "scanning", "iac"]
@@ -184,6 +184,70 @@ def retry_job(job_id: str, tenant_id: str, actor_email: str) -> str | None:
     )
 
     return str(task.id)
+
+
+def trigger_job(
+    tenant_id: str,
+    task_type: TaskType,
+    provider_id: str,
+    provider: str,
+    frameworks: list[str],
+    actor_email: str,
+) -> str:
+    """Dispatch a new job immediately, bypassing the Celery Beat schedule."""
+    if task_type == TaskType.CSPM:
+        from app.workers.tasks.cspm_scan import run_cspm_scan
+
+        task = run_cspm_scan.delay(
+            tenant_id=tenant_id,
+            provider_id=provider_id,
+            provider=provider,
+            frameworks=frameworks,
+            credentials={},
+            account_id="",
+        )
+    elif task_type == TaskType.IAC:
+        from app.workers.tasks.iac_scan import run_iac_scan
+
+        task = run_iac_scan.delay(
+            tenant_id=tenant_id,
+            repo_url="",
+            branch="main",
+            path=".",
+            account_id="",
+        )
+    else:
+        from app.workers.tasks.discovery import discover_aws_basic
+
+        task = discover_aws_basic.delay(
+            tenant_id=tenant_id,
+            regions=["us-east-1"],
+        )
+
+    job_id = str(task.id)
+    _write_audit_log(
+        action="job.trigger",
+        actor_email=actor_email,
+        target_type="scan_job",
+        target_id=job_id,
+        before_state=None,
+        after_state={
+            "job_id": job_id,
+            "task_type": task_type,
+            "tenant_id": tenant_id,
+            "provider_id": provider_id,
+        },
+        tenant_id=tenant_id,
+    )
+    return job_id
+
+
+def get_job_logs(job_id: str, tenant_id: str) -> list[str]:
+    """Return the log lines stored for a job."""
+    job = get_job(job_id, tenant_id)
+    if job is None:
+        return []
+    return job.logs
 
 
 def revoke_job(job_id: str, tenant_id: str, actor_email: str) -> bool:

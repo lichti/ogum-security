@@ -50,9 +50,24 @@ class JobDetail(JobSummary):
     checks_completed: int | None = None
 
 
+class TaskType(StrEnum):
+    CSPM = "cspm"
+    IAC = "iac"
+    DISCOVERY = "discovery"
+
+
 class RetryRequest(BaseModel):
     actor_email: str
     tenant_id: str
+
+
+class TriggerRequest(BaseModel):
+    tenant_id: str
+    task_type: TaskType
+    provider_id: str = ""
+    provider: str = ""
+    frameworks: list[str] = Field(default_factory=list)
+    actor_email: str
 
 
 class WorkerInfo(BaseModel):
