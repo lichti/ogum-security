@@ -648,20 +648,20 @@ def clear_dev_data(
     deleted_jobs = 0
 
     try:
-        result = db.aql.execute(
+        cursor = db.aql.execute(
             "FOR f IN findings FILTER f.tenant_id == @tid REMOVE f IN findings RETURN 1",
             bind_vars={"tid": x_tenant_id},
         )
-        deleted_findings = sum(1 for _ in result)
+        deleted_findings = len(list(cursor))
     except Exception:
         pass
 
     try:
-        result = db.aql.execute(
+        cursor = db.aql.execute(
             "FOR j IN scan_jobs FILTER j.tenant_id == @tid REMOVE j IN scan_jobs RETURN 1",
             bind_vars={"tid": x_tenant_id},
         )
-        deleted_jobs = sum(1 for _ in result)
+        deleted_jobs = len(list(cursor))
     except Exception:
         pass
 
