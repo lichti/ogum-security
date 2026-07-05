@@ -17,6 +17,17 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Makefile** (`Makefile`): covers Docker Compose lifecycle (`up`, `down`, `up-infra`, `up-backend`,
+  `restart`), code quality (`lint`, `format`, `typecheck`, `check`, `fe-lint`, `fe-typecheck`),
+  tests by layer (`test-unit`, `test-integration`, `test-security`, `fe-test`, `agent-test`),
+  dependency management (`install`, `update-deps`), container shells, log tailing, and a
+  `health` target that checks all services. Run `make help` to list all targets.
+- **Terraform test fixtures** (`infra/terraform/test-fixtures/`): deploys intentionally
+  misconfigured AWS resources (EC2, S3, IAM, Security Groups, VPC, CloudTrail) for validating
+  Ogum.Inventory discovery and Ogum.Static CSPM findings. Includes compliant baselines alongside
+  misconfigured scenarios for diff testing. `terraform output expected_findings` lists the exact
+  CSPM findings that should appear after scanning the fixture account.
+
 - **IaC scanning (Ogum.Static Sprint 4)**: `POST /api/v1/scans/iac` triggers a Celery task that
   shallow-clones a Git repository, runs Checkov across Terraform, CloudFormation, and Kubernetes
   manifests, and persists findings with `source: iac`. Repository tokens are injected into the
