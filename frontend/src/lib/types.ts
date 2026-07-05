@@ -220,3 +220,36 @@ export interface DiscoverResponse {
   discovery_job_id: string
   message: string
 }
+
+// ─── Scans ────────────────────────────────────────────────────────────────────
+
+export type ScanJobStatus = 'queued' | 'running' | 'completed' | 'failed'
+
+export interface ScanJob {
+  job_id: string
+  tenant_id: string
+  provider_id: string
+  provider: string
+  task_name: string
+  frameworks: string[]
+  regions: string[] | null
+  status: ScanJobStatus
+  checks_total: number
+  checks_completed: number
+  findings_found: number
+  findings_fail: number
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+  error_message: string | null
+}
+
+export interface ScanTriggerRequest {
+  provider_id: string
+  frameworks?: string[]
+}
+
+export interface ScanTriggerResponse {
+  job_id: string
+  status: string
+}

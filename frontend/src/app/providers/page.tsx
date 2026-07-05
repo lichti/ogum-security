@@ -2,8 +2,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
-import { providersApi } from '@/lib/api'
+import { Plus, CheckCircle2 } from 'lucide-react'
+import { providersApi, scansApi } from '@/lib/api'
 import type { ProviderConfig } from '@/lib/types'
 import { ProvidersTable } from '@/components/providers/ProvidersTable'
 import { ConnectWizard } from '@/components/providers/ConnectWizard'
@@ -15,6 +15,7 @@ export default function ProvidersPage() {
   const [showWizard, setShowWizard] = useState(false)
   const [editingProvider, setEditingProvider] = useState<ProviderConfig | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [scanSuccess, setScanSuccess] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['providers'],
@@ -42,6 +43,17 @@ export default function ProvidersPage() {
     onError: () => setActionError('Failed to delete provider.'),
   })
 
+  const scanMutation = useMutation({
+    mutationFn: (providerId: string) =>
+      scansApi.trigger({ provider_id: providerId }),
+    onSuccess: (res) => {
+      const jobId = res.data.data.job_id
+      setScanSuccess(`CSPM scan queued — job ${jobId}. Findings will appear shortly.`)
+      setTimeout(() => setScanSuccess(null), 8000)
+    },
+    onError: () => setActionError('Failed to trigger CSPM scan. Check that provider credentials are configured.'),
+  })
+
   const providers = data ?? []
 
   return (
@@ -62,6 +74,16 @@ export default function ProvidersPage() {
             Connect Account
           </button>
         </div>
+
+        {scanSuccess && (
+          <div className="mb-4 p-3 bg-green-950 border border-green-800 rounded-lg text-green-400 text-sm flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              {scanSuccess}
+            </span>
+            <button onClick={() => setScanSuccess(null)} className="text-green-600 hover:text-green-400 ml-4">×</button>
+          </div>
+        )}
 
         {actionError && (
           <div className="mb-4 p-3 bg-red-950 border border-red-800 rounded-lg text-red-400 text-sm flex items-center justify-between">
@@ -85,6 +107,7 @@ export default function ProvidersPage() {
                 onEdit={(p) => setEditingProvider(p)}
                 onToggle={(id, enabled) => toggleMutation.mutateAsync({ id, enabled })}
                 onDiscover={(id) => discoverMutation.mutateAsync(id)}
+                onScan={(id) => scanMutation.mutateAsync(id)}
                 onDelete={(id) => deleteMutation.mutateAsync(id)}
               />
             </>

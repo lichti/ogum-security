@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { RefreshCw, Trash2, Power, PowerOff, Pencil } from 'lucide-react'
+import { RefreshCw, Trash2, Power, PowerOff, Pencil, ShieldCheck } from 'lucide-react'
 import type { ProviderConfig, ProviderStatus } from '@/lib/types'
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -44,10 +44,11 @@ interface ProvidersTableProps {
   onEdit: (provider: ProviderConfig) => void
   onToggle: (id: string, enabled: boolean) => Promise<unknown>
   onDiscover: (id: string) => Promise<unknown>
+  onScan: (id: string) => Promise<unknown>
   onDelete: (id: string) => Promise<unknown>
 }
 
-export function ProvidersTable({ providers, onEdit, onToggle, onDiscover, onDelete }: ProvidersTableProps) {
+export function ProvidersTable({ providers, onEdit, onToggle, onDiscover, onScan, onDelete }: ProvidersTableProps) {
   const [busy, setBusy] = useState<Record<string, boolean>>({})
 
   const withBusy = (id: string, fn: () => Promise<unknown>) => async (): Promise<void> => {
@@ -74,6 +75,7 @@ export function ProvidersTable({ providers, onEdit, onToggle, onDiscover, onDele
             <th className="text-left py-3 px-4 text-slate-400 font-medium">Regions</th>
             <th className="text-left py-3 px-4 text-slate-400 font-medium">Status</th>
             <th className="text-left py-3 px-4 text-slate-400 font-medium">Last Discovery</th>
+            <th className="text-right py-3 px-4 text-slate-400 font-medium">Last Scan</th>
             <th className="text-right py-3 px-4 text-slate-400 font-medium">Actions</th>
           </tr>
         </thead>
@@ -101,6 +103,7 @@ export function ProvidersTable({ providers, onEdit, onToggle, onDiscover, onDele
                   </span>
                 </td>
                 <td className="py-3 px-4 text-slate-400 text-xs">{relativeTime(p.last_discovery_at)}</td>
+                <td className="py-3 px-4 text-slate-400 text-xs text-right">—</td>
                 <td className="py-3 px-4">
                   <div className="flex items-center justify-end gap-1">
                     <button
@@ -117,6 +120,14 @@ export function ProvidersTable({ providers, onEdit, onToggle, onDiscover, onDele
                       className="p-1.5 rounded text-slate-400 hover:text-orange-400 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isBusy ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button
+                      title="Run CSPM scan now"
+                      disabled={isBusy || !p.enabled}
+                      onClick={withBusy(p.key, () => onScan(p.key))}
+                      className="p-1.5 rounded text-slate-400 hover:text-green-400 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
                     </button>
                     <button
                       title={p.enabled ? 'Disable provider' : 'Enable provider'}
@@ -152,10 +163,11 @@ interface ProviderCardProps {
   onEdit: (provider: ProviderConfig) => void
   onToggle: (id: string, enabled: boolean) => Promise<unknown>
   onDiscover: (id: string) => Promise<unknown>
+  onScan: (id: string) => Promise<unknown>
   onDelete: (id: string) => Promise<unknown>
 }
 
-export function ProviderCard({ provider: p, onEdit, onToggle, onDiscover, onDelete }: ProviderCardProps) {
+export function ProviderCard({ provider: p, onEdit, onToggle, onDiscover, onScan, onDelete }: ProviderCardProps) {
   const [busy, setBusy] = useState(false)
   const status = STATUS_BADGE[p.status ?? 'pending']
 
@@ -204,6 +216,14 @@ export function ProviderCard({ provider: p, onEdit, onToggle, onDiscover, onDele
         >
           <RefreshCw className={`w-3 h-3 ${busy ? 'animate-spin' : ''}`} />
           Rediscover
+        </button>
+        <button
+          disabled={busy || !p.enabled}
+          onClick={withBusy(() => onScan(p.key))}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg border border-green-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          <ShieldCheck className="w-3 h-3" />
+          Scan Now
         </button>
         <button
           disabled={busy}

@@ -15,6 +15,9 @@ import type {
   ProviderUpdateRequest,
   DiscoverRequest,
   DiscoverResponse,
+  ScanJob,
+  ScanTriggerRequest,
+  ScanTriggerResponse,
 } from './types'
 
 export const apiClient = axios.create({
@@ -124,6 +127,17 @@ export const findingsApi = {
       status: 'ACCEPTED',
       reason,
     }),
+}
+
+export const scansApi = {
+  trigger: (body: ScanTriggerRequest) =>
+    apiClient.post<ApiResponse<ScanTriggerResponse>>('/api/v1/scans', body),
+
+  get: (jobId: string) =>
+    apiClient.get<ApiResponse<ScanJob>>(`/api/v1/scans/${jobId}`),
+
+  list: () =>
+    apiClient.get<ApiResponse<ScanJob[]>>('/api/v1/scans'),
 }
 
 export const complianceApi = {
