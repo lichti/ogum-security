@@ -17,6 +17,16 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Admin Jobs API (Epic 10 Sprint 1)**: cross-tenant job inspection and control endpoints under
+  `/api/v1/admin/`. `GET /admin/jobs` lists scan jobs across all tenant databases (or scoped to one
+  via `?tenant_id=`), with optional `status` filter and keyset cursor pagination. `GET
+  /admin/jobs/{id}` returns full job detail including findings counts and logs. `POST
+  /admin/jobs/{id}/retry` re-enqueues a failed job and records the action in `admin_audit_log`.
+  `DELETE /admin/jobs/{id}` calls Celery revoke. `GET /admin/workers` inspects live worker state
+  via Celery inspect. `GET /admin/queue-depth` returns pending message counts for all known queues
+  via Redis `LLEN`. `admin_audit_log` collection added to a dedicated `ogum_admin` database.
+  All routes marked `TODO(epic-06)` for role enforcement once Auth/RBAC is implemented.
+
 - **App shell navigation (Epic 11 Sprint 1)**: global layout with fixed sidebar and header wrapping
   all pages. `AppShell` composes `Sidebar` + `Header` and is wired into `app/layout.tsx`.
   `Sidebar` organises all platform modules into labelled sections with active links for implemented

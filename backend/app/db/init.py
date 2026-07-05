@@ -17,6 +17,10 @@ VERTEX_COLLECTIONS = [
     "audit_log",
 ]
 
+ADMIN_VERTEX_COLLECTIONS = [
+    "admin_audit_log",
+]
+
 EDGE_COLLECTIONS = [
     "EXPOSED_TO",
     "ASSUMES_ROLE",
@@ -55,6 +59,23 @@ PERSISTENT_INDEXES: list[tuple[str, list[str], bool]] = [
     ("audit_log", ["tenant_id", "finding_key"], False),
 ]
 
+ADMIN_PERSISTENT_INDEXES: list[tuple[str, list[str], bool]] = [
+    ("admin_audit_log", ["tenant_id"], False),
+    ("admin_audit_log", ["tenant_id", "timestamp"], False),
+    ("admin_audit_log", ["actor_id"], False),
+]
+
+
+def _ensure_indexes(db: StandardDatabase, indexes: list[tuple[str, list[str], bool]]) -> None:
+    for collection_name, fields, unique in indexes:
+        col = db.collection(collection_name)
+        existing = col.indexes()
+        already_exists = any(
+            sorted(idx.get("fields", [])) == sorted(fields) and idx.get("type") == "persistent" for idx in existing
+        )
+        if not already_exists:
+            col.add_index({"type": "persistent", "fields": fields, "unique": unique})
+
 
 def init_tenant_schema(db: StandardDatabase) -> None:
     """Create all vertex collections, edge collections, and indexes for a tenant DB."""
@@ -66,11 +87,13 @@ def init_tenant_schema(db: StandardDatabase) -> None:
         if not db.has_collection(name):
             db.create_collection(name, edge=True)
 
-    for collection_name, fields, unique in PERSISTENT_INDEXES:
-        col = db.collection(collection_name)
-        existing = col.indexes()
-        already_exists = any(
-            sorted(idx.get("fields", [])) == sorted(fields) and idx.get("type") == "persistent" for idx in existing
-        )
-        if not already_exists:
-            col.add_index({"type": "persistent", "fields": fields, "unique": unique})
+    _ensure_indexes(db, PERSISTENT_INDEXES)
+
+
+def init_admin_schema(db: StandardDatabase) -> None:
+    """Create the admin database schema (ogum_admin). Idempotent."""
+    for name in ADMIN_VERTEX_COLLECTIONS:
+        if not db.has_collection(name):
+            db.create_collection(name)
+
+    _ensure_indexes(db, ADMIN_PERSISTENT_INDEXES)
