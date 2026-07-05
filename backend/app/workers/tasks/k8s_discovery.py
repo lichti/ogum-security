@@ -21,6 +21,7 @@ from app.core.config import settings
 from app.db.init import init_tenant_schema
 from app.models.inventory import K8sResource, Provider
 from app.workers.celery_app import celery_app
+from app.workers.tasks._job_tracking import complete_discovery_job, fail_discovery_job, start_discovery_job
 from app.workers.tasks.discovery import (
     _get_tenant_db,
     _mark_stale_deleted,
@@ -459,6 +460,7 @@ def discover_k8s(
         return {"skipped": True, "tenant_id": tenant_id, "provider": "k8s"}
 
     db = _get_tenant_db(tenant_id)
+    _job_id = start_discovery_job(db, tenant_id, "k8s", provider_key)
 
     try:
         if kubeconfig:
@@ -546,6 +548,7 @@ def discover_k8s(
             deleted,
         )
         _set_provider_status(db, provider_key, "active")
+        complete_discovery_job(db, _job_id, len(resource_keys))
         return {
             "tenant_id": tenant_id,
             "provider": "k8s",
@@ -557,6 +560,7 @@ def discover_k8s(
     except Exception as exc:
         logger.exception("K8s discovery failed [tenant=%s cluster=%s]: %s", tenant_id, cluster_name, exc)
         _set_provider_status(db, provider_key, "error")
+        fail_discovery_job(db, _job_id, str(exc))
         raise self.retry(exc=exc)
 
     finally:

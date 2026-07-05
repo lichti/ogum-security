@@ -17,6 +17,12 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Discovery job tracking (US-10.09)**: all four discovery tasks (`discover_aws`, `discover_azure`,
+  `discover_gcp`, `discover_k8s`) now write to the `scan_jobs` ArangoDB collection so runs appear in
+  `/admin/jobs`. A new `_job_tracking` helper module (`start_discovery_job`, `complete_discovery_job`,
+  `fail_discovery_job`) handles the lifecycle with fire-and-forget semantics — tracking failures never
+  abort discovery. Integration tests cover all state transitions and the missing-collection edge case.
+
 - **Admin Jobs API (Epic 10 Sprint 1)**: cross-tenant job inspection and control endpoints under
   `/api/v1/admin/`. `GET /admin/jobs` lists scan jobs across all tenant databases (or scoped to one
   via `?tenant_id=`), with optional `status` filter and keyset cursor pagination. `GET
