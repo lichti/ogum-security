@@ -66,8 +66,18 @@ class TestSeedFindings:
                 bind_vars={"tid": TENANT},
             )
         )
-        required = {"check_id", "title", "severity", "status", "provider", "account_id",
-                    "framework_mapping", "detected_at", "scan_job_id", "raw_output"}
+        required = {
+            "check_id",
+            "title",
+            "severity",
+            "status",
+            "provider",
+            "account_id",
+            "framework_mapping",
+            "detected_at",
+            "scan_job_id",
+            "raw_output",
+        }
         for doc in docs:
             missing = required - set(doc.keys())
             assert not missing, f"Finding {doc.get('check_id')} missing fields: {missing}"
