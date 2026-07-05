@@ -12,6 +12,8 @@ celery_app = Celery(
         "app.workers.tasks.azure_discovery",
         "app.workers.tasks.gcp_discovery",
         "app.workers.tasks.k8s_discovery",
+        "app.workers.tasks.cspm_scan",
+        "app.workers.tasks.iac_scan",
     ],
 )
 
@@ -32,8 +34,16 @@ celery_app.conf.update(
 celery_app.conf.beat_schedule = {
     "dev-trigger-aws-every-6h": {
         "task": "app.workers.tasks.scheduling.trigger_all_discoveries",
-        "schedule": 6 * 3600,  # seconds
+        "schedule": 6 * 3600,
         "args": ["dev", "aws"],
         "kwargs": {"regions": ["us-east-1"]},
+    },
+    # CSPM scans run 1 hour after discovery to let resources populate first.
+    # trigger_all_cspm_scans reads all tenants and provider configs from ArangoDB
+    # and dispatches run_cspm_scan for each enabled provider automatically.
+    "cspm-scan-all-tenants-every-6h": {
+        "task": "app.workers.tasks.scheduling.trigger_all_cspm_scans",
+        "schedule": 6 * 3600,
+        "options": {"countdown": 3600},  # start 1h after the Beat tick
     },
 }
