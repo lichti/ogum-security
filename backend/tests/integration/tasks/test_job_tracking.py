@@ -119,7 +119,7 @@ class TestDiscoveryJobLifecycle:
 
         doc = db_tenant_a.collection("scan_jobs").get(job_id)
         assert doc["status"] == "running"
-        assert doc["completed_at"] is None or "completed_at" not in doc
+        assert "completed_at" not in doc or doc.get("completed_at") is None
 
         complete_discovery_job(db_tenant_a, job_id, 7)
         doc = db_tenant_a.collection("scan_jobs").get(job_id)
