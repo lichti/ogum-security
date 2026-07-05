@@ -15,6 +15,10 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Fixed
+
+- **CSPM scan import path**: corrected `prowler.providers.aws.provider` → `prowler.providers.aws.aws_provider` — the module was renamed in prowler v5 and the worker was failing with `ModuleNotFoundError` on every scan trigger.
+
 ### Added
 
 - **Discovery job tracking (US-10.09)**: all four discovery tasks (`discover_aws`, `discover_azure`,
