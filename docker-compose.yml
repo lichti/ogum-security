@@ -13,7 +13,7 @@ services:
     volumes:
       - arangodb_data:/var/lib/arangodb3
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8529/_api/version"]
+      test: ["CMD", "nc", "-z", "127.0.0.1", "8529"]
       interval: 10s
       timeout: 5s
       retries: 10
