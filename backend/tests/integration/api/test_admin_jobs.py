@@ -169,9 +169,7 @@ class TestRevokeAdminJob:
         mocker.patch("app.services.admin_service.get_admin_db")
         mocker.patch("app.services.admin_service.AdminAuditEntry")
 
-        resp = api_client.delete(
-            f"/api/v1/admin/jobs/job-abc?tenant_id={TEST_TENANT_A}&actor_email=admin@example.com"
-        )
+        resp = api_client.delete(f"/api/v1/admin/jobs/job-abc?tenant_id={TEST_TENANT_A}&actor_email=admin@example.com")
 
         assert resp.status_code == 204
         mock_revoke.assert_called_once_with("job-abc", terminate=False)

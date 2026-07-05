@@ -19,6 +19,7 @@ _KNOWN_QUEUES = ["celery", "default", "discovery", "scanning", "iac"]
 
 # ── Database helpers ──────────────────────────────────────────────────────────
 
+
 def _arango_client() -> ArangoClient:
     return ArangoClient(hosts=f"http://{settings.ARANGO_HOST}:{settings.ARANGO_PORT}")
 
@@ -47,13 +48,14 @@ def get_tenant_db_direct(tenant_id: str) -> StandardDatabase:
 def _all_tenant_ids() -> list[str]:
     sys_db = get_system_db()
     return [
-        db_name[len("ogum_"):]
+        db_name[len("ogum_") :]
         for db_name in sys_db.databases()
         if db_name.startswith("ogum_") and db_name != "ogum_admin"
     ]
 
 
 # ── Job helpers ───────────────────────────────────────────────────────────────
+
 
 def _doc_to_job_summary(doc: dict[str, Any]) -> JobSummary:
     return JobSummary(
@@ -96,6 +98,7 @@ def _doc_to_job_detail(doc: dict[str, Any]) -> JobDetail:
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def list_jobs(
     tenant_id: str | None = None,
@@ -240,6 +243,7 @@ def get_queue_depths() -> list[QueueDepth]:
 
 
 # ── Internal ──────────────────────────────────────────────────────────────────
+
 
 def _write_audit_log(
     action: str,
