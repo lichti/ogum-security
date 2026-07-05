@@ -17,6 +17,14 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **App shell navigation (Epic 11 Sprint 1)**: global layout with fixed sidebar and header wrapping
+  all pages. `AppShell` composes `Sidebar` + `Header` and is wired into `app/layout.tsx`.
+  `Sidebar` organises all platform modules into labelled sections with active links for implemented
+  pages (`/`, `/inventory`, `/findings`, `/compliance`, `/providers`) and disabled `<span>` elements
+  with a "Soon" badge for modules not yet built (Attack Paths, Side Scanning, Pulse, CDR, AI
+  Remediation, Integrations, Agent, Admin). `Header` shows a dynamic breadcrumb based on the
+  current route. `NavItem` highlights the active route with an orange left border.
+
 - **Makefile** (`Makefile`): covers Docker Compose lifecycle (`up`, `down`, `up-infra`, `up-backend`,
   `restart`), code quality (`lint`, `format`, `typecheck`, `check`, `fe-lint`, `fe-typecheck`),
   tests by layer (`test-unit`, `test-integration`, `test-security`, `fe-test`, `agent-test`),
