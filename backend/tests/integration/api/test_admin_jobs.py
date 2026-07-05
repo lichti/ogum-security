@@ -211,3 +211,95 @@ class TestAdminQueueDepth:
         queues = {q["queue"]: q["depth"] for q in resp.json()["data"]}
         assert queues["celery"] == 5
         assert queues["discovery"] == 2
+
+
+# ─── POST /api/v1/admin/jobs/trigger ─────────────────────────────────────────
+
+
+@pytest.mark.integration
+class TestTriggerAdminJob:
+    def test_trigger_cspm_dispatches_task(self, api_client, mocker):
+        """POST /admin/jobs/trigger with task_type=cspm returns 202 and job_id."""
+        mock_task = mocker.MagicMock()
+        mock_task.id = "triggered-job-001"
+        mocker.patch("app.services.admin_service.get_admin_db")
+        mocker.patch("app.workers.tasks.cspm_scan.run_cspm_scan.delay", return_value=mock_task)
+
+        resp = api_client.post(
+            "/api/v1/admin/jobs/trigger",
+            json={
+                "tenant_id": TEST_TENANT_A,
+                "task_type": "cspm",
+                "provider_id": "aws-111",
+                "provider": "aws",
+                "frameworks": ["CIS-AWS-2.0"],
+                "actor_email": "admin@example.com",
+            },
+        )
+
+        assert resp.status_code == 202
+        data = resp.json()["data"]
+        assert data["job_id"] == "triggered-job-001"
+        assert data["task_type"] == "cspm"
+        assert data["tenant_id"] == TEST_TENANT_A
+
+    def test_trigger_invalid_task_type_returns_422(self, api_client):
+        """POST /admin/jobs/trigger with unknown task_type returns 422."""
+        resp = api_client.post(
+            "/api/v1/admin/jobs/trigger",
+            json={
+                "tenant_id": TEST_TENANT_A,
+                "task_type": "invalid_type",
+                "actor_email": "admin@example.com",
+            },
+        )
+
+        assert resp.status_code == 422
+
+    def test_trigger_discovery_dispatches_task(self, api_client, mocker):
+        """POST /admin/jobs/trigger with task_type=discovery returns 202."""
+        mock_task = mocker.MagicMock()
+        mock_task.id = "triggered-discovery-001"
+        mocker.patch("app.services.admin_service.get_admin_db")
+        mocker.patch("app.workers.tasks.discovery.discover_aws_basic.delay", return_value=mock_task)
+
+        resp = api_client.post(
+            "/api/v1/admin/jobs/trigger",
+            json={
+                "tenant_id": TEST_TENANT_A,
+                "task_type": "discovery",
+                "actor_email": "admin@example.com",
+            },
+        )
+
+        assert resp.status_code == 202
+        assert resp.json()["data"]["task_type"] == "discovery"
+
+
+# ─── GET /api/v1/admin/jobs/{job_id}/logs ────────────────────────────────────
+
+
+@pytest.mark.integration
+class TestAdminJobLogs:
+    def test_logs_returns_sse_stream(self, api_client, db_tenant_a, mocker):
+        """GET /admin/jobs/{id}/logs returns text/event-stream with stored log lines."""
+        mocker.patch("app.services.admin_service.get_tenant_db_direct", return_value=db_tenant_a)
+        _seed_job(db_tenant_a, "job-with-logs", TEST_TENANT_A)
+        db_tenant_a.collection("scan_jobs").update(
+            {"_key": "job-with-logs", "logs": ["Starting scan", "Completed 10 checks"]}
+        )
+
+        resp = api_client.get(f"/api/v1/admin/jobs/job-with-logs/logs?tenant_id={TEST_TENANT_A}")
+
+        assert resp.status_code == 200
+        assert "text/event-stream" in resp.headers["content-type"]
+
+    def test_logs_empty_job_returns_no_logs_message(self, api_client, db_tenant_a, mocker):
+        """GET /admin/jobs/{id}/logs for job with no logs returns [no logs] sentinel."""
+        mocker.patch("app.services.admin_service.get_tenant_db_direct", return_value=db_tenant_a)
+        _seed_job(db_tenant_a, "job-no-logs", TEST_TENANT_A)
+
+        resp = api_client.get(f"/api/v1/admin/jobs/job-no-logs/logs?tenant_id={TEST_TENANT_A}")
+
+        assert resp.status_code == 200
+        assert "[no logs]" in resp.text

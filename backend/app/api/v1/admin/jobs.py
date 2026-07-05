@@ -4,9 +4,14 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+import asyncio
+import json
+from collections.abc import AsyncGenerator
 
-from app.models.admin import JobDetail, QueueDepth, RetryRequest, WorkerInfo
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
+
+from app.models.admin import JobDetail, QueueDepth, RetryRequest, TriggerRequest, WorkerInfo
 from app.models.api_responses import ApiResponse
 from app.services import admin_service
 
@@ -45,6 +50,42 @@ async def retry_job(job_id: str, body: RetryRequest) -> ApiResponse[dict]:
     if new_job_id is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return ApiResponse(data={"original_job_id": job_id, "new_job_id": new_job_id})
+
+
+@router.post("/jobs/trigger", response_model=ApiResponse[dict], status_code=202)
+async def trigger_job(body: TriggerRequest) -> ApiResponse[dict]:
+    # TODO(epic-06): add @require_role(["PlatformAdmin"])
+    """Immediately dispatch a new scan job, bypassing the scheduled queue."""
+    job_id = admin_service.trigger_job(
+        tenant_id=body.tenant_id,
+        task_type=body.task_type,
+        provider_id=body.provider_id,
+        provider=body.provider,
+        frameworks=body.frameworks,
+        actor_email=body.actor_email,
+    )
+    return ApiResponse(data={"job_id": job_id, "task_type": body.task_type, "tenant_id": body.tenant_id})
+
+
+@router.get("/jobs/{job_id}/logs")
+async def stream_job_logs(
+    job_id: str,
+    tenant_id: str = Query(..., description="Tenant that owns this job"),
+) -> StreamingResponse:
+    # TODO(epic-06): add @require_role(["PlatformAdmin"])
+    """Stream stored log lines for a job via Server-Sent Events."""
+
+    async def _generate() -> AsyncGenerator[str, None]:
+        logs = admin_service.get_job_logs(job_id, tenant_id)
+        if not logs:
+            yield f"data: {json.dumps({'line': '[no logs]', 'index': 0})}\n\n"
+        else:
+            for i, line in enumerate(logs):
+                yield f"data: {json.dumps({'line': line, 'index': i})}\n\n"
+                await asyncio.sleep(0)
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(_generate(), media_type="text/event-stream")
 
 
 @router.delete("/jobs/{job_id}", status_code=204)
