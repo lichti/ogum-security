@@ -4,6 +4,7 @@ import type {
   ComplianceSummary,
   FindingDetail,
   FindingsFilter,
+  FindingsStats,
   PagedFindings,
   ResourceSummary,
   ResourceDetail,
@@ -96,6 +97,9 @@ export const providersApi = {
 }
 
 export const findingsApi = {
+  stats: () =>
+    apiClient.get<ApiResponse<FindingsStats>>('/api/v1/findings/stats'),
+
   list: (filters: FindingsFilter) =>
     apiClient.get<ApiResponse<PagedFindings>>('/api/v1/findings', {
       params: {

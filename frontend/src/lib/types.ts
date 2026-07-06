@@ -61,6 +61,12 @@ export interface InventoryFilters {
 
 // ─── Findings ─────────────────────────────────────────────────────────────────
 
+export interface FindingsStats {
+  by_severity: Record<string, number>
+  by_status: Record<string, number>
+  total: number
+}
+
 export type SeverityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFORMATIONAL'
 export type FindingStatus = 'FAIL' | 'PASS' | 'MUTED' | 'ACCEPTED'
 export type FindingSource = 'cspm' | 'iac'

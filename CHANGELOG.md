@@ -15,6 +15,12 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Added
+
+- **Dashboard home (F0.3)**: replaced `/` redirect with a real security overview page showing ThreatScore, finding counts by severity (CRITICAL/HIGH/MEDIUM/LOW — each links to `/findings?severity=X`), last 5 scan jobs with status icons and relative timestamps, and quick-navigation links to all main sections.
+- **`GET /api/v1/findings/stats`**: new endpoint returning aggregate counts `by_severity` and `by_status` plus `total` — a single AQL query, scoped by tenant, used by the dashboard.
+- **`findingsApi.stats()`**: new client method in `frontend/src/lib/api.ts`; `FindingsStats` type added to `types.ts`.
+
 ### Fixed
 
 - **Prowler metadata normalization**: `result.metadata` in `OutputFinding` is `CheckMetadata` directly — the previous code was accessing `metadata.CheckMetadata` (one level too deep), causing all `check_id`, `title`, `description`, `severity`, and `resource_type` to resolve as `"unknown"` on every finding.
