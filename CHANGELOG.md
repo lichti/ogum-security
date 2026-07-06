@@ -17,6 +17,12 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Post-scan inventory extraction (all providers)**: CSPM scans now automatically populate the inventory after each scan run — no separate discovery task required. `prowler_inventory.extract_inventory_from_findings()` deduplicates resources by `resource_uid`, routes to the correct collection (`resources`, `identities`, `data_assets`), and upserts with `last_scanned_at` and normalized `resource_type`. Supports all four providers: AWS, Azure, GCP, and Kubernetes.
+- **`ProwlerService.run_azure_scan`**, **`run_gcp_scan`**, **`run_kubernetes_scan`**: new scan methods wrapping `AzureProvider`, `GcpProvider`, and `KubernetesProvider`. `run_cspm_scan` task now routes to the correct method by provider (was AWS-only).
+- **Provider-aware default frameworks in `GET /api/v1/scans`**: when no frameworks are specified, the scan API selects sane defaults per provider (`CIS-AWS-2.0 + PCI + SOC2` for AWS, `CIS-AZURE-2.0` for Azure, `CIS-GCP-2.0` for GCP, `CIS-K8S-1.12` for Kubernetes).
+- **`ScanResult` dataclass**: `ProwlerService` scan methods now return `ScanResult(findings, raw_outputs)` so the task can use raw `OutputFinding` objects for inventory extraction without a second pass.
+- **43 unit tests for `prowler_inventory`**: cover type normalization (AWS/Azure/GCP/K8s), collection routing (IAM → identities, S3 → data_assets, EC2 → resources), tag extraction, public IP detection, ArangoDB key generation, deduplication, and edge cases.
+
 - **Dashboard home (F0.3)**: replaced `/` redirect with a real security overview page showing ThreatScore, finding counts by severity (CRITICAL/HIGH/MEDIUM/LOW — each links to `/findings?severity=X`), last 5 scan jobs with status icons and relative timestamps, and quick-navigation links to all main sections.
 - **`GET /api/v1/findings/stats`**: new endpoint returning aggregate counts `by_severity` and `by_status` plus `total` — a single AQL query, scoped by tenant, used by the dashboard.
 - **`findingsApi.stats()`**: new client method in `frontend/src/lib/api.ts`; `FindingsStats` type added to `types.ts`.

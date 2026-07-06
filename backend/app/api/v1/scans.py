@@ -15,12 +15,18 @@ from app.workers.tasks.cspm_scan import run_cspm_scan
 
 router = APIRouter(prefix="/api/v1/scans", tags=["scans"])
 
-_DEFAULT_FRAMEWORKS = ["CIS-AWS-2.0", "PCI_DSS_v4", "SOC2"]
+_DEFAULT_FRAMEWORKS: dict[str, list[str]] = {
+    "aws": ["CIS-AWS-2.0", "PCI_DSS_v4", "SOC2"],
+    "azure": ["CIS-AZURE-2.0"],
+    "gcp": ["CIS-GCP-2.0"],
+    "k8s": ["CIS-K8S-1.12"],
+    "kubernetes": ["CIS-K8S-1.12"],
+}
 
 
 class ScanRequest(BaseModel):
     provider_id: str
-    frameworks: list[str] = Field(default_factory=lambda: list(_DEFAULT_FRAMEWORKS))
+    frameworks: list[str] = Field(default_factory=list)
 
 
 class ScanResponse(BaseModel):
@@ -45,18 +51,24 @@ async def trigger_scan(
 
     account_id = provider.account_id or provider.subscription_id or provider.project_id or ""
 
+    # Use caller-supplied frameworks, or fall back to provider-specific defaults
+    frameworks = body.frameworks or _DEFAULT_FRAMEWORKS.get(provider.provider, ["CIS-AWS-2.0"])
+
     # Build complete credentials including non-secret role fields stored on the provider
     full_credentials = {
         **credentials,
         "role_arn": provider.role_arn,
-        "external_id": provider.external_id,
+        "external_id": getattr(provider, "external_id", None),
+        "azure_tenant_id": getattr(provider, "azure_tenant_id", None),
+        "azure_client_id": getattr(provider, "azure_client_id", None),
+        "cluster_name": getattr(provider, "cluster_name", None),
     }
 
     task = run_cspm_scan.delay(
         tenant_id=x_tenant_id,
         provider_id=body.provider_id,
         provider=provider.provider,
-        frameworks=body.frameworks,
+        frameworks=frameworks,
         credentials=full_credentials,
         account_id=account_id,
         regions=provider.regions or None,
