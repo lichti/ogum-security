@@ -139,9 +139,8 @@ class ProwlerService:
             status_str = str(getattr(result, "status", "FAIL")).upper()
             status = _STATUS_MAP.get(status_str, FindingStatus.FAIL)
 
-            # Severity — lives inside metadata
-            metadata = getattr(result, "metadata", None)
-            check_metadata = getattr(metadata, "CheckMetadata", None) if metadata else None
+            # result.metadata IS CheckMetadata directly (prowler v5 OutputFinding)
+            check_metadata = getattr(result, "metadata", None)
             severity_str = "medium"
             if check_metadata:
                 severity_str = str(getattr(check_metadata, "Severity", "medium")).lower()
