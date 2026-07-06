@@ -17,6 +17,8 @@ Commit types that trigger version bumps:
 
 ### Fixed
 
+- **Finding `_key` sanitization**: `arango_key()` now uses `sha256(check_id|resource_id|tenant_id)` instead of string substitution — prowler resource names/UIDs can contain dots, parens, `@`, and other characters that ArangoDB rejects as `_key` values, causing `ERR 1221` on upsert.
+- **Prowler v5 API alignment**: rewrote `ProwlerService.run_aws_scan` to match the actual prowler-core v5 API — `AwsProvider` now takes flat keyword args (no `audit_config` dict), and scanning uses the high-level `Scan` class with `compliances=[...]` instead of manual check iteration. Framework IDs are mapped to prowler's file slugs (`CIS-AWS-2.0` → `cis_2.0_aws`, etc.). `_normalize` converts `OutputFinding` pydantic objects to Ogum's `Finding` model via field introspection.
 - **CSPM scan import path**: corrected `prowler.providers.aws.provider` → `prowler.providers.aws.aws_provider` — the module was renamed in prowler v5 and the worker was failing with `ModuleNotFoundError` on every scan trigger.
 
 ### Added

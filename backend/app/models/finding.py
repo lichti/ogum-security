@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -63,8 +64,10 @@ class Finding(BaseModel):
     raw_output: dict[str, Any] = Field(default_factory=dict)
 
     def arango_key(self) -> str:
-        parts = f"{self.check_id}_{self.resource_id}_{self.tenant_id}"
-        return parts.replace("/", "_").replace(":", "_").replace(" ", "_")
+        # ArangoDB _key only allows [a-zA-Z0-9_-]. Prowler resource names/UIDs
+        # can contain ARNs, dots, parens, @ signs, etc. — hash avoids any edge case.
+        raw = f"{self.check_id}|{self.resource_id}|{self.tenant_id}"
+        return hashlib.sha256(raw.encode()).hexdigest()
 
     def to_arango_doc(self) -> dict[str, Any]:
         doc = self.model_dump(mode="json")
