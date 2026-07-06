@@ -83,6 +83,43 @@ async def list_findings_endpoint(
     return ApiResponse(data=PagedFindings(items=items, next_cursor=next_cursor, count=len(items)))
 
 
+class FindingsStats(BaseModel):
+    by_severity: dict[str, int]
+    by_status: dict[str, int]
+    total: int
+
+
+@router.get("/stats", response_model=ApiResponse[FindingsStats])
+async def findings_stats_endpoint(
+    x_tenant_id: str = Header(..., alias="X-Tenant-Id"),
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> ApiResponse[FindingsStats]:
+    """Aggregate counts by severity and status — used by the dashboard."""
+    aql = """
+    FOR f IN findings
+      FILTER f.tenant_id == @tid
+      COLLECT severity = f.severity, status = f.status WITH COUNT INTO c
+      RETURN { severity, status, c }
+    """
+    rows = list(db.aql.execute(aql, bind_vars={"tid": x_tenant_id}))
+
+    by_severity: dict[str, int] = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFORMATIONAL": 0}
+    by_status: dict[str, int] = {"FAIL": 0, "PASS": 0, "MUTED": 0, "ACCEPTED": 0}
+    total = 0
+
+    for row in rows:
+        sev = str(row.get("severity", "")).upper()
+        sta = str(row.get("status", "")).upper()
+        count = int(row.get("c", 0))
+        if sev in by_severity:
+            by_severity[sev] += count
+        if sta in by_status:
+            by_status[sta] += count
+        total += count
+
+    return ApiResponse(data=FindingsStats(by_severity=by_severity, by_status=by_status, total=total))
+
+
 _EXPORT_FIELDS = [
     "check_id",
     "title",
