@@ -51,6 +51,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
+          cache-dependency-path: backend/pyproject.toml
 
       - name: Install Poetry
         run: pip install poetry==1.8.3
@@ -60,13 +61,15 @@ jobs:
         working-directory: backend
 
       - name: Cache Poetry virtualenv
+        id: venv-cache
         uses: actions/cache@v4
         with:
           path: backend/.venv
-          key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml') }}
+          key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml', 'backend/poetry.lock') }}
           restore-keys: venv-${{ runner.os }}-py3.12-
 
       - name: Install dependencies
+        if: steps.venv-cache.outputs.cache-hit != 'true'
         working-directory: backend
         run: poetry install --no-root
 
@@ -93,6 +96,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
+          cache-dependency-path: backend/pyproject.toml
 
       - name: Install Poetry
         run: pip install poetry==1.8.3
@@ -102,13 +106,15 @@ jobs:
         working-directory: backend
 
       - name: Cache Poetry virtualenv
+        id: venv-cache
         uses: actions/cache@v4
         with:
           path: backend/.venv
-          key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml') }}
+          key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml', 'backend/poetry.lock') }}
           restore-keys: venv-${{ runner.os }}-py3.12-
 
       - name: Install dependencies
+        if: steps.venv-cache.outputs.cache-hit != 'true'
         working-directory: backend
         run: poetry install
 
@@ -135,6 +141,11 @@ jobs:
         image: redis:7-alpine
         ports:
           - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
@@ -143,6 +154,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
+          cache-dependency-path: backend/pyproject.toml
 
       - name: Install Poetry
         run: pip install poetry==1.8.3
@@ -152,13 +164,15 @@ jobs:
         working-directory: backend
 
       - name: Cache Poetry virtualenv
+        id: venv-cache
         uses: actions/cache@v4
         with:
           path: backend/.venv
-          key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml') }}
+          key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml', 'backend/poetry.lock') }}
           restore-keys: venv-${{ runner.os }}-py3.12-
 
       - name: Install dependencies
+        if: steps.venv-cache.outputs.cache-hit != 'true'
         working-directory: backend
         run: poetry install
 
@@ -166,11 +180,10 @@ jobs:
         run: |
           for i in $(seq 1 30); do
             if curl -sf http://localhost:8529/_api/version > /dev/null 2>&1; then
-              echo "ArangoDB is ready"
+              echo "ArangoDB ready after ${i} attempts"
               break
             fi
-            echo "Waiting for ArangoDB... ($i/30)"
-            sleep 5
+            sleep 3
           done
 
       - name: Integration tests
@@ -199,6 +212,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
+          cache-dependency-path: backend/pyproject.toml
 
       - name: Install Poetry
         run: pip install poetry==1.8.3
@@ -208,13 +222,15 @@ jobs:
         working-directory: backend
 
       - name: Cache Poetry virtualenv
+        id: venv-cache
         uses: actions/cache@v4
         with:
           path: backend/.venv
-          key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml') }}
+          key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml', 'backend/poetry.lock') }}
           restore-keys: venv-${{ runner.os }}-py3.12-
 
       - name: Install dependencies
+        if: steps.venv-cache.outputs.cache-hit != 'true'
         working-directory: backend
         run: poetry install --no-root
 

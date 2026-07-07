@@ -15,6 +15,15 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Provider cascade delete**: deleting a provider now removes all associated data in the correct order — findings and scan_jobs (by `provider_id`), then graph vertices (resources, identities, data_assets, network_endpoints scoped by provider+account), then orphaned edges, and finally stale attack_paths whose entry_point or target no longer exists in the graph. Previously, findings, scan_jobs, and attack_paths were left as orphaned records after provider removal.
+
+### Changed
+
+- **CI — venv cache optimization**: all backend CI jobs (lint, unit tests, integration tests, security audit) now use `poetry.lock` in the cache key (not just `pyproject.toml`), add `cache-dependency-path: backend/pyproject.toml` to the `setup-python` action, and skip `poetry install` entirely when the virtualenv cache is hit. The integration and unit test jobs add `id: venv-cache` + `if: steps.venv-cache.outputs.cache-hit != 'true'` guards.
+- **CI — ArangoDB readiness polling optimized**: the `backend-integration` job now polls ArangoDB with 3s intervals (was 5s), breaking immediately when ready instead of always completing 30 iterations. Redis uses a Docker `--health-cmd "redis-cli ping"` health check. Note: ArangoDB cannot use a Docker health check because `curl` is not available in the `arangodb:3.12` image — the runner-side polling loop is the correct approach.
+
 ### Added
 
 - **Attack Paths canvas (Epic 02 Sprint 3)**: interactive React Flow canvas replacing the flat table layout. `AttackPathList` panel (260px) groups paths by severity with score, entry→target route, hop count, and toxic badge — clicking loads the path in the canvas. `AttackPathCanvas` renders custom node types (`EntryPointNode` red, `TargetNode` yellow, `IdentityNode` purple, `ResourceNode` default) with dagre left-to-right auto-layout, animated smoothstep edges with inferred relation labels, zoom/pan controls, and minimap. Bottom info bar shows selected path summary with entry point, target, risk score, hops, and a disabled "Remediate with AI" CTA. `NodeDetailPanel` slide-over fetches full resource detail from `/api/v1/inventory/{key}` on node click. `graph-layout.ts` utility wraps dagre layout and node-type inference. 15 component tests for `AttackPathList` and `AttackPathCanvas`. `structuredClone` polyfill added to jest setup (dagre dependency). `@xyflow/react` v12 and `@dagrejs/dagre` installed.
