@@ -2,19 +2,25 @@
 
 import { useCallback, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Flame, ArrowRight, Wand2 } from 'lucide-react'
 import { AttackPathStatsBar } from '@/components/attack-paths/AttackPathStatsBar'
-import { AttackPathFilterBar } from '@/components/attack-paths/AttackPathFilters'
-import { AttackPathsTable } from '@/components/attack-paths/AttackPathsTable'
-import { AttackPathDetailPanel } from '@/components/attack-paths/AttackPathDetailPanel'
+import { AttackPathCanvas } from '@/components/graph/AttackPathCanvas'
+import { AttackPathList } from '@/components/graph/AttackPathList'
+import { NodeDetailPanel } from '@/components/graph/NodeDetailPanel'
 import { attackPathsApi } from '@/lib/api'
-import type { AttackPath, AttackPathFilters, AttackPathSeverity } from '@/lib/types'
+import type { AttackPath, AttackPathSeverity } from '@/lib/types'
 
-const DEFAULT_FILTERS: AttackPathFilters = { limit: 50 }
+const SEVERITY_COLOR: Record<AttackPathSeverity, string> = {
+  CRITICAL: 'text-red-400 bg-red-500/10 border-red-500/30',
+  HIGH: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
+  MEDIUM: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
+  LOW: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
+}
 
 export default function AttackPathsPage() {
-  const [filters, setFilters] = useState<AttackPathFilters>(DEFAULT_FILTERS)
-  const [prevCursors, setPrevCursors] = useState<string[]>([])
-  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [selectedPath, setSelectedPath] = useState<AttackPath | null>(null)
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [severityFilter, setSeverityFilter] = useState<AttackPathSeverity | undefined>()
 
   const { data: statsData } = useQuery({
     queryKey: ['attack-paths-stats'],
@@ -22,76 +28,116 @@ export default function AttackPathsPage() {
     staleTime: 30_000,
   })
 
-  const { data: listData, isLoading } = useQuery({
-    queryKey: ['attack-paths', filters],
-    queryFn: () => attackPathsApi.list(filters).then((r) => r.data.data),
-    placeholderData: (prev) => prev,
+  const { data: listData, isLoading: listLoading } = useQuery({
+    queryKey: ['attack-paths', severityFilter],
+    queryFn: () =>
+      attackPathsApi.list({ limit: 100, severity: severityFilter }).then((r) => r.data.data),
+    staleTime: 30_000,
+  })
+
+  const { data: detailData, isLoading: detailLoading } = useQuery({
+    queryKey: ['attack-path-detail', selectedPath?._key],
+    queryFn: () =>
+      attackPathsApi.get(selectedPath!._key).then((r) => r.data.data),
+    enabled: !!selectedPath,
+    staleTime: 60_000,
   })
 
   const paths = listData?.items ?? []
-  const nextCursor = listData?.next_cursor ?? null
 
-  const handleFiltersChange = useCallback((next: AttackPathFilters) => {
-    setPrevCursors([])
-    setFilters({ ...next, cursor: undefined })
+  const handleSelectPath = useCallback((path: AttackPath) => {
+    setSelectedPath(path)
+    setSelectedNodeId(null)
   }, [])
 
   const handleSeverityClick = useCallback((severity: string) => {
-    handleFiltersChange({ ...DEFAULT_FILTERS, severity: severity as AttackPathSeverity })
-  }, [handleFiltersChange])
+    setSeverityFilter(severity as AttackPathSeverity)
+  }, [])
 
-  const handleNext = () => {
-    if (!nextCursor) return
-    setPrevCursors((p) => [...p, filters.cursor ?? ''])
-    setFilters((f) => ({ ...f, cursor: nextCursor }))
-  }
-
-  const handlePrev = () => {
-    const prev = [...prevCursors]
-    const cursor = prev.pop() || undefined
-    setPrevCursors(prev)
-    setFilters((f) => ({ ...f, cursor }))
-  }
+  const handleNodeClick = useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId)
+  }, [])
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200">
-      <div className="max-w-screen-xl mx-auto px-6 py-8">
-        {/* Header */}
-        <div className="mb-6">
+    <div className="h-screen flex flex-col bg-slate-950 text-slate-200 overflow-hidden">
+      {/* Header + Stats */}
+      <div className="shrink-0 px-6 pt-6 pb-4">
+        <div className="mb-4">
           <h1 className="text-2xl font-bold text-slate-100">Attack Paths</h1>
-          <p className="text-slate-500 text-sm mt-1">
+          <p className="text-slate-500 text-sm mt-0.5">
             Contextual risk graph — paths from internet exposure to sensitive data
           </p>
         </div>
-
-        {/* Stats bar */}
         {statsData && (
-          <div className="mb-6">
-            <AttackPathStatsBar stats={statsData} onSeverityClick={handleSeverityClick} />
-          </div>
+          <AttackPathStatsBar stats={statsData} onSeverityClick={handleSeverityClick} />
         )}
-
-        {/* Filters */}
-        <div className="mb-5">
-          <AttackPathFilterBar filters={filters} onChange={handleFiltersChange} />
-        </div>
-
-        {/* Table */}
-        <AttackPathsTable
-          paths={paths}
-          loading={isLoading}
-          nextCursor={nextCursor}
-          prevCursors={prevCursors}
-          onNext={handleNext}
-          onPrev={handlePrev}
-          onRowClick={(p: AttackPath) => setSelectedKey(p._key)}
-        />
       </div>
 
-      {/* Detail panel */}
-      <AttackPathDetailPanel
-        pathKey={selectedKey}
-        onClose={() => setSelectedKey(null)}
+      {/* Main split layout */}
+      <div className="flex-1 flex gap-4 px-6 pb-4 min-h-0">
+        {/* Left: path list */}
+        <AttackPathList
+          paths={paths}
+          selectedKey={selectedPath?._key ?? null}
+          loading={listLoading}
+          onSelect={handleSelectPath}
+        />
+
+        {/* Right: canvas */}
+        <div className="flex-1 flex flex-col gap-3 min-w-0">
+          <AttackPathCanvas
+            detail={detailData ?? null}
+            loading={!!selectedPath && detailLoading}
+            onNodeClick={handleNodeClick}
+          />
+
+          {/* Bottom info bar — visible when a path is selected */}
+          {selectedPath && (
+            <div className="shrink-0 flex items-center gap-4 px-4 py-3 bg-slate-900 border border-slate-800 rounded-lg">
+              <span
+                className={`text-[11px] font-semibold px-2 py-1 rounded border ${SEVERITY_COLOR[selectedPath.severity]}`}
+              >
+                {selectedPath.severity}
+              </span>
+
+              <div className="flex items-center gap-1.5 text-sm text-slate-400 min-w-0 flex-1">
+                <span className="text-slate-200 font-medium truncate">{selectedPath.entry_point_name}</span>
+                <ArrowRight size={14} className="text-slate-600 shrink-0" />
+                <span className="text-slate-200 font-medium truncate">{selectedPath.target_name}</span>
+              </div>
+
+              <div className="flex items-center gap-4 shrink-0 text-xs text-slate-500">
+                <span>
+                  Score: <span className="text-slate-300 font-semibold">{selectedPath.risk_score.toFixed(0)}</span>
+                </span>
+                <span>
+                  {selectedPath.hops} hop{selectedPath.hops !== 1 ? 's' : ''}
+                </span>
+                {selectedPath.is_toxic_combination && (
+                  <span className="flex items-center gap-1 text-orange-400">
+                    <Flame size={12} />
+                    Toxic
+                  </span>
+                )}
+              </div>
+
+              <button
+                disabled
+                title="Ogum.AI remediation — coming in Sprint 4"
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed"
+              >
+                <Wand2 size={12} />
+                Remediate with AI
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Node detail panel */}
+      <NodeDetailPanel
+        nodeId={selectedNodeId}
+        onClose={() => setSelectedNodeId(null)}
       />
     </div>
   )
