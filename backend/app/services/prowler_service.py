@@ -96,7 +96,6 @@ class ProwlerService:
     ) -> ScanResult:
         """Execute Prowler v5 checks against an AWS account."""
         try:
-            from prowler.lib.scan.scan import Scan  # noqa: PLC0415
             from prowler.providers.aws.aws_provider import AwsProvider  # noqa: PLC0415
         except ImportError as exc:
             raise RuntimeError("prowler-core is not installed") from exc
@@ -144,7 +143,6 @@ class ProwlerService:
     ) -> ScanResult:
         """Execute Prowler v5 checks against an Azure subscription."""
         try:
-            from prowler.lib.scan.scan import Scan  # noqa: PLC0415, F401
             from prowler.providers.azure.azure_provider import AzureProvider  # noqa: PLC0415
         except ImportError as exc:
             raise RuntimeError("prowler-core is not installed") from exc
@@ -187,7 +185,6 @@ class ProwlerService:
     ) -> ScanResult:
         """Execute Prowler v5 checks against a GCP project."""
         try:
-            from prowler.lib.scan.scan import Scan  # noqa: PLC0415, F401
             from prowler.providers.gcp.gcp_provider import GcpProvider  # noqa: PLC0415
         except ImportError as exc:
             raise RuntimeError("prowler-core is not installed") from exc
@@ -225,7 +222,6 @@ class ProwlerService:
     ) -> ScanResult:
         """Execute Prowler v5 checks against a Kubernetes cluster."""
         try:
-            from prowler.lib.scan.scan import Scan  # noqa: PLC0415, F401
             from prowler.providers.kubernetes.kubernetes_provider import KubernetesProvider  # noqa: PLC0415
         except ImportError as exc:
             raise RuntimeError("prowler-core is not installed") from exc

@@ -8,7 +8,6 @@ from typing import Any
 import pytest
 
 from app.services.prowler_inventory import (
-    _camel_to_snake,
     _collection_for,
     _extract_tags,
     _is_public,
@@ -293,7 +292,11 @@ class TestExtractInventoryAws:
 
 @pytest.mark.unit
 class TestExtractInventoryAzure:
-    def _make_azure_finding(self, resource_uid="/subscriptions/sub1/virtualMachines/myvm", resource_type="microsoft.compute/virtualmachines"):
+    def _make_azure_finding(
+        self,
+        resource_uid: str = "/subscriptions/sub1/virtualMachines/myvm",
+        resource_type: str = "microsoft.compute/virtualmachines",
+    ):
         check_meta = SimpleNamespace(
             ResourceType=resource_type,
             ServiceName="vm",

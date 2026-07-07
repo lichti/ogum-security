@@ -53,11 +53,11 @@ def _upsert_finding(db: Any, finding: Finding) -> None:
 
 def _upsert_inventory(db: Any, inventory: dict[str, list[dict[str, Any]]]) -> int:
     """Upsert resources, identities, and data_assets from post-scan extraction."""
+    _immutable = {"_key", "tenant_id", "provider", "resource_id", "arn"}
     count = 0
     for collection, docs in inventory.items():
         for doc in docs:
-            key = doc["_key"]
-            update_fields = {k: v for k, v in doc.items() if k not in ("_key", "tenant_id", "provider", "resource_id", "arn")}
+            update_fields = {k: v for k, v in doc.items() if k not in _immutable}
             _upsert(db, collection, doc, update_fields)
             count += 1
     return count
