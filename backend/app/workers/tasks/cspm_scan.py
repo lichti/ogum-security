@@ -209,6 +209,19 @@ def run_cspm_scan(
             fail_count,
             inventory_count,
         )
+
+        # Enqueue post-scan graph enrichment (fire-and-forget)
+        try:
+            from app.workers.tasks.attack_paths import (  # noqa: PLC0415
+                detect_attack_paths,
+                recalculate_risk_scores,
+            )
+
+            recalculate_risk_scores.delay(tenant_id)
+            detect_attack_paths.delay(tenant_id)
+        except Exception:
+            logger.warning("Failed to enqueue post-scan graph tasks for tenant=%s", tenant_id)
+
         return {
             "job_id": job_id,
             "tenant_id": tenant_id,
