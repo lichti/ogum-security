@@ -13,6 +13,7 @@ import pytest
 
 from app.db.init import init_tenant_schema
 from app.models.finding import FindingStatus, SeverityLevel
+from app.services.prowler_service import ScanResult
 from app.workers.tasks.cspm_scan import run_cspm_scan
 
 TEST_TENANT = "test-tenant-aaa"
@@ -54,6 +55,11 @@ def _make_mock_finding(
     )
 
 
+def _scan_result(findings):
+    """Wrap findings in a ScanResult (raw_outputs empty — inventory extraction skipped)."""
+    return ScanResult(findings=findings, raw_outputs=[])
+
+
 @pytest.mark.integration
 class TestCSPMScanTask:
     def test_scan_creates_scan_job_and_findings(self, db_tenant_a, mocker):
@@ -66,7 +72,7 @@ class TestCSPMScanTask:
             _make_mock_finding("s3_bucket_public_read", "my-bucket", FindingStatus.PASS_),
         ]
         mock_prowler = MagicMock()
-        mock_prowler.run_aws_scan.return_value = findings
+        mock_prowler.run_aws_scan.return_value = _scan_result(findings)
         mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
 
         result = run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
@@ -97,7 +103,7 @@ class TestCSPMScanTask:
             jobs = list(db_tenant_a.aql.execute("FOR j IN scan_jobs RETURN j"))
             if jobs:
                 captured_status["status"] = jobs[0]["status"]
-            return []
+            return _scan_result([])
 
         mock_prowler = MagicMock()
         mock_prowler.run_aws_scan.side_effect = check_job_exists
@@ -112,7 +118,7 @@ class TestCSPMScanTask:
         mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
 
         mock_prowler = MagicMock()
-        mock_prowler.run_aws_scan.return_value = []
+        mock_prowler.run_aws_scan.return_value = _scan_result([])
         mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
 
         result = run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
@@ -129,7 +135,7 @@ class TestCSPMScanTask:
 
         findings = [_make_mock_finding("iam_root_mfa_enabled")]
         mock_prowler = MagicMock()
-        mock_prowler.run_aws_scan.return_value = findings
+        mock_prowler.run_aws_scan.return_value = _scan_result(findings)
         mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
 
         run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
@@ -139,11 +145,12 @@ class TestCSPMScanTask:
         assert len(stored) == 1
 
     def test_unsupported_provider_produces_empty_findings(self, db_tenant_a, mocker):
-        """GCP provider (not yet implemented) must create a completed job with 0 findings."""
+        """GCP scan returns empty ScanResult when credentials are not provided."""
         init_tenant_schema(db_tenant_a)
         mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
 
         mock_prowler = MagicMock()
+        mock_prowler.run_gcp_scan.return_value = _scan_result([])
         mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
 
         kwargs = {**_TASK_KWARGS, "provider": "gcp"}
