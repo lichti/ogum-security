@@ -12,6 +12,7 @@ from app.services.prowler_inventory import (
     _extract_tags,
     _is_public,
     _normalize_type_name,
+    _to_jsonable,
     extract_inventory_from_findings,
     resource_arango_key,
 )
@@ -375,3 +376,85 @@ class TestExtractInventoryK8s:
         doc = inv["resources"][0]
         assert doc["provider"] == "k8s"
         assert doc["resource_type"] == "k8s_pod"
+
+
+# ---------------------------------------------------------------------------
+# _to_jsonable — Pydantic v1/v2 nested object serialization
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestToJsonable:
+    def test_plain_types_pass_through(self):
+        assert _to_jsonable("hello") == "hello"
+        assert _to_jsonable(42) == 42
+        assert _to_jsonable(3.14) == 3.14
+        assert _to_jsonable(True) is True
+        assert _to_jsonable(None) is None
+
+    def test_dict_is_recursed(self):
+        assert _to_jsonable({"a": 1, "b": "x"}) == {"a": 1, "b": "x"}
+
+    def test_list_is_recursed(self):
+        assert _to_jsonable([1, "two", None]) == [1, "two", None]
+
+    def test_nested_dict_in_list(self):
+        assert _to_jsonable([{"k": 1}]) == [{"k": 1}]
+
+    def test_datetime_becomes_isoformat(self):
+        from datetime import datetime, timezone
+        dt = datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        result = _to_jsonable(dt)
+        assert result == "2024-01-15T12:00:00+00:00"
+
+    def test_unknown_object_becomes_str(self):
+        class Opaque:
+            def __str__(self):
+                return "opaque-value"
+        assert _to_jsonable(Opaque()) == "opaque-value"
+
+    def test_pydantic_v1_model_serialized(self):
+        """Simulate a Prowler v5 Trail-like Pydantic v1 model nested in resource_metadata."""
+        try:
+            from pydantic.v1 import BaseModel as PydanticV1Base
+        except ImportError:
+            pytest.skip("pydantic.v1 not available")
+
+        class Trail(PydanticV1Base):
+            name: str
+            arn: str
+            is_multiregion: bool = False
+
+        trail = Trail(name="my-trail", arn="arn:aws:cloudtrail:us-east-1:123:trail/my-trail")
+        metadata = {"trail": trail, "region": "us-east-1"}
+        result = _to_jsonable(metadata)
+        assert isinstance(result, dict)
+        assert result["region"] == "us-east-1"
+        assert isinstance(result["trail"], dict)
+        assert result["trail"]["name"] == "my-trail"
+        assert result["trail"]["arn"] == "arn:aws:cloudtrail:us-east-1:123:trail/my-trail"
+
+    def test_resource_metadata_with_nested_model_is_json_serializable(self):
+        """End-to-end: resource_metadata containing a Pydantic v1 model must produce a JSON-safe doc."""
+        import json
+
+        try:
+            from pydantic.v1 import BaseModel as PydanticV1Base
+        except ImportError:
+            pytest.skip("pydantic.v1 not available")
+
+        class Trail(PydanticV1Base):
+            name: str
+            home_region: str
+
+        finding = _make_finding(
+            resource_uid="arn:aws:cloudtrail:us-east-1:123:trail/my-trail",
+            resource_type="AwsCloudTrailTrail",
+            metadata={"trail": Trail(name="my-trail", home_region="us-east-1")},
+        )
+        inv = extract_inventory_from_findings([finding], "dev-tenant", "aws", "123456789012")
+        assert len(inv["resources"]) == 1
+        doc = inv["resources"][0]
+        # Must not raise — this is what python-arango does before sending to ArangoDB
+        serialized = json.dumps(doc)
+        assert "my-trail" in serialized

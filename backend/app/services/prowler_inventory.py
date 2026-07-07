@@ -22,6 +22,27 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _to_jsonable(obj: Any) -> Any:
+    """Recursively convert Pydantic models and other non-serializable objects to plain Python types.
+
+    Prowler v5 uses Pydantic v1 and stores service objects (e.g. Trail, Bucket)
+    as values inside resource_metadata dicts. json.dumps raises TypeError for these.
+    """
+    if hasattr(obj, "model_dump"):  # Pydantic v2
+        return _to_jsonable(obj.model_dump())
+    if hasattr(obj, "__fields__") and hasattr(obj, "dict") and callable(obj.dict):  # Pydantic v1
+        return _to_jsonable(obj.dict())
+    if isinstance(obj, dict):
+        return {str(k): _to_jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_jsonable(item) for item in obj]
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, (str, int, float, bool)) or obj is None:
+        return obj
+    return str(obj)
+
+
 # ---------------------------------------------------------------------------
 # Collection routing heuristics (applied to the raw prowler ResourceType)
 # ---------------------------------------------------------------------------
@@ -165,7 +186,7 @@ def extract_inventory_from_findings(
         effective_account = result_account or account_id
 
         resource_metadata = getattr(finding, "resource_metadata", {})
-        metadata_dict = resource_metadata if isinstance(resource_metadata, dict) else {}
+        metadata_dict = _to_jsonable(resource_metadata) if resource_metadata else {}
 
         type_name = _normalize_type_name(raw_type, provider)
         collection = _collection_for(raw_type or type_name)
