@@ -8,6 +8,8 @@ import type {
   FindingDetail,
   FindingsFilter,
   FindingsStats,
+  IdentityPermissions,
+  IdentitySummary,
   PagedAttackPaths,
   PagedFindings,
   ResourceSummary,
@@ -172,4 +174,12 @@ export const attackPathsApi = {
 
   get: (pathKey: string) =>
     apiClient.get<ApiResponse<AttackPathDetail>>(`/api/v1/attack-paths/${pathKey}`),
+}
+
+export const identitiesApi = {
+  list: (params?: { provider?: string; only_dangerous?: boolean; limit?: number; offset?: number }) =>
+    apiClient.get<ApiResponse<IdentitySummary[]>>('/api/v1/identities', { params }),
+
+  permissions: (identityKey: string) =>
+    apiClient.get<ApiResponse<IdentityPermissions>>(`/api/v1/identities/${identityKey}/permissions`),
 }

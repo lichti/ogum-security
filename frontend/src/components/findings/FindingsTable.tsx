@@ -1,6 +1,7 @@
 'use client'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Badge, type BadgeVariant } from '@/components/ui/Badge'
+import { RiskBadge } from '@/components/ui/RiskBadge'
 import { SeverityBadge } from '@/components/ui/SeverityBadge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import type { Finding } from '@/lib/types'
@@ -70,6 +71,7 @@ export function FindingsTable({
             <th className="pb-3 pr-4 font-medium">Provider</th>
             <th className="pb-3 pr-4 font-medium">Region</th>
             <th className="pb-3 pr-4 font-medium">Status</th>
+            <th className="pb-3 pr-4 font-medium">Risk</th>
             <th className="pb-3 font-medium">Detected</th>
           </tr>
         </thead>
@@ -105,6 +107,9 @@ export function FindingsTable({
                 ) : (
                   <span className="text-green-400 text-xs font-medium">{f.status}</span>
                 )}
+              </td>
+              <td className="py-3 pr-4">
+                <RiskBadge score={(f as Finding & { risk_score?: number | null }).risk_score} />
               </td>
               <td className="py-3 text-slate-500 text-xs">
                 {new Date(f.detected_at).toLocaleDateString()}

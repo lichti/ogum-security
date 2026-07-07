@@ -1,6 +1,7 @@
 'use client'
 import { ChevronLeft, ChevronRight, Globe, Lock } from 'lucide-react'
 import { Badge, type BadgeVariant } from '@/components/ui/Badge'
+import { RiskBadge } from '@/components/ui/RiskBadge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import type { ResourceSummary } from '@/lib/types'
 
@@ -102,7 +103,9 @@ export function DataTable({
                   {r.status}
                 </Badge>
               </td>
-              <td className="py-3 text-slate-500">—</td>
+              <td className="py-3">
+                <RiskBadge score={r.risk_score} />
+              </td>
             </tr>
           ))}
         </tbody>
