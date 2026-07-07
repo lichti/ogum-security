@@ -176,7 +176,7 @@ For on-premise servers, edge environments, or unsupported clouds — a lightweig
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-**Core stack:** Python 3.13 · FastAPI · Prowler v5 (`prowler-core`) · ArangoDB · Redpanda · Apache Flink · React 19 · Next.js 15 · Go · eBPF · LangChain · Ollama
+**Core stack:** Python 3.12+ · FastAPI · Prowler v5 (`prowler-core`) · ArangoDB · Redpanda · Apache Flink · React 19 · Next.js 15 · Go · eBPF · LangChain · Ollama
 
 ---
 
@@ -228,13 +228,17 @@ curl -X POST http://localhost:8000/api/v1/providers \
 # 2. View your inventory
 open http://localhost:3000/inventory
 
-# 3. Export inventory as CSV
-curl "http://localhost:8000/api/v1/inventory/export?format=csv" \
+# 3. Run a CSPM scan (Prowler v5 — 1,700+ checks)
+curl -X POST http://localhost:8000/api/v1/scans \
+  -H "Content-Type: application/json" \
   -H "X-Tenant-ID: dev-tenant" \
-  -o inventory.csv
-```
+  -d '{"provider_id": "<provider_id>", "frameworks": ["CIS-AWS-2.0"]}'
 
-> CSPM scans with Prowler v5 are coming in Phase 1 — Ogum.Static.
+# 4. Export findings as CSV
+curl "http://localhost:8000/api/v1/findings/export?format=csv" \
+  -H "X-Tenant-ID: dev-tenant" \
+  -o findings.csv
+```
 
 ---
 
@@ -242,8 +246,8 @@ curl "http://localhost:8000/api/v1/inventory/export?format=csv" \
 
 We are building this in public. Here is where we are and where we are going:
 
-### Phase 1 — MVP (In Progress 🔨)
-> Asset inventory layer complete — CSPM and compliance dashboard next
+### Phase 1 — MVP ✅ Complete
+> Full asset inventory + CSPM with 1,700+ checks + compliance dashboard + IaC scanning
 
 - [x] Project structure and architecture
 - [x] Docker Compose dev stack (ArangoDB, Redpanda, Qdrant, Ollama)
@@ -257,34 +261,43 @@ We are building this in public. Here is where we are and where we are going:
 - [x] **Ogum.Inventory:** Provider onboarding wizard — connect AWS/Azure/GCP/K8s from the UI
 - [x] **Ogum.Inventory:** Inventory export — CSV and OCSF-inspired JSON via streaming API
 - [x] **Ogum.Inventory:** Tenant isolation — separate ArangoDB database per tenant, 5 security tests blocking in CI
-- [ ] **Ogum.Static:** FastAPI backend with Prowler v5 integration
-- [ ] **Ogum.Static:** Scan orchestration via Celery workers
-- [ ] **Ogum.Static:** Findings API with filtering (provider, severity, framework)
-- [ ] **Ogum.Static:** Compliance posture dashboard (CIS, NIST, PCI DSS, SOC 2)
-- [ ] **Ogum.Static:** Next.js 15 findings console with remediation panel
-- [ ] Multi-tenant OIDC authentication (Ogum.Auth)
+- [x] **Ogum.Static:** FastAPI + Prowler v5 (`prowler-core`) — 1,700+ checks, multi-cloud
+- [x] **Ogum.Static:** Scan orchestration via Celery workers (AWS, Azure, GCP, Kubernetes)
+- [x] **Ogum.Static:** Findings API — filtering by provider, severity, framework, region; keyset pagination
+- [x] **Ogum.Static:** Compliance posture dashboard (CIS, NIST 800-53, PCI DSS v4.0, SOC 2, ISO 27001)
+- [x] **Ogum.Static:** Findings console — severity filters, detail panel, CLI remediation commands, mute/accept
+- [x] **Ogum.Static:** IaC scanning with Checkov (Terraform, CloudFormation, Kubernetes manifests)
+- [x] **Ogum.Static:** Findings export (CSV + OCSF JSON streaming)
+- [x] **Ogum.Static:** Post-scan inventory enrichment — CSPM findings automatically populate resource graph
+- [ ] Multi-tenant OIDC authentication (Ogum.Auth) — Phase 3
 
-### Phase 2 — Alpha (Planned 📋)
-> Graph risk engine, side-scanning, and AI remediation
+### Phase 2 — Alpha (In Progress 🔨)
+> Attack paths, contextual risk, side-scanning, and CIEM. AI remediation next.
 
-- [ ] Attack Path graph visualization (React Flow canvas)
-- [ ] Toxic Combination detection (AQL traversal queries)
-- [ ] Contextual Risk Scoring engine
-- [ ] Agentless VM side-scanning (AWS EC2 EBS snapshots)
-- [ ] AWS Lambda artifact scanning
-- [ ] Kubernetes runtime container scanning (DaemonSet)
-- [ ] Ogum.AI RAG remediation engine (LangChain + Ollama)
-- [ ] GitOps PR auto-generation (GitHub/GitLab)
-- [ ] CIEM: privilege gap analysis and escalation path detection
-- [ ] Jira bidirectional integration
-- [ ] Slack / MS Teams / Telegram alerts
+- [x] **Ogum.Graph:** Contextual Risk Scoring engine (0–100, severity × exposure × blast radius)
+- [x] **Ogum.Graph:** Attack Path detection — AQL traversal up to 4 hops, Toxic Combination rules
+- [x] **Ogum.Graph:** Attack Path list UI with risk score, entry→target route, severity grouping
+- [x] **Ogum.Graph:** Attack Path canvas (React Flow) — custom node types, dagre layout, animated edges
+- [x] **Ogum.Graph:** CIEM static analysis — dangerous IAM permissions (18 actions), AssumeRole chaining
+- [x] **Ogum.Graph:** CIEM UI — identities list with risk score, permissions detail panel
+- [x] **Ogum.Dynamic:** Agentless EC2 side-scanning — ephemeral EBS snapshots + Trivy + YARA + secret detection (Sprint 1)
+- [ ] **Ogum.Dynamic:** EC2 side-scanning via EBS Direct API — eliminates volume/mount pipeline (Sprint 2)
+- [ ] **Ogum.Dynamic:** AWS Lambda artifact scanning
+- [ ] **Ogum.Dynamic:** Kubernetes runtime container scanning (DaemonSet)
+- [ ] **Ogum.Dynamic:** SBOM generation (CycloneDX) + daily re-scan without new snapshots
+- [ ] **Ogum.AI:** RAG remediation engine (LangChain + Ollama)
+- [ ] **Ogum.AI:** GitOps PR auto-generation (GitHub/GitLab)
+- [ ] **Ogum.Connect:** Jira bidirectional integration
+- [ ] **Ogum.Connect:** Slack / MS Teams / Telegram alerts
+- [ ] CIEM privilege gap (granted vs. used — requires CloudTrail data from Phase 3)
 
 ### Phase 3 — Beta (Planned 📋)
-> Real-time detection, enterprise auth, and hybrid coverage
+> Real-time detection, enterprise auth, SIEM connectors, and hybrid coverage
 
-- [ ] Near Real-Time pipeline (Redpanda + Apache Flink CEP)
+- [ ] Near Real-Time pipeline (Redpanda + Apache Flink CEP, < 2s latency)
 - [ ] K8s Audit Log and CloudTrail streaming ingestion
 - [ ] Falco runtime event integration
+- [ ] Cloud Detection and Response (Ogum.CDR) — Tier 1 auto-containment + Tier 2 Slack approval
 - [ ] OIDC/SAML 2.0 with RBAC (PlatformAdmin, SecOps, DevOps, Auditor)
 - [ ] AWS Security Hub bidirectional sync (ASFF format)
 - [ ] SIEM forwarding: Splunk, Microsoft Sentinel, Datadog, OpenSearch
