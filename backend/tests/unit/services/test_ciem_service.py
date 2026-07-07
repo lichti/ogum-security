@@ -20,24 +20,31 @@ class TestAnalyzeDangerousPermissions:
         actions = [r["action"] for r in result]
         assert "iam:PassRole" in actions
 
-    def test_detects_wildcard_iam(self):
-        doc = {"granted_actions": ["iam:CreateUser"], "policies": []}
+    def test_detects_wildcard_iam_grant(self):
+        # iam:* as a granted action is dangerous (unrestricted IAM access)
+        doc = {"granted_actions": ["iam:*"], "policies": []}
         result = analyze_dangerous_permissions(doc)
         actions = [r["action"] for r in result]
-        # iam:CreateUser matches the iam:* wildcard
         assert "iam:*" in actions
 
-    def test_detects_wildcard_s3(self):
-        doc = {"granted_actions": ["s3:DeleteBucket"], "policies": []}
+    def test_detects_wildcard_s3_grant(self):
+        # s3:* as a granted action is dangerous
+        doc = {"granted_actions": ["s3:*"], "policies": []}
         result = analyze_dangerous_permissions(doc)
         actions = [r["action"] for r in result]
         assert "s3:*" in actions
 
-    def test_wildcard_ec2_matches_ec2_action(self):
-        doc = {"granted_actions": ["ec2:RunInstances"], "policies": []}
+    def test_detects_wildcard_ec2_grant(self):
+        # ec2:* as a granted action is dangerous
+        doc = {"granted_actions": ["ec2:*"], "policies": []}
         result = analyze_dangerous_permissions(doc)
         actions = [r["action"] for r in result]
         assert "ec2:*" in actions
+
+    def test_specific_ec2_action_is_not_flagged(self):
+        # ec2:DescribeInstances is read-only and not inherently dangerous
+        doc = {"granted_actions": ["ec2:DescribeInstances", "s3:GetObject"], "policies": []}
+        assert analyze_dangerous_permissions(doc) == []
 
     def test_detects_administrator_access_policy(self):
         doc = {"granted_actions": [], "policies": ["arn:aws:iam::aws:policy/AdministratorAccess"]}
@@ -50,13 +57,17 @@ class TestAnalyzeDangerousPermissions:
         result = analyze_dangerous_permissions(doc)
         assert len(result) >= 1
 
-    def test_no_duplicates_when_action_and_wildcard_both_match(self):
-        # iam:PassRole matches directly AND the iam:* wildcard — should appear once
-        doc = {"granted_actions": ["iam:PassRole", "iam:CreateUser"], "policies": []}
+    def test_no_duplicates_when_same_action_listed_twice(self):
+        # iam:PassRole listed twice should appear only once in results
+        doc = {"granted_actions": ["iam:PassRole", "iam:PassRole"], "policies": []}
         result = analyze_dangerous_permissions(doc)
         actions = [r["action"] for r in result]
-        assert actions.count("iam:*") <= 1
-        assert actions.count("iam:PassRole") <= 1
+        assert actions.count("iam:PassRole") == 1
+
+    def test_safe_iam_action_not_flagged(self):
+        # iam:CreateUser alone is not in the dangerous list
+        doc = {"granted_actions": ["iam:CreateUser"], "policies": []}
+        assert analyze_dangerous_permissions(doc) == []
 
     def test_multiple_dangerous_actions_detected(self):
         doc = {
@@ -64,7 +75,10 @@ class TestAnalyzeDangerousPermissions:
             "policies": [],
         }
         result = analyze_dangerous_permissions(doc)
-        assert len(result) >= 3
+        actions = [r["action"] for r in result]
+        assert "iam:PassRole" in actions
+        assert "iam:CreateAccessKey" in actions
+        assert "lambda:UpdateFunctionCode" in actions
 
     def test_handles_missing_fields(self):
         assert analyze_dangerous_permissions({}) == []

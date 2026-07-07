@@ -104,13 +104,15 @@ _MAX_CHAINS_PER_QUERY = 50
 
 
 def _matches_dangerous(action: str) -> str | None:
-    """Return the matched dangerous action string, or None if safe."""
+    """Return the matched dangerous action string, or None if safe.
+
+    Exact matching only — wildcard entries like ec2:* only match when the
+    granted action IS ec2:* (not when a specific ec2:Foo action is granted).
+    Specific actions like ec2:RunInstances are not inherently dangerous without
+    additional context; only the explicit wildcard grant is flagged.
+    """
     if action in _DANGEROUS_ACTIONS:
         return action
-    for wildcard in _DANGEROUS_WILDCARDS:
-        service = wildcard.split(":")[0]
-        if action.startswith(f"{service}:"):
-            return wildcard
     return None
 
 
