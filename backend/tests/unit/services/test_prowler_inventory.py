@@ -20,6 +20,7 @@ from app.services.prowler_inventory import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_finding(
     resource_uid: str = "arn:aws:ec2:us-east-1:123:instance/i-abc",
     resource_name: str = "web-server",
@@ -52,6 +53,7 @@ def _make_finding(
 # ---------------------------------------------------------------------------
 # _normalize_type_name
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestNormalizeTypeName:
@@ -94,6 +96,7 @@ class TestNormalizeTypeName:
 # _collection_for
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestCollectionFor:
     def test_iam_role_goes_to_identities(self):
@@ -125,6 +128,7 @@ class TestCollectionFor:
 # _extract_tags
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestExtractTags:
     def test_aws_tag_list(self):
@@ -142,6 +146,7 @@ class TestExtractTags:
 # ---------------------------------------------------------------------------
 # _is_public
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestIsPublic:
@@ -161,6 +166,7 @@ class TestIsPublic:
 # ---------------------------------------------------------------------------
 # resource_arango_key
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_arango_key_is_deterministic():
@@ -186,6 +192,7 @@ def test_arango_key_is_hex_64_chars():
 # ---------------------------------------------------------------------------
 # extract_inventory_from_findings — AWS
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestExtractInventoryAws:
@@ -277,10 +284,13 @@ class TestExtractInventoryAws:
         assert all(len(v) == 0 for v in inv.values())
 
     def test_status_active_always_set(self):
-        findings = [_make_finding(status="PASS"), _make_finding(
-            resource_uid="arn:aws:ec2:us-east-1:123:instance/i-xyz",
-            status="FAIL",
-        )]
+        findings = [
+            _make_finding(status="PASS"),
+            _make_finding(
+                resource_uid="arn:aws:ec2:us-east-1:123:instance/i-xyz",
+                status="FAIL",
+            ),
+        ]
         inv = extract_inventory_from_findings(findings, "t1", "aws", "123")
         for doc in inv["resources"]:
             assert doc["status"] == "active"
@@ -289,6 +299,7 @@ class TestExtractInventoryAws:
 # ---------------------------------------------------------------------------
 # extract_inventory_from_findings — Azure
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestExtractInventoryAzure:
@@ -316,9 +327,7 @@ class TestExtractInventoryAzure:
         )
 
     def test_azure_vm_goes_to_resources(self):
-        inv = extract_inventory_from_findings(
-            [self._make_azure_finding()], "t1", "azure", "sub1"
-        )
+        inv = extract_inventory_from_findings([self._make_azure_finding()], "t1", "azure", "sub1")
         assert len(inv["resources"]) == 1
         doc = inv["resources"][0]
         assert doc["provider"] == "azure"
@@ -327,7 +336,9 @@ class TestExtractInventoryAzure:
     def test_azure_keyvault_goes_to_data_assets(self):
         inv = extract_inventory_from_findings(
             [self._make_azure_finding(resource_type="microsoft.keyvault/vaults")],
-            "t1", "azure", "sub1",
+            "t1",
+            "azure",
+            "sub1",
         )
         assert len(inv["data_assets"]) == 1
 
@@ -335,6 +346,7 @@ class TestExtractInventoryAzure:
 # ---------------------------------------------------------------------------
 # extract_inventory_from_findings — Kubernetes
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestExtractInventoryK8s:
@@ -358,9 +370,7 @@ class TestExtractInventoryK8s:
         )
 
     def test_k8s_pod_goes_to_resources(self):
-        inv = extract_inventory_from_findings(
-            [self._make_k8s_finding()], "t1", "kubernetes", "my-cluster"
-        )
+        inv = extract_inventory_from_findings([self._make_k8s_finding()], "t1", "kubernetes", "my-cluster")
         assert len(inv["resources"]) == 1
         doc = inv["resources"][0]
         assert doc["provider"] == "k8s"

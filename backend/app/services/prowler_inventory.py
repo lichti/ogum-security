@@ -52,6 +52,7 @@ def _collection_for(raw_type: str) -> str:
 # ResourceType → snake_case name
 # ---------------------------------------------------------------------------
 
+
 def _camel_to_snake(name: str) -> str:
     s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
     s = re.sub(r"([a-z\d])([A-Z])", r"\1_\2", s)
@@ -94,13 +95,9 @@ def _normalize_type_name(raw: str, provider: str) -> str:
 # Tag extraction
 # ---------------------------------------------------------------------------
 
+
 def _extract_tags(metadata: dict[str, Any]) -> dict[str, str]:
-    raw = (
-        metadata.get("tags")
-        or metadata.get("Tags")
-        or metadata.get("labels")
-        or []
-    )
+    raw = metadata.get("tags") or metadata.get("Tags") or metadata.get("labels") or []
     if isinstance(raw, list):
         tags = {}
         for tag in raw:
@@ -128,6 +125,7 @@ def _is_public(metadata: dict[str, Any]) -> bool:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def resource_arango_key(resource_uid: str, tenant_id: str) -> str:
     return hashlib.sha256(f"{resource_uid}|{tenant_id}".encode()).hexdigest()
