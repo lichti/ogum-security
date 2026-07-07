@@ -17,6 +17,8 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Attack Paths API (Epic 02 Sprint 2)**: three new endpoints under `/api/v1/attack-paths`. `GET /api/v1/attack-paths` returns a paginated, risk-score-sorted list of attack paths with filters for `severity`, `is_toxic_combination`, and `provider` (keyset cursor pagination on `risk_score DESC`). `GET /api/v1/attack-paths/stats` returns aggregate counts by severity plus a `new_24h` counter. `GET /api/v1/attack-paths/{path_id}` returns the full path document, all vertex node documents, and associated findings. Tenant isolation enforced at database level (separate ArangoDB database per tenant) plus `tenant_id` filter on every query.
+
 - **Post-scan inventory extraction (all providers)**: CSPM scans now automatically populate the inventory after each scan run — no separate discovery task required. `prowler_inventory.extract_inventory_from_findings()` deduplicates resources by `resource_uid`, routes to the correct collection (`resources`, `identities`, `data_assets`), and upserts with `last_scanned_at` and normalized `resource_type`. Supports all four providers: AWS, Azure, GCP, and Kubernetes.
 - **`ProwlerService.run_azure_scan`**, **`run_gcp_scan`**, **`run_kubernetes_scan`**: new scan methods wrapping `AzureProvider`, `GcpProvider`, and `KubernetesProvider`. `run_cspm_scan` task now routes to the correct method by provider (was AWS-only).
 - **Provider-aware default frameworks in `GET /api/v1/scans`**: when no frameworks are specified, the scan API selects sane defaults per provider (`CIS-AWS-2.0 + PCI + SOC2` for AWS, `CIS-AZURE-2.0` for Azure, `CIS-GCP-2.0` for GCP, `CIS-K8S-1.12` for Kubernetes).
