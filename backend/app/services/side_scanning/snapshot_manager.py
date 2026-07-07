@@ -31,7 +31,7 @@ def create_scan_snapshot(ec2_client: Any, volume_id: str, tenant_id: str) -> str
             }
         ],
     )
-    snapshot_id = resp["SnapshotId"]
+    snapshot_id: str = resp["SnapshotId"]
     logger.info("Created snapshot %s from volume %s (tenant=%s)", snapshot_id, volume_id, tenant_id)
     return snapshot_id
 
@@ -57,7 +57,7 @@ def create_volume_from_snapshot(ec2_client: Any, snapshot_id: str, availability_
         AvailabilityZone=availability_zone,
         VolumeType="gp3",
     )
-    volume_id = resp["VolumeId"]
+    volume_id: str = resp["VolumeId"]
     logger.info("Created volume %s from snapshot %s", volume_id, snapshot_id)
     return volume_id
 
@@ -115,4 +115,5 @@ def list_ogum_snapshots(ec2_client: Any) -> list[dict[str, Any]]:
         Filters=[{"Name": "tag:ogum:scan", "Values": ["true"]}],
         OwnerIds=["self"],
     )
-    return resp.get("Snapshots", [])
+    snapshots: list[dict[str, Any]] = resp.get("Snapshots", [])
+    return snapshots
