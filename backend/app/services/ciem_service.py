@@ -295,7 +295,8 @@ def list_identities_with_ciem(
     bind["offset"] = offset
 
     try:
-        count_cursor = db.aql.execute(count_aql, bind_vars={k: v for k, v in bind.items() if k not in ("limit", "offset")})
+        count_bind = {k: v for k, v in bind.items() if k not in ("limit", "offset")}
+        count_cursor = db.aql.execute(count_aql, bind_vars=count_bind)
         total = (list(count_cursor) or [0])[0]
 
         list_cursor = db.aql.execute(list_aql, bind_vars=bind)
