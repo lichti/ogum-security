@@ -153,10 +153,13 @@ async def get_attack_path_detail(
     x_tenant_id: str = Header(..., alias="X-Tenant-Id"),
     db: StandardDatabase = Depends(get_tenant_db),
 ) -> ApiResponse[AttackPathDetail]:
+    path_doc: dict[str, Any] | None = None
     try:
-        path_doc: dict[str, Any] | None = db.collection("attack_paths").get(path_id)
+        result = db.collection("attack_paths").get(path_id)
+        if isinstance(result, dict):
+            path_doc = result
     except Exception:
-        path_doc = None
+        pass
 
     if not path_doc or path_doc.get("tenant_id") != x_tenant_id:
         raise HTTPException(status_code=404, detail="Attack path not found")
