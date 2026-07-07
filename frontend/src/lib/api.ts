@@ -1,10 +1,14 @@
 import axios from 'axios'
 import type {
   ApiResponse,
+  AttackPathDetail,
+  AttackPathFilters,
+  AttackPathStats,
   ComplianceSummary,
   FindingDetail,
   FindingsFilter,
   FindingsStats,
+  PagedAttackPaths,
   PagedFindings,
   ResourceSummary,
   ResourceDetail,
@@ -149,4 +153,23 @@ export const complianceApi = {
     apiClient.get<ApiResponse<ComplianceSummary>>('/api/v1/compliance/summary', {
       params: tenantId ? { tenant_id: tenantId } : undefined,
     }),
+}
+
+export const attackPathsApi = {
+  stats: () =>
+    apiClient.get<ApiResponse<AttackPathStats>>('/api/v1/attack-paths/stats'),
+
+  list: (filters: AttackPathFilters) =>
+    apiClient.get<ApiResponse<PagedAttackPaths>>('/api/v1/attack-paths', {
+      params: {
+        severity: filters.severity || undefined,
+        is_toxic_combination: filters.is_toxic_combination ?? undefined,
+        provider: filters.provider || undefined,
+        limit: filters.limit,
+        cursor: filters.cursor || undefined,
+      },
+    }),
+
+  get: (pathKey: string) =>
+    apiClient.get<ApiResponse<AttackPathDetail>>(`/api/v1/attack-paths/${pathKey}`),
 }

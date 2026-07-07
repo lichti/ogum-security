@@ -259,3 +259,53 @@ export interface ScanTriggerResponse {
   job_id: string
   status: string
 }
+
+// ─── Attack Paths ─────────────────────────────────────────────────────────────
+
+export type AttackPathSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+
+export interface AttackPath {
+  _key: string
+  path_id: string
+  tenant_id: string
+  rule: string
+  entry_point_id: string
+  entry_point_type: string
+  entry_point_name: string
+  target_id: string
+  target_type: string
+  target_name: string
+  hops: number
+  path_vertex_ids: string[]
+  risk_score: number
+  severity: AttackPathSeverity
+  is_toxic_combination: boolean
+  detected_at: string
+  status: string
+}
+
+export interface AttackPathStats {
+  total: number
+  by_severity: Record<AttackPathSeverity, number>
+  new_24h: number
+}
+
+export interface AttackPathDetail {
+  path: AttackPath
+  nodes: Record<string, unknown>[]
+  findings: Record<string, unknown>[]
+}
+
+export interface PagedAttackPaths {
+  items: AttackPath[]
+  next_cursor: string | null
+  count: number
+}
+
+export interface AttackPathFilters {
+  severity?: AttackPathSeverity
+  is_toxic_combination?: boolean
+  provider?: string
+  limit: number
+  cursor?: string
+}
