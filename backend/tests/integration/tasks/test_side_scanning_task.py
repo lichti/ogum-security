@@ -406,8 +406,15 @@ def test_cleanup_orphan_snapshots_deletes_expired(db_tenant_a, mocker):
     assert result["deleted"] == 1
     assert result["scanned"] >= 1
 
-    # Snapshot gone
-    snaps = ec2_client.describe_snapshots(SnapshotIds=[snap_id])
+    # Snapshot gone — filter-based query returns empty list for deleted snapshots
+    # (describe_snapshots with SnapshotIds raises ClientError for deleted snapshots)
+    snaps = ec2_client.describe_snapshots(
+        Filters=[
+            {"Name": "tag:ogum:scan", "Values": ["true"]},
+            {"Name": "snapshot-id", "Values": [snap_id]},
+        ],
+        OwnerIds=["self"],
+    )
     assert len(snaps["Snapshots"]) == 0
 
 
