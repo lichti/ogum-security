@@ -215,19 +215,21 @@ class TestCSPMScanTask:
         init_tenant_schema(db_tenant_a)
         mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
 
+        # EC2 instance routes to "resources" collection (not data_assets like S3)
+        resource_uid = "arn:aws:ec2:us-east-1:111111111111:instance/i-abc123"
         meta = SimpleNamespace(
-            CheckID="s3_bucket_public_read",
-            CheckTitle="S3 Bucket Public Read",
+            CheckID="ec2_instance_imdsv2_enabled",
+            CheckTitle="EC2 IMDSv2 Enabled",
             Description="desc",
             Severity="high",
-            ResourceType="aws_s3_bucket",
+            ResourceType="aws_ec2_instance",
             Remediation=None,
         )
         raw_output = SimpleNamespace(
             status="FAIL",
-            status_extended="bucket is public",
-            resource_uid="arn:aws:s3:::my-test-bucket",
-            resource_name="my-test-bucket",
+            status_extended="IMDSv2 not enabled",
+            resource_uid=resource_uid,
+            resource_name="my-ec2",
             region="us-east-1",
             account_uid=ACCOUNT_ID,
             metadata=meta,
@@ -237,7 +239,7 @@ class TestCSPMScanTask:
 
         mock_prowler = MagicMock()
         mock_prowler.run_aws_scan.return_value = ScanResult(
-            findings=[_make_mock_finding("s3_bucket_public_read", "my-test-bucket")],
+            findings=[_make_mock_finding("ec2_instance_imdsv2_enabled", resource_uid)],
             raw_outputs=[raw_output],
         )
         mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
@@ -249,4 +251,4 @@ class TestCSPMScanTask:
 
         resources = list(db_tenant_a.aql.execute("FOR r IN resources RETURN r"))
         assert len(resources) >= 1
-        assert resources[0]["resource_id"] == "arn:aws:s3:::my-test-bucket"
+        assert resources[0]["resource_id"] == resource_uid
