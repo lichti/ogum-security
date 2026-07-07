@@ -32,17 +32,6 @@ Commit types that trigger version bumps:
 - **14 integration tests for `GET /api/v1/identities` and `GET /api/v1/identities/{key}/permissions`**: cover empty list, sorting by risk_score, provider filter, `only_dangerous` filter, pagination, 404 for missing identity, dangerous permission detection, and response field completeness.
 - **10 component tests for `RiskBadge`**: cover all 5 tiers (CRITICAL/HIGH/MEDIUM/LOW/NONE), null/undefined score rendering, title attribute, and tier CSS class verification.
 
-### Fixed
-
-- **Provider cascade delete**: deleting a provider now removes all associated data in the correct order — findings and scan_jobs (by `provider_id`), then graph vertices (resources, identities, data_assets, network_endpoints scoped by provider+account), then orphaned edges, and finally stale attack_paths whose entry_point or target no longer exists in the graph. Previously, findings, scan_jobs, and attack_paths were left as orphaned records after provider removal.
-
-### Changed
-
-- **CI — venv cache optimization**: all backend CI jobs (lint, unit tests, integration tests, security audit) now use `poetry.lock` in the cache key (not just `pyproject.toml`), add `cache-dependency-path: backend/pyproject.toml` to the `setup-python` action, and skip `poetry install` entirely when the virtualenv cache is hit. The integration and unit test jobs add `id: venv-cache` + `if: steps.venv-cache.outputs.cache-hit != 'true'` guards.
-- **CI — ArangoDB readiness polling optimized**: the `backend-integration` job now polls ArangoDB with 3s intervals (was 5s), breaking immediately when ready instead of always completing 30 iterations. Redis uses a Docker `--health-cmd "redis-cli ping"` health check. Note: ArangoDB cannot use a Docker health check because `curl` is not available in the `arangodb:3.12` image — the runner-side polling loop is the correct approach.
-
-### Added
-
 - **Attack Paths canvas (Epic 02 Sprint 3)**: interactive React Flow canvas replacing the flat table layout. `AttackPathList` panel (260px) groups paths by severity with score, entry→target route, hop count, and toxic badge — clicking loads the path in the canvas. `AttackPathCanvas` renders custom node types (`EntryPointNode` red, `TargetNode` yellow, `IdentityNode` purple, `ResourceNode` default) with dagre left-to-right auto-layout, animated smoothstep edges with inferred relation labels, zoom/pan controls, and minimap. Bottom info bar shows selected path summary with entry point, target, risk score, hops, and a disabled "Remediate with AI" CTA. `NodeDetailPanel` slide-over fetches full resource detail from `/api/v1/inventory/{key}` on node click. `graph-layout.ts` utility wraps dagre layout and node-type inference. 15 component tests for `AttackPathList` and `AttackPathCanvas`. `structuredClone` polyfill added to jest setup (dagre dependency). `@xyflow/react` v12 and `@dagrejs/dagre` installed.
 - **Attack Paths API (Epic 02 Sprint 2)**: three new endpoints under `/api/v1/attack-paths`. `GET /api/v1/attack-paths` returns a paginated, risk-score-sorted list of attack paths with filters for `severity`, `is_toxic_combination`, and `provider` (keyset cursor pagination on `risk_score DESC`). `GET /api/v1/attack-paths/stats` returns aggregate counts by severity plus a `new_24h` counter. `GET /api/v1/attack-paths/{path_id}` returns the full path document, all vertex node documents, and associated findings. Tenant isolation enforced at database level (separate ArangoDB database per tenant) plus `tenant_id` filter on every query.
 - **Attack Paths frontend (Epic 02 Sprint 2)**: web console page at `/attack-paths`. Stats bar with per-severity counts and new-in-24h indicator. Filter bar for severity, provider, and toxic-combination toggle. Paginated table sorted by risk score with entry-point → target path display, risk score progress bar, hops count, and toxic combination badge. Slide-over detail panel with entry/target cards, full vertex node list, and associated findings. Sidebar nav item enabled. New types (`AttackPath`, `AttackPathStats`, `AttackPathDetail`, `AttackPathFilters`) and `attackPathsApi` client added. 20 component tests.
@@ -60,15 +49,6 @@ Commit types that trigger version bumps:
 - **Dashboard home (F0.3)**: replaced `/` redirect with a real security overview page showing ThreatScore, finding counts by severity (CRITICAL/HIGH/MEDIUM/LOW — each links to `/findings?severity=X`), last 5 scan jobs with status icons and relative timestamps, and quick-navigation links to all main sections.
 - **`GET /api/v1/findings/stats`**: new endpoint returning aggregate counts `by_severity` and `by_status` plus `total` — a single AQL query, scoped by tenant, used by the dashboard.
 - **`findingsApi.stats()`**: new client method in `frontend/src/lib/api.ts`; `FindingsStats` type added to `types.ts`.
-
-### Fixed
-
-- **Prowler metadata normalization**: `result.metadata` in `OutputFinding` is `CheckMetadata` directly — the previous code was accessing `metadata.CheckMetadata` (one level too deep), causing all `check_id`, `title`, `description`, `severity`, and `resource_type` to resolve as `"unknown"` on every finding.
-- **Finding `_key` sanitization**: `arango_key()` now uses `sha256(check_id|resource_id|tenant_id)` instead of string substitution — prowler resource names/UIDs can contain dots, parens, `@`, and other characters that ArangoDB rejects as `_key` values, causing `ERR 1221` on upsert.
-- **Prowler v5 API alignment**: rewrote `ProwlerService.run_aws_scan` to match the actual prowler-core v5 API — `AwsProvider` now takes flat keyword args (no `audit_config` dict), and scanning uses the high-level `Scan` class with `compliances=[...]` instead of manual check iteration. Framework IDs are mapped to prowler's file slugs (`CIS-AWS-2.0` → `cis_2.0_aws`, etc.). `_normalize` converts `OutputFinding` pydantic objects to Ogum's `Finding` model via field introspection.
-- **CSPM scan import path**: corrected `prowler.providers.aws.provider` → `prowler.providers.aws.aws_provider` — the module was renamed in prowler v5 and the worker was failing with `ModuleNotFoundError` on every scan trigger.
-
-### Added
 
 - **Dev seed endpoint (F0.1)**: `POST /api/v1/dev/seed` inserts 19 realistic demo findings (CRITICAL/HIGH/MEDIUM/LOW, mix of FAIL/PASS/MUTED) into ArangoDB without requiring real cloud credentials. Only available when `DEV_MODE=true`. Endpoint is idempotent. Complementary `DELETE /api/v1/dev/seed` clears findings and scan_jobs. Standalone script `backend/scripts/seed_demo.py` and `make seed` / `make seed-clear` Makefile targets for local use. `DEV_MODE` setting added to `config.py` and `.env.example`.
 
@@ -194,21 +174,6 @@ Commit types that trigger version bumps:
 - **Edit button** (Pencil icon) added to `ProvidersTable` and `ProviderCard` — opens
   `EditProviderModal` with current provider values pre-filled.
 
-### Fixed
-
-- **Re-trigger discovery with static credentials**: `POST /{id}/discover` now accepts an optional
-  `DiscoverRequest` body so providers registered with `credential_type: static`,
-  `service_principal`, `service_account`, or `kubeconfig` can re-provide their ephemeral
-  credentials without re-registering the provider.
-- **`discover_aws` diagnostic log**: the task now logs `has_role_arn` and `has_static_keys` at
-  INFO level on start, making it easy to verify whether credentials reached the Celery worker.
-- **AWS discovery credential guard**: `NoCredentialsError` was not caught when `account_id` was
-  already provided at registration — the `sts:GetCallerIdentity` call was skipped, so missing
-  credentials were only detected mid-discovery inside `_list_vpcs`. Fixed by always calling STS
-  upfront to validate credentials regardless of whether `account_id` is known.
-
-### Added
-
 - **Multi-method credential support for all providers**:
   - **AWS**: IAM Role (`role_arn` via `sts:AssumeRole`) and static API keys
     (`aws_access_key_id` / `aws_secret_access_key`, dev only) are both supported in the UI
@@ -243,41 +208,6 @@ Commit types that trigger version bumps:
 - **`providersApi` client additions**: `get()`, `update()`, and `triggerDiscovery()` methods
 - **`docs/connecting-accounts.md`**: comprehensive guide covering UI wizard, API reference,
   credential model, discovery schedule, status reference, and troubleshooting
-
-### Fixed
-
-- `docker/backend.Dockerfile` — base image updated from `python:3.11-slim` to `python:3.13-slim`
-  to match the Python 3.13 requirement in `pyproject.toml`; `docker compose up` was failing
-  with "currently activated Python version 3.11.15 is not supported by the project"
-- `backend/pyproject.toml` — Python constraint changed from `^3.13` (`>=3.13,<4.0`) to
-  `>=3.13,<3.14`; `prowler ^5.31.0` requires `Python <3.14` and Poetry was unable to resolve
-  dependencies when the upper bound was open-ended at `<4.0`
-- `backend/pyproject.toml` — removed all cloud provider SDK direct declarations
-  (`azure-identity`, `azure-mgmt-security`, `azure-mgmt-compute`, `azure-mgmt-network`,
-  `azure-mgmt-storage`, `azure-mgmt-containerservice`, `azure-mgmt-keyvault`,
-  `google-cloud-securitycenter`, `google-cloud-compute`, `google-cloud-storage`,
-  `google-cloud-container`, `kubernetes`); `prowler ^5.31.0` pins specific versions of all
-  these packages and any independent range declaration causes dependency resolution failure.
-  All these SDKs remain available as prowler transitive dependencies; only `boto3` is kept
-  as a direct dependency since it is used in discovery tasks that run independently of prowler
-- `backend/pyproject.toml` — removed `truffleHog3 ^3.0.0`; all 3.x versions pin
-  `attrs==20.3.0` which is incompatible with `prowler`'s required `jsonschema==4.23.0`
-  (which needs `attrs>=22.2.0`); `truffleHog3` was planned for Epic 03 (Side-Scanning)
-  and is deferred until a compatible secrets-scanner alternative is chosen
-- `backend/pyproject.toml` and `docker/backend.Dockerfile` — downgraded target runtime
-  from Python 3.13 to **Python 3.12**; Python 3.13 has no pre-built wheels for several
-  `prowler` transitive dependencies (notably `alibabacloud-tea`), which forces source
-  compilation; during source compilation, Poetry's mid-install downgrade of `packaging`
-  (26.2 → 23.2) leaves `packaging/tags.py` temporarily absent, breaking the build
-  isolation subprocess; Python 3.12 has full wheel coverage for all prowler dependencies,
-  eliminating source builds and the packaging race condition entirely
-- `.github/workflows/ci.yml` — updated all `python-version` references from `3.13` to
-  `3.12` to match the runtime constraint in `pyproject.toml` and `backend.Dockerfile`
-- `.github/workflows/ci.yml` — added `docker-build` job that runs `docker compose build
-  --no-cache` on every push and PR; validates that the Docker build succeeds before any
-  other job runs; prevents `docker compose up` regressions from reaching `main`
-
-### Added
 
 - **Ogum.Inventory Sprint 5 — Onboarding, Export, and Tenant Isolation**
   - `tenant_config` document collection added to `init_tenant_schema()` — stores connected
@@ -412,16 +342,27 @@ Commit types that trigger version bumps:
     IGW→VPC (ROUTES_TRAFFIC), Lambda→Role (ASSUMES_ROLE), 2-hop AQL traversal IGW→VPC→EC2
 
 ### Changed
-<!-- Changes to existing features. -->
+
+- **CI — venv cache optimization**: all backend CI jobs (lint, unit tests, integration tests, security audit) now use `poetry.lock` in the cache key (not just `pyproject.toml`), add `cache-dependency-path: backend/pyproject.toml` to the `setup-python` action, and skip `poetry install` entirely when the virtualenv cache is hit. The integration and unit test jobs add `id: venv-cache` + `if: steps.venv-cache.outputs.cache-hit != 'true'` guards.
+- **CI — ArangoDB readiness polling optimized**: the `backend-integration` job now polls ArangoDB with 3s intervals (was 5s), breaking immediately when ready instead of always completing 30 iterations. Redis uses a Docker `--health-cmd "redis-cli ping"` health check. Note: ArangoDB cannot use a Docker health check because `curl` is not available in the `arangodb:3.12` image — the runner-side polling loop is the correct approach.
 
 ### Fixed
-<!-- Bug fixes. -->
 
-### Removed
-<!-- Removed features or deprecated items. -->
-
-### Security
-<!-- Security patches and advisories. -->
+- **Provider cascade delete**: deleting a provider now removes all associated data in the correct order — findings and scan_jobs (by `provider_id`), then graph vertices (resources, identities, data_assets, network_endpoints scoped by provider+account), then orphaned edges, and finally stale attack_paths whose entry_point or target no longer exists in the graph. Previously, findings, scan_jobs, and attack_paths were left as orphaned records after provider removal.
+- **Prowler metadata normalization**: `result.metadata` in `OutputFinding` is `CheckMetadata` directly — the previous code was accessing `metadata.CheckMetadata` (one level too deep), causing all `check_id`, `title`, `description`, `severity`, and `resource_type` to resolve as `"unknown"` on every finding.
+- **Finding `_key` sanitization**: `arango_key()` now uses `sha256(check_id|resource_id|tenant_id)` instead of string substitution — prowler resource names/UIDs can contain dots, parens, `@`, and other characters that ArangoDB rejects as `_key` values, causing `ERR 1221` on upsert.
+- **Prowler v5 API alignment**: rewrote `ProwlerService.run_aws_scan` to match the actual prowler-core v5 API — `AwsProvider` now takes flat keyword args (no `audit_config` dict), and scanning uses the high-level `Scan` class with `compliances=[...]` instead of manual check iteration. Framework IDs are mapped to prowler's file slugs (`CIS-AWS-2.0` → `cis_2.0_aws`, etc.). `_normalize` converts `OutputFinding` pydantic objects to Ogum's `Finding` model via field introspection.
+- **CSPM scan import path**: corrected `prowler.providers.aws.provider` → `prowler.providers.aws.aws_provider` — the module was renamed in prowler v5 and the worker was failing with `ModuleNotFoundError` on every scan trigger.
+- **Re-trigger discovery with static credentials**: `POST /{id}/discover` now accepts an optional `DiscoverRequest` body so providers registered with `credential_type: static`, `service_principal`, `service_account`, or `kubeconfig` can re-provide their ephemeral credentials without re-registering the provider.
+- **`discover_aws` diagnostic log**: the task now logs `has_role_arn` and `has_static_keys` at INFO level on start, making it easy to verify whether credentials reached the Celery worker.
+- **AWS discovery credential guard**: `NoCredentialsError` was not caught when `account_id` was already provided at registration — the `sts:GetCallerIdentity` call was skipped, so missing credentials were only detected mid-discovery inside `_list_vpcs`. Fixed by always calling STS upfront to validate credentials regardless of whether `account_id` is known.
+- `docker/backend.Dockerfile` — base image updated from `python:3.11-slim` to `python:3.13-slim` to match the Python 3.13 requirement in `pyproject.toml`; `docker compose up` was failing with "currently activated Python version 3.11.15 is not supported by the project"
+- `backend/pyproject.toml` — Python constraint changed from `^3.13` (`>=3.13,<4.0`) to `>=3.13,<3.14`; `prowler ^5.31.0` requires `Python <3.14` and Poetry was unable to resolve dependencies when the upper bound was open-ended at `<4.0`
+- `backend/pyproject.toml` — removed all cloud provider SDK direct declarations (`azure-identity`, `azure-mgmt-security`, `azure-mgmt-compute`, `azure-mgmt-network`, `azure-mgmt-storage`, `azure-mgmt-containerservice`, `azure-mgmt-keyvault`, `google-cloud-securitycenter`, `google-cloud-compute`, `google-cloud-storage`, `google-cloud-container`, `kubernetes`); `prowler ^5.31.0` pins specific versions of all these packages and any independent range declaration causes dependency resolution failure. All these SDKs remain available as prowler transitive dependencies; only `boto3` is kept as a direct dependency since it is used in discovery tasks that run independently of prowler
+- `backend/pyproject.toml` — removed `truffleHog3 ^3.0.0`; all 3.x versions pin `attrs==20.3.0` which is incompatible with `prowler`'s required `jsonschema==4.23.0` (which needs `attrs>=22.2.0`); `truffleHog3` was planned for Epic 03 (Side-Scanning) and is deferred until a compatible secrets-scanner alternative is chosen
+- `backend/pyproject.toml` and `docker/backend.Dockerfile` — downgraded target runtime from Python 3.13 to **Python 3.12**; Python 3.13 has no pre-built wheels for several `prowler` transitive dependencies (notably `alibabacloud-tea`), which forces source compilation; during source compilation, Poetry's mid-install downgrade of `packaging` (26.2 → 23.2) leaves `packaging/tags.py` temporarily absent, breaking the build isolation subprocess; Python 3.12 has full wheel coverage for all prowler dependencies, eliminating source builds and the packaging race condition entirely
+- `.github/workflows/ci.yml` — updated all `python-version` references from `3.13` to `3.12` to match the runtime constraint in `pyproject.toml` and `backend.Dockerfile`
+- `.github/workflows/ci.yml` — added `docker-build` job that runs `docker compose build --no-cache` on every push and PR; validates that the Docker build succeeds before any other job runs; prevents `docker compose up` regressions from reaching `main`
 
 ---
 
