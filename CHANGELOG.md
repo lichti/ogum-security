@@ -15,6 +15,15 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Provider cascade delete**: deleting a provider now removes all associated data in the correct order — findings and scan_jobs (by `provider_id`), then graph vertices (resources, identities, data_assets, network_endpoints scoped by provider+account), then orphaned edges, and finally stale attack_paths whose entry_point or target no longer exists in the graph. Previously, findings, scan_jobs, and attack_paths were left as orphaned records after provider removal.
+
+### Changed
+
+- **CI — venv cache optimization**: all backend CI jobs (lint, unit tests, integration tests, security audit) now use `poetry.lock` in the cache key (not just `pyproject.toml`), add `cache-dependency-path: backend/pyproject.toml` to the `setup-python` action, and skip `poetry install` entirely when the virtualenv cache is hit. The integration and unit test jobs add `id: venv-cache` + `if: steps.venv-cache.outputs.cache-hit != 'true'` guards.
+- **CI — ArangoDB and Redis readiness via Docker health checks**: the `backend-integration` job now uses Docker `--health-cmd` options on the `arangodb` and `redis` services instead of a manual polling loop. GitHub Actions waits for services to pass health checks before starting steps, eliminating the 30×5s busy-wait that added up to 2.5 minutes of unnecessary delay.
+
 ### Added
 
 - **Attack Paths API (Epic 02 Sprint 2)**: three new endpoints under `/api/v1/attack-paths`. `GET /api/v1/attack-paths` returns a paginated, risk-score-sorted list of attack paths with filters for `severity`, `is_toxic_combination`, and `provider` (keyset cursor pagination on `risk_score DESC`). `GET /api/v1/attack-paths/stats` returns aggregate counts by severity plus a `new_24h` counter. `GET /api/v1/attack-paths/{path_id}` returns the full path document, all vertex node documents, and associated findings. Tenant isolation enforced at database level (separate ArangoDB database per tenant) plus `tenant_id` filter on every query.

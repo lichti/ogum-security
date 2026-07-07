@@ -320,7 +320,7 @@ class TestProvidersTriggerDiscoveryEndpoint:
 
 @pytest.mark.integration
 class TestProvidersDeleteEndpoint:
-    def test_delete_existing_provider(self, api_client, mocker):
+    def test_delete_existing_provider(self, api_client, mocker, db_tenant_a):
         provider_id = _register_aws(api_client, mocker, account_id="555555555555")
 
         del_resp = api_client.delete(f"/api/v1/providers/{provider_id}", headers=HEADERS)
@@ -333,6 +333,85 @@ class TestProvidersDeleteEndpoint:
     def test_delete_nonexistent_provider_returns_404(self, api_client):
         resp = api_client.delete("/api/v1/providers/nonexistent-key-xyz", headers=HEADERS)
         assert resp.status_code == 404
+
+    def test_cascade_delete_removes_findings_and_scan_jobs(self, api_client, mocker, db_tenant_a):
+        """Deleting a provider must cascade-delete its findings and scan_jobs."""
+        provider_id = _register_aws(api_client, mocker, account_id="777777777777")
+
+        # Seed a finding and a scan_job linked to this provider
+        db_tenant_a.collection("findings").insert(
+            {
+                "_key": "find-cascade",
+                "tenant_id": TEST_TENANT_A,
+                "provider_id": provider_id,
+                "check_id": "ec2_public",
+                "severity": "HIGH",
+                "status": "FAIL",
+            },
+            overwrite=True,
+        )
+        db_tenant_a.collection("scan_jobs").insert(
+            {
+                "_key": "job-cascade",
+                "tenant_id": TEST_TENANT_A,
+                "provider_id": provider_id,
+                "status": "completed",
+            },
+            overwrite=True,
+        )
+
+        del_resp = api_client.delete(f"/api/v1/providers/{provider_id}", headers=HEADERS)
+        assert del_resp.status_code == 200
+
+        # Both documents must be gone
+        assert db_tenant_a.collection("findings").get("find-cascade") is None
+        assert db_tenant_a.collection("scan_jobs").get("job-cascade") is None
+
+        purge = del_resp.json()["data"].get("purged", {})
+        assert purge.get("findings", 0) >= 1
+        assert purge.get("scan_jobs", 0) >= 1
+
+    def test_cascade_delete_removes_stale_attack_paths(self, api_client, mocker, db_tenant_a):
+        """Deleting a provider must cascade-delete attack paths whose nodes are gone."""
+        provider_id = _register_aws(api_client, mocker, account_id="888888888888")
+
+        # Seed a resource and an attack path referencing it
+        db_tenant_a.collection("resources").insert(
+            {
+                "_key": "ep-res",
+                "tenant_id": TEST_TENANT_A,
+                "provider": "aws",
+                "account_id": "888888888888",
+                "resource_id": "arn:aws:ec2::888888888888:instance/i-001",
+            },
+            overwrite=True,
+        )
+        db_tenant_a.collection("attack_paths").insert(
+            {
+                "_key": "ap-stale",
+                "tenant_id": TEST_TENANT_A,
+                "entry_point_id": "resources/ep-res",
+                "target_id": "data_assets/nonexistent",
+                "risk_score": 80,
+                "severity": "HIGH",
+                "is_toxic_combination": False,
+                "hops": 1,
+                "path_vertex_ids": ["resources/ep-res"],
+                "rule": "TEST",
+                "status": "active",
+            },
+            overwrite=True,
+        )
+
+        del_resp = api_client.delete(f"/api/v1/providers/{provider_id}", headers=HEADERS)
+        assert del_resp.status_code == 200
+
+        # resource and attack path must both be gone
+        assert db_tenant_a.collection("resources").get("ep-res") is None
+        assert db_tenant_a.collection("attack_paths").get("ap-stale") is None
+
+        purge = del_resp.json()["data"].get("purged", {})
+        assert purge.get("attack_paths", 0) >= 1
 
 
 # ──────────────────────────────────────────────────────────────────────────────

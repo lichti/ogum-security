@@ -208,13 +208,55 @@ _EDGE_COLLECTIONS = [
 def _purge_provider_resources(db: StandardDatabase, config: ProviderConfig) -> dict[str, int]:
     """Hard-delete all graph data owned by a provider.
 
-    Vertices are deleted first by (provider, account_id/cluster_name) scope,
-    then orphaned edges are swept from all edge collections.
+    Order: findings → scan_jobs → graph vertices → orphaned edges → attack_paths.
+    Findings and scan_jobs are keyed by provider_id (direct FK).
+    Vertices are scoped by (provider, account_id/cluster_name).
+    Orphaned edges are swept after vertices are removed.
+    Attack paths are swept last: any path whose entry_point or target no longer
+    exists as a graph document is considered stale and removed.
+
     Returns a dict of {collection_name: deleted_count}.
     """
     counts: dict[str, int] = {}
+    provider_id = config.key
 
-    # K8s resources don't have account_id — they use cluster_name
+    # 1. Findings — keyed by provider_id
+    for coll in ("findings",):
+        if not db.has_collection(coll):
+            counts[coll] = 0
+            continue
+        cursor = db.aql.execute(
+            """
+            FOR doc IN @@coll
+              FILTER doc.provider_id == @provider_id
+              REMOVE doc IN @@coll
+              COLLECT WITH COUNT INTO n
+              RETURN n
+            """,
+            bind_vars={"@coll": coll, "provider_id": provider_id},
+        )
+        result = list(cursor)
+        counts[coll] = result[0] if result else 0
+
+    # 2. Scan jobs — keyed by provider_id
+    for coll in ("scan_jobs",):
+        if not db.has_collection(coll):
+            counts[coll] = 0
+            continue
+        cursor = db.aql.execute(
+            """
+            FOR doc IN @@coll
+              FILTER doc.provider_id == @provider_id
+              REMOVE doc IN @@coll
+              COLLECT WITH COUNT INTO n
+              RETURN n
+            """,
+            bind_vars={"@coll": coll, "provider_id": provider_id},
+        )
+        result = list(cursor)
+        counts[coll] = result[0] if result else 0
+
+    # 3. Graph vertices — scoped by (provider, account_id/cluster_name)
     if config.provider == "k8s":
         scope_filter = "FILTER doc.provider == @provider AND doc.cluster_name == @identifier"
         identifier = config.cluster_name or ""
@@ -239,7 +281,7 @@ def _purge_provider_resources(db: StandardDatabase, config: ProviderConfig) -> d
         result = list(cursor)
         counts[coll] = result[0] if result else 0
 
-    # Remove orphaned edges (both endpoints must still exist)
+    # 4. Orphaned edges — sweep after vertices are gone
     for edge_coll in _EDGE_COLLECTIONS:
         if not db.has_collection(edge_coll):
             counts[edge_coll] = 0
@@ -256,6 +298,23 @@ def _purge_provider_resources(db: StandardDatabase, config: ProviderConfig) -> d
         )
         result = list(cursor)
         counts[edge_coll] = result[0] if result else 0
+
+    # 5. Attack paths — remove any path whose entry_point or target no longer exists
+    if db.has_collection("attack_paths"):
+        cursor = db.aql.execute(
+            """
+            FOR ap IN attack_paths
+              FILTER DOCUMENT(ap.entry_point_id) == null
+                  OR DOCUMENT(ap.target_id) == null
+              REMOVE ap IN attack_paths
+              COLLECT WITH COUNT INTO n
+              RETURN n
+            """
+        )
+        result = list(cursor)
+        counts["attack_paths"] = result[0] if result else 0
+    else:
+        counts["attack_paths"] = 0
 
     return counts
 
