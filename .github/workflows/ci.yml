@@ -136,11 +136,6 @@ jobs:
           ARANGO_ROOT_PASSWORD: testpassword
         ports:
           - 8529:8529
-        options: >-
-          --health-cmd "curl -sf http://localhost:8529/_api/version"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 20
 
       redis:
         image: redis:7-alpine
@@ -180,6 +175,16 @@ jobs:
         if: steps.venv-cache.outputs.cache-hit != 'true'
         working-directory: backend
         run: poetry install
+
+      - name: Wait for ArangoDB
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8529/_api/version > /dev/null 2>&1; then
+              echo "ArangoDB ready after ${i} attempts"
+              break
+            fi
+            sleep 3
+          done
 
       - name: Integration tests
         working-directory: backend

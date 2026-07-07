@@ -22,7 +22,7 @@ Commit types that trigger version bumps:
 ### Changed
 
 - **CI — venv cache optimization**: all backend CI jobs (lint, unit tests, integration tests, security audit) now use `poetry.lock` in the cache key (not just `pyproject.toml`), add `cache-dependency-path: backend/pyproject.toml` to the `setup-python` action, and skip `poetry install` entirely when the virtualenv cache is hit. The integration and unit test jobs add `id: venv-cache` + `if: steps.venv-cache.outputs.cache-hit != 'true'` guards.
-- **CI — ArangoDB and Redis readiness via Docker health checks**: the `backend-integration` job now uses Docker `--health-cmd` options on the `arangodb` and `redis` services instead of a manual polling loop. GitHub Actions waits for services to pass health checks before starting steps, eliminating the 30×5s busy-wait that added up to 2.5 minutes of unnecessary delay.
+- **CI — ArangoDB readiness polling optimized**: the `backend-integration` job now polls ArangoDB with 3s intervals (was 5s), breaking immediately when ready instead of always completing 30 iterations. Redis uses a Docker `--health-cmd "redis-cli ping"` health check. Note: ArangoDB cannot use a Docker health check because `curl` is not available in the `arangodb:3.12` image — the runner-side polling loop is the correct approach.
 
 ### Added
 
