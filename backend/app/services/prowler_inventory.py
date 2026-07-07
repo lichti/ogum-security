@@ -148,23 +148,23 @@ def extract_inventory_from_findings(
     # uid → (collection, doc) — last finding wins for metadata (same resource)
     seen: dict[str, tuple[str, dict[str, Any]]] = {}
 
-    for result in findings:
-        resource_uid = str(getattr(result, "resource_uid", "") or "").strip()
-        resource_name = str(getattr(result, "resource_name", "") or "").strip()
+    for finding in findings:
+        resource_uid = str(getattr(finding, "resource_uid", "") or "").strip()
+        resource_name = str(getattr(finding, "resource_name", "") or "").strip()
 
         uid = resource_uid or resource_name
         if not uid or uid in seen:
             continue
 
-        check_meta = getattr(result, "metadata", None)
+        check_meta = getattr(finding, "metadata", None)
         raw_type = str(getattr(check_meta, "ResourceType", "") or "").strip() if check_meta else ""
-        region = str(getattr(result, "region", "") or "").strip() or None
+        region = str(getattr(finding, "region", "") or "").strip() or None
 
         # For non-AWS providers, account_uid carries subscription/project ID
-        result_account = str(getattr(result, "account_uid", "") or "").strip()
+        result_account = str(getattr(finding, "account_uid", "") or "").strip()
         effective_account = result_account or account_id
 
-        resource_metadata = getattr(result, "resource_metadata", {})
+        resource_metadata = getattr(finding, "resource_metadata", {})
         metadata_dict = resource_metadata if isinstance(resource_metadata, dict) else {}
 
         type_name = _normalize_type_name(raw_type, provider)
@@ -193,20 +193,24 @@ def extract_inventory_from_findings(
             },
         )
 
-    result: dict[str, list[dict[str, Any]]] = {
+    output: dict[str, list[dict[str, Any]]] = {
         "resources": [],
         "identities": [],
         "data_assets": [],
     }
-    for uid, (col, doc) in seen.items():
-        result.get(col, result["resources"]).append(doc)
+    for _uid, (col, doc) in seen.items():
+        bucket = output.get(col)
+        if bucket is not None:
+            bucket.append(doc)
+        else:
+            output["resources"].append(doc)
 
     logger.info(
         "Inventory extracted [provider=%s tenant=%s]: resources=%d identities=%d data_assets=%d",
         provider,
         tenant_id,
-        len(result["resources"]),
-        len(result["identities"]),
-        len(result["data_assets"]),
+        len(output["resources"]),
+        len(output["identities"]),
+        len(output["data_assets"]),
     )
-    return result
+    return output
