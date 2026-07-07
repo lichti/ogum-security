@@ -170,7 +170,7 @@ async def get_attack_path_detail(
     for vid in path_vertex_ids:
         try:
             node = db.document(vid)
-            nodes.append(node)
+            nodes.append(node if isinstance(node, dict) else {"_id": vid, "error": "not_found"})
         except Exception:
             nodes.append({"_id": vid, "error": "not_found"})
 

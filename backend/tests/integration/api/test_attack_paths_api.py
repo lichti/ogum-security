@@ -314,13 +314,25 @@ class TestTenantIsolation:
 
         assert resp.status_code == 404
 
-    def test_each_tenant_sees_only_their_paths(self, client_a, client_b, db_tenant_a, db_tenant_b):
-        """Seed different paths in each tenant DB and verify isolation."""
+    def test_each_tenant_sees_only_their_paths(self, db_tenant_a, db_tenant_b):
+        """Seed different paths in each tenant DB and verify isolation.
+
+        Uses sequential dependency overrides to avoid fixture conflict — two
+        TestClient fixtures active simultaneously both write the same
+        dependency_overrides key, causing the second to clobber the first.
+        """
+        init_tenant_schema(db_tenant_a)
+        init_tenant_schema(db_tenant_b)
         _seed_path(db_tenant_a, "a-path", tenant_id=TEST_TENANT_A)
         _seed_path(db_tenant_b, "b-path", tenant_id=TEST_TENANT_B)
 
-        resp_a = client_a.get("/api/v1/attack-paths", headers=HEADERS_A)
-        resp_b = client_b.get("/api/v1/attack-paths", headers=HEADERS_B)
+        app.dependency_overrides[get_tenant_db] = lambda: db_tenant_a
+        resp_a = TestClient(app).get("/api/v1/attack-paths", headers=HEADERS_A)
+
+        app.dependency_overrides[get_tenant_db] = lambda: db_tenant_b
+        resp_b = TestClient(app).get("/api/v1/attack-paths", headers=HEADERS_B)
+
+        app.dependency_overrides.clear()
 
         assert resp_a.json()["data"]["count"] == 1
         assert resp_b.json()["data"]["count"] == 1
