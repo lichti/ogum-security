@@ -75,10 +75,7 @@ async def list_attack_paths(
         bind["toxic"] = is_toxic_combination
 
     if provider:
-        filters.append(
-            "CONTAINS(LOWER(ap.entry_point_type), @provider) "
-            "OR CONTAINS(LOWER(ap.target_type), @provider)"
-        )
+        filters.append("CONTAINS(LOWER(ap.entry_point_type), @provider) OR CONTAINS(LOWER(ap.target_type), @provider)")
         bind["provider"] = provider.lower()
 
     cursor_clause = ""
@@ -86,8 +83,7 @@ async def list_attack_paths(
         c = _decode_cursor(cursor)
         if c and "risk_score" in c and "_key" in c:
             cursor_clause = (
-                "FILTER (ap.risk_score < @cur_score) "
-                "OR (ap.risk_score == @cur_score AND ap._key < @cur_key)"
+                "FILTER (ap.risk_score < @cur_score) OR (ap.risk_score == @cur_score AND ap._key < @cur_key)"
             )
             bind["cur_score"] = float(c["risk_score"])
             bind["cur_key"] = str(c["_key"])
@@ -186,8 +182,6 @@ async def get_attack_path_detail(
             LIMIT 20
             RETURN f
         """
-        findings = list(
-            db.aql.execute(find_aql, bind_vars={"tenant_id": x_tenant_id, "vertex_ids": path_vertex_ids})
-        )
+        findings = list(db.aql.execute(find_aql, bind_vars={"tenant_id": x_tenant_id, "vertex_ids": path_vertex_ids}))
 
     return ApiResponse(data=AttackPathDetail(path=path_doc, nodes=nodes, findings=findings))

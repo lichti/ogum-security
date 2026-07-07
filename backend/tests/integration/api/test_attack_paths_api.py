@@ -160,9 +160,7 @@ class TestListAttackPaths:
         assert page1["count"] == 2
         assert page1["next_cursor"] is not None
 
-        resp2 = client_a.get(
-            f"/api/v1/attack-paths?limit=2&cursor={page1['next_cursor']}", headers=HEADERS_A
-        )
+        resp2 = client_a.get(f"/api/v1/attack-paths?limit=2&cursor={page1['next_cursor']}", headers=HEADERS_A)
         assert resp2.status_code == 200
         page2 = resp2.json()["data"]
         assert page2["count"] == 2
