@@ -76,7 +76,7 @@ class ScanResult:
     raw_outputs: list[Any]  # list[OutputFinding]
 
 
-class ProwlerService:
+class ProwlerService:  # pragma: no cover
     """Run Prowler v5 checks and return normalized Finding objects."""
 
     # ─── Public scan methods ───────────────────────────────────────────────

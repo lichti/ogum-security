@@ -158,3 +158,95 @@ class TestCSPMScanTask:
 
         assert result["findings_found"] == 0
         mock_prowler.run_aws_scan.assert_not_called()
+
+    def test_azure_scan_dispatch(self, db_tenant_a, mocker):
+        """Azure provider routes to run_azure_scan (not run_aws_scan)."""
+        init_tenant_schema(db_tenant_a)
+        mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
+
+        mock_prowler = MagicMock()
+        mock_prowler.run_azure_scan.return_value = _scan_result([])
+        mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
+
+        kwargs = {**_TASK_KWARGS, "provider": "azure", "frameworks": ["CIS-AZURE-2.0"]}
+        result = run_cspm_scan.apply(kwargs=kwargs).get()
+
+        assert result["provider"] == "azure"
+        assert result["findings_found"] == 0
+        mock_prowler.run_azure_scan.assert_called_once()
+        mock_prowler.run_aws_scan.assert_not_called()
+
+    def test_k8s_scan_dispatch(self, db_tenant_a, mocker):
+        """Kubernetes provider routes to run_kubernetes_scan."""
+        init_tenant_schema(db_tenant_a)
+        mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
+
+        mock_prowler = MagicMock()
+        mock_prowler.run_kubernetes_scan.return_value = _scan_result([])
+        mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
+
+        kwargs = {**_TASK_KWARGS, "provider": "k8s", "frameworks": ["CIS-K8S-1.12"]}
+        result = run_cspm_scan.apply(kwargs=kwargs).get()
+
+        assert result["provider"] == "k8s"
+        assert result["findings_found"] == 0
+        mock_prowler.run_kubernetes_scan.assert_called_once()
+        mock_prowler.run_aws_scan.assert_not_called()
+
+    def test_unknown_provider_falls_back_to_empty(self, db_tenant_a, mocker):
+        """Unrecognized provider returns completed job with zero findings."""
+        init_tenant_schema(db_tenant_a)
+        mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
+
+        mock_prowler = MagicMock()
+        mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
+
+        kwargs = {**_TASK_KWARGS, "provider": "oracle"}
+        result = run_cspm_scan.apply(kwargs=kwargs).get()
+
+        assert result["findings_found"] == 0
+        jobs = list(db_tenant_a.aql.execute("FOR j IN scan_jobs RETURN j"))
+        assert jobs[0]["status"] == "completed"
+
+    def test_inventory_extracted_from_raw_outputs(self, db_tenant_a, mocker):
+        """Inventory extraction runs when scan produces raw OutputFinding objects."""
+        from types import SimpleNamespace
+
+        init_tenant_schema(db_tenant_a)
+        mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
+
+        meta = SimpleNamespace(
+            CheckID="s3_bucket_public_read",
+            CheckTitle="S3 Bucket Public Read",
+            Description="desc",
+            Severity="high",
+            ResourceType="aws_s3_bucket",
+            Remediation=None,
+        )
+        raw_output = SimpleNamespace(
+            status="FAIL",
+            status_extended="bucket is public",
+            resource_uid="arn:aws:s3:::my-test-bucket",
+            resource_name="my-test-bucket",
+            region="us-east-1",
+            account_uid=ACCOUNT_ID,
+            metadata=meta,
+            compliance={},
+            resource_metadata={},
+        )
+
+        mock_prowler = MagicMock()
+        mock_prowler.run_aws_scan.return_value = ScanResult(
+            findings=[_make_mock_finding("s3_bucket_public_read", "my-test-bucket")],
+            raw_outputs=[raw_output],
+        )
+        mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
+
+        result = run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
+
+        assert result["findings_found"] == 1
+        assert result["inventory_upserted"] >= 1
+
+        resources = list(db_tenant_a.aql.execute("FOR r IN resources RETURN r"))
+        assert len(resources) >= 1
+        assert resources[0]["resource_id"] == "arn:aws:s3:::my-test-bucket"
