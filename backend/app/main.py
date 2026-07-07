@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import attack_paths, compliance, findings, iac_scans, inventory, providers, scans
+from app.api.v1 import attack_paths, compliance, findings, iac_scans, identities, inventory, providers, scans
 from app.api.v1 import dev as dev_module
 from app.api.v1.admin import jobs as admin_jobs
 from app.core.config import settings
@@ -29,6 +29,7 @@ async def health() -> dict:
 
 
 app.include_router(inventory.router)
+app.include_router(identities.router)
 app.include_router(providers.router)
 app.include_router(scans.router)
 app.include_router(findings.router)

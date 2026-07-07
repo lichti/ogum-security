@@ -12,8 +12,10 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  GitBranch,
+  Skull,
 } from 'lucide-react'
-import { complianceApi, findingsApi, scansApi } from '@/lib/api'
+import { attackPathsApi, complianceApi, findingsApi, scansApi } from '@/lib/api'
 import type { ScanJob } from '@/lib/types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -101,6 +103,12 @@ export default function DashboardPage() {
     refetchInterval: 30_000,
   })
 
+  const { data: attackPathStats } = useQuery({
+    queryKey: ['attack-paths-stats'],
+    queryFn: () => attackPathsApi.stats().then((r) => r.data.data),
+    staleTime: 60_000,
+  })
+
   const threatScore = complianceData?.data.data.threat_score ?? null
   const stats = statsData?.data.data
   const recentScans = (scansData?.data.data ?? []).slice(0, 5)
@@ -151,6 +159,45 @@ export default function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* Attack Paths card */}
+      <Link
+        href="/attack-paths"
+        className="block bg-slate-900 border border-slate-800 rounded-lg p-4 hover:border-orange-500/40 hover:bg-orange-500/5 transition-colors group"
+      >
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm font-medium text-slate-300 flex items-center gap-2">
+            <GitBranch className="w-4 h-4 text-orange-400" />
+            Attack Paths
+          </span>
+          <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-400" />
+        </div>
+        <div className="flex items-center gap-6">
+          <div>
+            <p className="text-2xl font-bold text-slate-100 tabular-nums">
+              {attackPathStats ? attackPathStats.total : '—'}
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">active paths</p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Skull className="w-4 h-4 text-red-400" />
+            <p className="text-xl font-bold text-red-400 tabular-nums">
+              {attackPathStats
+                ? (attackPathStats.by_severity['CRITICAL'] ?? 0) +
+                  (attackPathStats.by_severity['HIGH'] ?? 0)
+                : '—'}
+            </p>
+            <p className="text-xs text-slate-500">critical/high</p>
+          </div>
+          {attackPathStats && attackPathStats.new_24h > 0 && (
+            <div className="ml-auto">
+              <span className="text-xs bg-red-500/10 border border-red-500/20 text-red-400 px-2 py-0.5 rounded">
+                +{attackPathStats.new_24h} new 24h
+              </span>
+            </div>
+          )}
+        </div>
+      </Link>
 
       {/* Bottom row: recent scans + quick links */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -220,6 +267,12 @@ export default function DashboardPage() {
             icon={Activity}
             label="Providers"
             description="Connected accounts and scan controls"
+          />
+          <QuickLink
+            href="/attack-paths"
+            icon={GitBranch}
+            label="Attack Paths"
+            description="Risk graph — internet exposure to sensitive data"
           />
         </div>
       </div>

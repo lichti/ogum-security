@@ -12,6 +12,8 @@ export interface ResourceSummary {
   tags: Record<string, string>
   last_scanned_at: string | null
   updated_at: string | null
+  risk_score?: number | null
+  in_attack_path?: boolean
 }
 
 export interface EdgeSummary {
@@ -308,4 +310,54 @@ export interface AttackPathFilters {
   provider?: string
   limit: number
   cursor?: string
+}
+
+export interface IdentitySummary {
+  key: string
+  name: string
+  identity_type: string
+  provider: string
+  account_id: string | null
+  arn: string
+  status: string
+  risk_score: number | null
+  has_admin_policy: boolean
+  dangerous_permissions_count: number
+  escalation_paths_count: number
+  privilege_gap_score: number
+  policies: string[]
+  last_scanned_at: string | null
+}
+
+export interface DangerousPermission {
+  action: string
+  risk: string
+}
+
+export interface EscalationChain {
+  start_id: string
+  start_name: string
+  target_id: string
+  target_name: string
+  hops: number
+  chain: string[]
+}
+
+export interface IdentityPermissions {
+  identity_id: string
+  identity_key: string
+  name: string
+  identity_type: string
+  provider: string
+  account_id: string | null
+  policies: string[]
+  granted_actions: string[]
+  dangerous_permissions: DangerousPermission[]
+  dangerous_permissions_count: number
+  escalation_chains: EscalationChain[]
+  escalation_paths_count: number
+  has_admin_policy: boolean
+  privilege_gap_score: number
+  risk_score: number | null
+  status: string
 }

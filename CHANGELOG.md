@@ -15,6 +15,16 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Added
+
+- **CIEM Static Analysis (Epic 02 Sprint 4)**: `app/services/ciem_service.py` — static permission analysis engine. `analyze_dangerous_permissions()` inspects an identity's `granted_actions` and `policies` against a curated list of 18 dangerous IAM actions (`iam:PassRole`, `iam:CreatePolicyVersion`, `iam:AttachRolePolicy`, `sts:AssumeRole`, `s3:*`, `iam:*`, `ec2:*`, `lambda:UpdateFunctionCode`, etc.) and wildcard expansion. `find_assume_role_chains()` traverses `ASSUMES_ROLE` edges up to 4 hops to detect privilege escalation paths to high-privilege identities. `list_identities_with_ciem()` returns paginated identities with `dangerous_permissions_count` and `escalation_paths_count` fields, sorted by risk score.
+- **Identities API (Epic 02 Sprint 4)**: `GET /api/v1/identities` — paginated list of IAM identities with CIEM counters, filterable by `provider` and `only_dangerous=true`. `GET /api/v1/identities/{key}/permissions` — full CIEM analysis for a single identity: dangerous permissions list, AssumeRole escalation chains, policy names, and risk score.
+- **Risk Score column in Inventory table (Epic 02 Sprint 4)**: `RiskBadge` component displays numeric score (0–100) with color-coded tier (CRITICAL red, HIGH orange, MEDIUM yellow, LOW blue, NONE slate). Inventory `DataTable` and Findings `FindingsTable` now render `RiskBadge` for each resource/finding.
+- **Attack Paths card on dashboard (Epic 02 Sprint 4)**: security overview page now shows a clickable Attack Paths card with total active paths count, critical+high count, and new-in-24h badge. Also added Attack Paths to the quick navigation links.
+- **13 unit tests for `ciem_service`**: cover dangerous permission detection, wildcard expansion (`iam:CreateUser` → `iam:*`, `s3:DeleteBucket` → `s3:*`), AdministratorAccess policy detection, duplicate prevention, missing field handling, and constant structure validation.
+- **14 integration tests for `GET /api/v1/identities` and `GET /api/v1/identities/{key}/permissions`**: cover empty list, sorting by risk_score, provider filter, `only_dangerous` filter, pagination, 404 for missing identity, dangerous permission detection, and response field completeness.
+- **10 component tests for `RiskBadge`**: cover all 5 tiers (CRITICAL/HIGH/MEDIUM/LOW/NONE), null/undefined score rendering, title attribute, and tier CSS class verification.
+
 ### Fixed
 
 - **Provider cascade delete**: deleting a provider now removes all associated data in the correct order — findings and scan_jobs (by `provider_id`), then graph vertices (resources, identities, data_assets, network_endpoints scoped by provider+account), then orphaned edges, and finally stale attack_paths whose entry_point or target no longer exists in the graph. Previously, findings, scan_jobs, and attack_paths were left as orphaned records after provider removal.
