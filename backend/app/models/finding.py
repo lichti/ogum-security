@@ -30,6 +30,7 @@ class FindingStatus(StrEnum):
 class FindingSource(StrEnum):
     CSPM = "cspm"
     IAC = "iac"
+    SIDE_SCANNING = "side_scanning"
 
 
 class ScanJobStatus(StrEnum):
