@@ -402,8 +402,8 @@ class TestToJsonable:
         assert _to_jsonable([{"k": 1}]) == [{"k": 1}]
 
     def test_datetime_becomes_isoformat(self):
-        from datetime import datetime, timezone
-        dt = datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        from datetime import UTC, datetime
+        dt = datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC)
         result = _to_jsonable(dt)
         assert result == "2024-01-15T12:00:00+00:00"
 
