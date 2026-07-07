@@ -34,11 +34,11 @@ def _to_jsonable(obj: Any) -> Any:
         return _to_jsonable(obj.dict())
     if isinstance(obj, dict):
         return {str(k): _to_jsonable(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, list | tuple):
         return [_to_jsonable(item) for item in obj]
     if isinstance(obj, datetime):
         return obj.isoformat()
-    if isinstance(obj, (str, int, float, bool)) or obj is None:
+    if isinstance(obj, str | int | float | bool) or obj is None:
         return obj
     return str(obj)
 
