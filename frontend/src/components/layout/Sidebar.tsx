@@ -48,7 +48,7 @@ export function Sidebar() {
           <NavItem icon={Database} label="Inventory" href="/inventory" />
           <NavItem icon={ShieldAlert} label="Findings" href="/findings" />
           <NavItem icon={CheckSquare} label="Compliance" href="/compliance" />
-          <NavItem icon={GitBranch} label="Attack Paths" disabled badge="Soon" />
+          <NavItem icon={GitBranch} label="Attack Paths" href="/attack-paths" />
           <NavItem icon={ScanLine} label="Side Scanning" disabled badge="Soon" />
         </NavSection>
 
