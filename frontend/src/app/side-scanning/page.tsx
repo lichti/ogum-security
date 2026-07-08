@@ -2,9 +2,8 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Badge } from '@/components/ui/Badge'
 import { sideScanApi } from '@/lib/api'
-import type { SideScanJob, SideScanJobStatus, SideScanJobType } from '@/lib/types'
+import type { SideScanJob, SideScanJobStatus, SideScanJobType, PagedSideScanJobs } from '@/lib/types'
 import { RefreshCw, Server, Box, Container, Image, RotateCcw } from 'lucide-react'
 
 const STATUS_VARIANT: Record<SideScanJobStatus, string> = {
@@ -27,7 +26,7 @@ function TypeIcon({ type }: { type: SideScanJobType }) {
   if (type === 'ec2') return <Server className={cls} />
   if (type === 'lambda') return <Box className={cls} />
   if (type === 'k8s_container') return <Container className={cls} />
-  if (type === 'ecr') return <Image className={cls} />
+  if (type === 'ecr') return <Image className={cls} aria-label="Registry image" />
   return <RotateCcw className={cls} />
 }
 
@@ -83,8 +82,8 @@ export default function SideScanning() {
     },
   })
 
-  const jobs: SideScanJob[] = (data as any)?.items ?? []
-  const total: number = (data as any)?.total ?? 0
+  const jobs: SideScanJob[] = (data as PagedSideScanJobs | undefined)?.items ?? []
+  const total: number = (data as PagedSideScanJobs | undefined)?.total ?? 0
 
   // KPI counts derived from current page
   const kpi = jobs.reduce(

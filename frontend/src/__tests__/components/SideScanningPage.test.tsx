@@ -46,7 +46,7 @@ describe('SideScanning page', () => {
   })
 
   it('shows loading state while query is in flight', () => {
-    const { sideScanApi } = require('@/lib/api')
+    const { sideScanApi } = jest.requireMock('@/lib/api') as { sideScanApi: { listJobs: jest.Mock } }
     // Return a promise that never resolves to keep the loading state
     sideScanApi.listJobs.mockReturnValueOnce(new Promise(() => {}))
     render(<SideScanning />, { wrapper })
