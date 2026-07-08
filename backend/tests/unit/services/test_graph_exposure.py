@@ -8,8 +8,8 @@ import pytest
 
 from app.services.graph.exposure import compute_exposed_internet, get_exposure_summary
 from app.services.graph.privilege_escalation import (
-    ESCALATION_PATTERNS,
     _DANGEROUS_PERMISSION_PATTERNS,
+    ESCALATION_PATTERNS,
     detect_all_escalation_paths,
     detect_dangerous_permission_patterns,
     detect_direct_assume_to_admin,
