@@ -15,7 +15,9 @@ from arango import ArangoClient
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
+_arango_host = os.getenv("ARANGO_HOST", "localhost")
+_arango_port = os.getenv("ARANGO_PORT", "8529")
+ARANGO_URL = os.getenv("ARANGO_URL", f"http://{_arango_host}:{_arango_port}")
 # Use ARANGO_PASSWORD to match app/core/config.py — docker-compose maps ARANGO_ROOT_PASSWORD to this
 ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "changeme")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/1")

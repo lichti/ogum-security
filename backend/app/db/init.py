@@ -16,6 +16,7 @@ VERTEX_COLLECTIONS = [
     "findings",
     "scan_jobs",
     "audit_log",
+    "saved_queries",  # Sprint 6: per-tenant AQL console saved queries
 ]
 
 ADMIN_VERTEX_COLLECTIONS = [
@@ -41,6 +42,11 @@ EDGE_COLLECTIONS = [
     "HAS_FINDING",
     "MAPPED_TO",
     "IMPLEMENTS",
+    # IAM deep model (Sprint 6)
+    "STS_ASSUMEROLE_ALLOW",  # identity A can assume role B (derived from trust policy)
+    "ASSUMES",  # identity A is actively assuming role B
+    "ATTACHED_POLICY",  # identity has policy attached
+    "HAS_ACTIVE_SESSION",  # identity has an active session credential
 ]
 
 # (collection_name, fields, unique)
@@ -74,6 +80,11 @@ PERSISTENT_INDEXES: list[tuple[str, list[str], bool]] = [
     ("data_assets", ["tenant_id", "risk_score"], False),
     ("audit_log", ["tenant_id"], False),
     ("audit_log", ["tenant_id", "finding_key"], False),
+    # Crown Jewels (Sprint 6)
+    ("resources", ["tenant_id", "is_crown_jewel"], False),
+    ("data_assets", ["tenant_id", "is_crown_jewel"], False),
+    # Saved queries console (Sprint 6)
+    ("saved_queries", ["tenant_id"], False),
 ]
 
 ADMIN_PERSISTENT_INDEXES: list[tuple[str, list[str], bool]] = [

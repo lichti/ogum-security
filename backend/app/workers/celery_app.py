@@ -15,6 +15,7 @@ celery_app = Celery(
         "app.workers.tasks.cspm_scan",
         "app.workers.tasks.iac_scan",
         "app.workers.tasks.attack_paths",
+        "app.workers.tasks.graph",
     ],
 )
 

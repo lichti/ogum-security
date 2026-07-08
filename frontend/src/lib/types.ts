@@ -344,6 +344,38 @@ export interface AttackPathFilters {
   cursor?: string
 }
 
+// ─── Graph (Sprint 6) ─────────────────────────────────────────────────────────
+
+export interface SavedQuery {
+  key: string
+  name: string
+  query: string
+  description: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AqlResult {
+  rows: unknown[]
+  count: number
+  truncated: boolean
+  execution_ms: number | null
+}
+
+export interface ShortestPathResult {
+  found: boolean
+  hops: number
+  vertices: Record<string, unknown>[]
+  edges: Record<string, unknown>[]
+}
+
+export interface ExposureSummary {
+  exposed_resources: number
+  exposed_data_assets: number
+  exposed_endpoints: number
+  total: number
+}
+
 export interface IdentitySummary {
   key: string
   name: string

@@ -188,7 +188,7 @@ jobs:
 
       - name: Integration tests
         working-directory: backend
-        run: poetry run pytest -m "integration or security" --cov=app --cov-report=xml
+        run: poetry run pytest -m "unit or integration or security" --cov=app --cov-report=xml
         env:
           ARANGO_URL: http://localhost:8529
           ARANGO_ROOT_PASSWORD: testpassword

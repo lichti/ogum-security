@@ -2,11 +2,13 @@
 
 import { useCallback, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Flame, ArrowRight, Wand2 } from 'lucide-react'
+import { Flame, ArrowRight, Wand2, Terminal, Milestone } from 'lucide-react'
 import { AttackPathStatsBar } from '@/components/attack-paths/AttackPathStatsBar'
 import { AttackPathCanvas } from '@/components/graph/AttackPathCanvas'
 import { AttackPathList } from '@/components/graph/AttackPathList'
 import { NodeDetailPanel } from '@/components/graph/NodeDetailPanel'
+import { QueryConsole } from '@/components/graph/QueryConsole'
+import { PathfindingPanel } from '@/components/graph/PathfindingPanel'
 import { attackPathsApi } from '@/lib/api'
 import type { AttackPath, AttackPathSeverity } from '@/lib/types'
 
@@ -21,6 +23,8 @@ export default function AttackPathsPage() {
   const [selectedPath, setSelectedPath] = useState<AttackPath | null>(null)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [severityFilter, setSeverityFilter] = useState<AttackPathSeverity | undefined>()
+  const [showQueryConsole, setShowQueryConsole] = useState(false)
+  const [showPathfinding, setShowPathfinding] = useState(false)
 
   const { data: statsData } = useQuery({
     queryKey: ['attack-paths-stats'],
@@ -62,11 +66,29 @@ export default function AttackPathsPage() {
     <div className="h-screen flex flex-col bg-slate-950 text-slate-200 overflow-hidden">
       {/* Header + Stats */}
       <div className="shrink-0 px-6 pt-6 pb-4">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold text-slate-100">Attack Paths</h1>
-          <p className="text-slate-500 text-sm mt-0.5">
-            Contextual risk graph — paths from internet exposure to sensitive data
-          </p>
+        <div className="mb-4 flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-100">Attack Paths</h1>
+            <p className="text-slate-500 text-sm mt-0.5">
+              Contextual risk graph — paths from internet exposure to sensitive data
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowPathfinding(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition-colors"
+            >
+              <Milestone size={13} />
+              Pathfinding
+            </button>
+            <button
+              onClick={() => setShowQueryConsole(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition-colors"
+            >
+              <Terminal size={13} />
+              AQL Console
+            </button>
+          </div>
         </div>
         {statsData && (
           <AttackPathStatsBar stats={statsData} onSeverityClick={handleSeverityClick} />
@@ -139,6 +161,16 @@ export default function AttackPathsPage() {
         nodeId={selectedNodeId}
         onClose={() => setSelectedNodeId(null)}
       />
+
+      {/* AQL Console modal */}
+      {showQueryConsole && (
+        <QueryConsole onClose={() => setShowQueryConsole(false)} />
+      )}
+
+      {/* Pathfinding modal */}
+      {showPathfinding && (
+        <PathfindingPanel onClose={() => setShowPathfinding(false)} />
+      )}
     </div>
   )
 }
