@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import subprocess
@@ -63,13 +64,12 @@ def create_volume_from_snapshot(ec2_client: Any, snapshot_id: str, availability_
 
 
 def delete_snapshot_safe(ec2_client: Any, snapshot_id: str) -> None:
-    """Delete snapshot, logging but not swallowing failures (caller handles DLQ)."""
+    """Delete snapshot, logging but not raising on error."""
     try:
         ec2_client.delete_snapshot(SnapshotId=snapshot_id)
         logger.info("Deleted snapshot %s", snapshot_id)
     except Exception:
         logger.exception("Failed to delete snapshot %s — requires manual cleanup", snapshot_id)
-        raise
 
 
 def delete_volume_safe(ec2_client: Any, volume_id: str) -> None:
@@ -107,6 +107,54 @@ def umount_volume(mount_path: str) -> None:
             logger.warning("umount %s returned %d: %s", mount_path, result.returncode, result.stderr.strip())
     except Exception:
         logger.exception("Failed to umount %s", mount_path)
+
+
+def scan_with_ebs_direct(
+    trivy_server_url: str,
+    snapshot_id: str,
+    job_id: str,
+    tenant_id: str,
+    timeout: int = 1800,
+    skip_dirs: str = "/proc,/sys,/dev,/run",
+    severity: str = "HIGH,CRITICAL",
+    trivyignore_path: str | None = None,
+) -> dict[str, Any]:
+    """
+    Run trivy vm ebs:{snapshot_id} via the trivy sidecar server (EBS Direct API).
+    Returns parsed JSON output. Raises RuntimeError on failure.
+    """
+    cmd = [
+        "trivy",
+        "client",
+        "--server",
+        trivy_server_url,
+        "vm",
+        f"ebs:{snapshot_id}",
+        "--scanners",
+        "vuln,secret",
+        "--skip-dirs",
+        skip_dirs,
+        "--ignore-unfixed",
+        "--severity",
+        severity,
+        "--timeout",
+        "20m",
+        "--format",
+        "json",
+        "--quiet",
+        "--no-progress",
+    ]
+    if trivyignore_path:
+        cmd.extend(["--ignorefile", trivyignore_path])
+
+    logger.info("EBS Direct scan: snapshot=%s job=%s tenant=%s", snapshot_id, job_id, tenant_id)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+
+    if result.returncode not in (0, 1):
+        raise RuntimeError(f"trivy client exited {result.returncode} for snapshot {snapshot_id}: {result.stderr[:500]}")
+    if not result.stdout.strip():
+        return {"Results": []}
+    return json.loads(result.stdout)
 
 
 def list_ogum_snapshots(ec2_client: Any) -> list[dict[str, Any]]:

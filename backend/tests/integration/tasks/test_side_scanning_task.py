@@ -3,12 +3,16 @@ Integration tests for scan_ec2_instance Celery task (Epic 03 Sprint 1).
 
 Strategy:
 - boto3 (EC2 API calls) → mocked via moto @mock_aws
-- Analysers (Trivy, YARA, TruffleHog) → mocked via pytest-mock (external binaries)
+- Analysers (Trivy, YARA) → mocked via pytest-mock (external binaries)
 - mount/umount subprocess → mocked (no real EBS attachment in CI)
 - ArangoDB → real instance via Docker (never mocked)
 
 Each test verifies the full task lifecycle: snapshot created, analysis run,
 findings persisted to ArangoDB, cleanup executed even on failure.
+
+Note (Sprint 2): TruffleHog3 was removed in Sprint 2 — secrets are now detected
+by Trivy `--scanners secret` in scan_ec2_instance_v2. Sprint 1 task no longer
+performs secret scanning but is kept for backwards compatibility.
 """
 
 from __future__ import annotations
@@ -62,7 +66,6 @@ def test_scan_creates_snapshot_and_deletes_it(db_tenant_a, mocker):
     # Analysers return empty — no findings expected
     mocker.patch("app.workers.tasks.side_scanning.run_trivy_fs", return_value=[])
     mocker.patch("app.workers.tasks.side_scanning.run_yara", return_value=[])
-    mocker.patch("app.workers.tasks.side_scanning.run_trufflehog", return_value=[])
 
     # Patch _get_tenant_db so the task uses the test DB
     mocker.patch(
@@ -128,7 +131,6 @@ def test_scan_persists_cve_findings(db_tenant_a, mocker):
     ]
     mocker.patch("app.workers.tasks.side_scanning.run_trivy_fs", return_value=trivy_output)
     mocker.patch("app.workers.tasks.side_scanning.run_yara", return_value=[])
-    mocker.patch("app.workers.tasks.side_scanning.run_trufflehog", return_value=[])
     mocker.patch(
         "app.workers.tasks.side_scanning._get_tenant_db",
         return_value=db_tenant_a,
@@ -161,8 +163,8 @@ def test_scan_persists_cve_findings(db_tenant_a, mocker):
 
 @pytest.mark.integration
 @mock_aws
-def test_scan_persists_secret_finding(db_tenant_a, mocker):
-    """Exposed secret findings are persisted — secret value never stored."""
+def test_scan_v1_has_no_secret_scanning(db_tenant_a, mocker):
+    """Sprint 1 task no longer does secret scanning (migrated to Trivy in scan_ec2_instance_v2)."""
     ec2_client = boto3.client("ec2", region_name=REGION)
     instance_id, volume_id = _seed_ec2(ec2_client)
     init_tenant_schema(db_tenant_a)
@@ -178,10 +180,8 @@ def test_scan_persists_secret_finding(db_tenant_a, mocker):
         }
     )
 
-    secret_output = [{"rule": "aws_key", "path": "/home/ubuntu/.bashrc", "line": 42}]
     mocker.patch("app.workers.tasks.side_scanning.run_trivy_fs", return_value=[])
     mocker.patch("app.workers.tasks.side_scanning.run_yara", return_value=[])
-    mocker.patch("app.workers.tasks.side_scanning.run_trufflehog", return_value=secret_output)
     mocker.patch(
         "app.workers.tasks.side_scanning._get_tenant_db",
         return_value=db_tenant_a,
@@ -198,16 +198,8 @@ def test_scan_persists_secret_finding(db_tenant_a, mocker):
         availability_zone=AZ,
     )
 
-    assert result["secret_count"] == 1
-
-    cursor = db_tenant_a.aql.execute("FOR f IN findings FILTER f.source == 'side_scanning' RETURN f")
-    findings = list(cursor)
-    assert len(findings) == 1
-    f = findings[0]
-    assert f["severity"] == "CRITICAL"
-    assert "exposed_secret" in f["check_id"] or "secret" in f["check_id"]
-    # The actual secret value must never appear
-    assert "AKIA" not in str(f)
+    # Sprint 1 no longer does secret scanning — secret_count is always 0
+    assert result["secret_count"] == 0
 
 
 @pytest.mark.integration
@@ -232,7 +224,6 @@ def test_scan_persists_malware_finding(db_tenant_a, mocker):
     yara_output = [{"rule": "Webshell_Generic", "path": "/var/www/html/shell.php"}]
     mocker.patch("app.workers.tasks.side_scanning.run_trivy_fs", return_value=[])
     mocker.patch("app.workers.tasks.side_scanning.run_yara", return_value=yara_output)
-    mocker.patch("app.workers.tasks.side_scanning.run_trufflehog", return_value=[])
     mocker.patch(
         "app.workers.tasks.side_scanning._get_tenant_db",
         return_value=db_tenant_a,
@@ -271,7 +262,6 @@ def test_cleanup_runs_after_analyser_exception(db_tenant_a, mocker):
         side_effect=RuntimeError("trivy crashed"),
     )
     mocker.patch("app.workers.tasks.side_scanning.run_yara", return_value=[])
-    mocker.patch("app.workers.tasks.side_scanning.run_trufflehog", return_value=[])
     mocker.patch(
         "app.workers.tasks.side_scanning._get_tenant_db",
         return_value=db_tenant_a,
@@ -309,7 +299,6 @@ def test_scan_job_record_created(db_tenant_a, mocker):
 
     mocker.patch("app.workers.tasks.side_scanning.run_trivy_fs", return_value=[])
     mocker.patch("app.workers.tasks.side_scanning.run_yara", return_value=[])
-    mocker.patch("app.workers.tasks.side_scanning.run_trufflehog", return_value=[])
     mocker.patch(
         "app.workers.tasks.side_scanning._get_tenant_db",
         return_value=db_tenant_a,
@@ -342,7 +331,6 @@ def test_snapshot_tagged_with_tenant_and_expiry(db_tenant_a, mocker):
 
     mocker.patch("app.workers.tasks.side_scanning.run_trivy_fs", return_value=[])
     mocker.patch("app.workers.tasks.side_scanning.run_yara", return_value=[])
-    mocker.patch("app.workers.tasks.side_scanning.run_trufflehog", return_value=[])
     mocker.patch(
         "app.workers.tasks.side_scanning._get_tenant_db",
         return_value=db_tenant_a,

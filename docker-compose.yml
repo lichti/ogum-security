@@ -87,6 +87,24 @@ services:
     #           count: 1
     #           capabilities: [gpu]
 
+  # ── Trivy Server — Shared Vulnerability DB (EBS Direct API sidecar) ─────
+  trivy-server:
+    image: aquasec/trivy:latest
+    container_name: ogum-trivy-server
+    command: server --listen 0.0.0.0:4954
+    ports:
+      - "4954:4954"
+    volumes:
+      - trivy-cache:/root/.cache/trivy
+    environment:
+      - TRIVY_CACHE_BACKEND=fs
+    healthcheck:
+      test: ["CMD", "trivy", "server", "--health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
   # ── Backend — FastAPI ─────────────────────────────────────────────────────
   backend:
     build:
@@ -142,6 +160,7 @@ services:
       - ARANGO_PASSWORD=${ARANGO_PASSWORD:-changeme}
       - REDIS_URL=redis://redis:6379/0
       - REDPANDA_BROKERS=redpanda:9092
+      - TRIVY_SERVER_URL=http://trivy-server:4954
     env_file:
       - .env
     volumes:
@@ -150,6 +169,7 @@ services:
     depends_on:
       - redis
       - arangodb
+      - trivy-server
     restart: unless-stopped
 
   # ── Celery Beat — Discovery Scheduler ────────────────────────────────────
@@ -199,3 +219,4 @@ volumes:
   redpanda_data:
   qdrant_data:
   ollama_data:
+  trivy-cache:

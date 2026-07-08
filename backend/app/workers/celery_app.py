@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import settings
 
@@ -16,6 +17,7 @@ celery_app = Celery(
         "app.workers.tasks.iac_scan",
         "app.workers.tasks.attack_paths",
         "app.workers.tasks.graph",
+        "app.workers.tasks.side_scanning",
     ],
 )
 
@@ -47,5 +49,12 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.tasks.scheduling.trigger_all_cspm_scans",
         "schedule": 6 * 3600,
         "options": {"countdown": 3600},  # start 1h after the Beat tick
+    },
+    # Sprint 2 (Epic 03): daily SBOM rescan for new CVEs (dev tenant only;
+    # Sprint 7 will replace with per-tenant scheduling from ArangoDB)
+    "rescan-sboms-daily": {
+        "task": "app.workers.tasks.side_scanning.rescan_sboms",
+        "schedule": crontab(hour=3, minute=0),
+        "kwargs": {"tenant_id": "dev"},
     },
 }

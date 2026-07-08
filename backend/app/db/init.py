@@ -17,6 +17,7 @@ VERTEX_COLLECTIONS = [
     "scan_jobs",
     "audit_log",
     "saved_queries",  # Sprint 6: per-tenant AQL console saved queries
+    "sboms",  # Sprint 2 (Epic 03): CycloneDX SBOMs generated per EC2 scan
 ]
 
 ADMIN_VERTEX_COLLECTIONS = [
@@ -47,6 +48,7 @@ EDGE_COLLECTIONS = [
     "ASSUMES",  # identity A is actively assuming role B
     "ATTACHED_POLICY",  # identity has policy attached
     "HAS_ACTIVE_SESSION",  # identity has an active session credential
+    "HAS_SBOM",  # resource → sbom (Sprint 2 Epic 03)
 ]
 
 # (collection_name, fields, unique)
@@ -85,6 +87,9 @@ PERSISTENT_INDEXES: list[tuple[str, list[str], bool]] = [
     ("data_assets", ["tenant_id", "is_crown_jewel"], False),
     # Saved queries console (Sprint 6)
     ("saved_queries", ["tenant_id"], False),
+    # SBOMs (Sprint 2 Epic 03)
+    ("sboms", ["tenant_id"], False),
+    ("sboms", ["tenant_id", "resource_id"], False),
 ]
 
 ADMIN_PERSISTENT_INDEXES: list[tuple[str, list[str], bool]] = [
