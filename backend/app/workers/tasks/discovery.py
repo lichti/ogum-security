@@ -158,20 +158,40 @@ def _get_tenant_db(tenant_id: str):  # type: ignore[no-untyped-def]
 
 
 def _upsert(db: Any, collection: str, doc: dict[str, Any], update: dict[str, Any]) -> None:
-    db.aql.execute(
-        """
-        UPSERT { _key: @key }
-        INSERT @doc
-        UPDATE @update
-        IN @@collection
-        """,
-        bind_vars={
-            "@collection": collection,
-            "key": doc["_key"],
-            "doc": doc,
-            "update": update,
-        },
-    )
+    arn = doc.get("arn")
+    if arn:
+        # Search by ARN when present — handles key-format migrations gracefully and
+        # avoids unique-constraint violations when legacy documents exist with the
+        # same ARN but a different _key format.
+        db.aql.execute(
+            """
+            UPSERT { arn: @arn }
+            INSERT @doc
+            UPDATE @update
+            IN @@collection
+            """,
+            bind_vars={
+                "@collection": collection,
+                "arn": arn,
+                "doc": doc,
+                "update": update,
+            },
+        )
+    else:
+        db.aql.execute(
+            """
+            UPSERT { _key: @key }
+            INSERT @doc
+            UPDATE @update
+            IN @@collection
+            """,
+            bind_vars={
+                "@collection": collection,
+                "key": doc["_key"],
+                "doc": doc,
+                "update": update,
+            },
+        )
 
 
 def _upsert_edge(
