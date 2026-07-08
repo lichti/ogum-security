@@ -10,8 +10,23 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.0"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.0"
+    }
   }
 }
+
+# ── Cost estimate (us-east-1, on-demand, no free tier) ───────────────────────
+# EC2:        2x t3.micro   ~$0.021/h  ~$15/month  (disable with create_ec2_instances=false)
+# EBS:        2x 8GB gp3    ~$0.80/month per volume
+# Lambda:     free tier (1M requests/month)
+# ECR:        free up to 500MB/month
+# S3:         free up to 5GB/month
+# KMS:        $1/month per CMK
+# CloudTrail: free for management events
+# Total:      ~$20/month with EC2  |  ~$5/month without (create_ec2_instances=false)
+# ─────────────────────────────────────────────────────────────────────────────
 
 provider "aws" {
   region = var.aws_region
@@ -127,6 +142,7 @@ data "aws_ami" "amazon_linux" {
 
 # Public-facing instance with open SG — should appear in Attack Paths
 resource "aws_instance" "public_exposed" {
+  count                  = var.create_ec2_instances ? 1 : 0
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.public.id
@@ -148,6 +164,7 @@ resource "aws_instance" "public_exposed" {
 
 # Private instance with restricted SG — clean baseline
 resource "aws_instance" "private_clean" {
+  count                  = var.create_ec2_instances ? 1 : 0
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.private.id

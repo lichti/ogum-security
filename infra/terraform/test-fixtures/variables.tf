@@ -14,3 +14,9 @@ variable "suffix" {
     error_message = "suffix must be lowercase alphanumeric with hyphens, max 10 chars."
   }
 }
+
+variable "create_ec2_instances" {
+  description = "Set to false to skip EC2 instance creation and save ~$15/month. Side-scanning tests will use Lambda and ECR instead."
+  type        = bool
+  default     = true
+}

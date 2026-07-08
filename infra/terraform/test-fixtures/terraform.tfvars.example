@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars and fill in your values.
+# Run: cp terraform.tfvars.example terraform.tfvars
+
+aws_region           = "us-east-1"
+suffix               = "dev"   # your username or "ci" — keeps resource names unique per developer
+create_ec2_instances = true    # set false to save ~$15/month when not testing EC2 side-scanning
