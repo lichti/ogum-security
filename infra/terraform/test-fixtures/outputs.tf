@@ -34,8 +34,7 @@ output "test_resources" {
       restricted = aws_security_group.restricted.id
     }
     lambda = {
-      clean_function  = aws_lambda_function.hello_clean.function_name
-      secret_function = aws_lambda_function.hello_with_secret.function_name
+      clean_function = aws_lambda_function.hello_clean.function_name
     }
     ecr = {
       app_repository       = aws_ecr_repository.app.repository_url
@@ -74,7 +73,6 @@ output "expected_findings" {
       "CloudTrail not multi-region — ${aws_cloudtrail.test_trail.name}",
       "Subnet assigns public IPs by default — ${aws_subnet.public.id}",
       # Lambda
-      "Lambda environment variable contains AWS_ACCESS_KEY_ID — ${aws_lambda_function.hello_with_secret.function_name}",
       # ECR
       "ECR repository encryption not configured — ${aws_ecr_repository.app.name}",
       # IAM PRIVESC (Epic 02 detectors)

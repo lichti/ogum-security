@@ -45,7 +45,7 @@ resource "aws_iam_role_policy" "devops_can_assume_admin" {
 
 resource "aws_iam_role" "privesc_admin_target" {
   name        = "${local.prefix}-privesc-admin"
-  description = "Admin role reachable via assume-role chain — PRIVESC-01/02 target"
+  description = "Admin role reachable via assume-role chain (PRIVESC-01/02 target)"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -71,7 +71,7 @@ resource "aws_iam_role_policy_attachment" "privesc_admin_policy" {
 
 resource "aws_iam_role" "privesc_create_policy_version" {
   name        = "${local.prefix}-privesc-cpv"
-  description = "Role with iam:CreatePolicyVersion — PRIVESC-03 detector target"
+  description = "Role with iam:CreatePolicyVersion (PRIVESC-03 detector target)"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -110,7 +110,7 @@ resource "aws_iam_role_policy" "privesc_create_policy_version_inline" {
 
 resource "aws_iam_role" "privesc_attach_role_policy" {
   name        = "${local.prefix}-privesc-arp"
-  description = "Role with iam:AttachRolePolicy — PRIVESC-05 detector target"
+  description = "Role with iam:AttachRolePolicy (PRIVESC-05 detector target)"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -142,7 +142,7 @@ resource "aws_iam_role_policy" "privesc_attach_role_policy_inline" {
 
 resource "aws_iam_role" "privesc_passrole_ec2" {
   name        = "${local.prefix}-privesc-passrole"
-  description = "Role with iam:PassRole + ec2:RunInstances — PRIVESC-10 detector target"
+  description = "Role with iam:PassRole + ec2:RunInstances (PRIVESC-10 detector target)"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

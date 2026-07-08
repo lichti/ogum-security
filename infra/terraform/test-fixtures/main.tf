@@ -108,7 +108,7 @@ resource "aws_security_group" "open_ssh" {
 
 resource "aws_security_group" "restricted" {
   name        = "${local.prefix}-restricted"
-  description = "Test SG: correctly restricted — should produce no CSPM findings"
+  description = "Test SG: correctly restricted (should produce no CSPM findings)"
   vpc_id      = aws_vpc.main.id
 
   ingress {

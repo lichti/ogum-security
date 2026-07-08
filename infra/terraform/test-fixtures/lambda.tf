@@ -54,27 +54,7 @@ resource "aws_lambda_function" "hello_clean" {
   }
 }
 
-# Lambda with hardcoded fake secrets in env vars — triggers Trivy secret scanner
-resource "aws_lambda_function" "hello_with_secret" {
-  function_name    = "${local.prefix}-hello-secret"
-  role             = aws_iam_role.lambda_exec.arn
-  handler          = "handler.handler"
-  runtime          = "python3.12"
-  filename         = data.archive_file.lambda_hello.output_path
-  source_code_hash = data.archive_file.lambda_hello.output_base64sha256
-  timeout          = 30
-  memory_size      = 128
-
-  environment {
-    variables = {
-      ENV                   = "test"
-      AWS_ACCESS_KEY_ID     = "AKIAIOSFODNN7EXAMPLE"                    # fake key — triggers Trivy secret scanner
-      AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" # fake secret
-    }
-  }
-
-  tags = {
-    Name         = "${local.prefix}-hello-secret"
-    TestScenario = "lambda-with-hardcoded-secret"
-  }
-}
+# Note: a Lambda function with hardcoded test credentials (for Trivy secret scanner testing)
+# is intentionally not managed by Terraform to avoid triggering GitHub secret push protection.
+# To test secret detection manually: create a Lambda ZIP containing a file with test patterns
+# (e.g., generic password strings) and upload it via AWS Console or CLI.
