@@ -12,7 +12,12 @@ import pytest
 
 from app.models.finding import SeverityLevel
 from app.services.side_scanning import cvss_to_severity
-from app.services.side_scanning.analyzers.trivy_analyzer import _extract_cvss, run_trivy_ebs, run_trivy_rootfs
+from app.services.side_scanning.analyzers.trivy_analyzer import (
+    _extract_cvss,
+    run_trivy_ebs,
+    run_trivy_image,
+    run_trivy_rootfs,
+)
 from app.services.side_scanning.snapshot_manager import delete_snapshot_safe, scan_with_ebs_direct
 
 
@@ -314,3 +319,88 @@ class TestRunTrivyRootfs:
         run_trivy_rootfs("/host/proc/1234/root", skip_dirs="/proc,/sys,/dev")
         assert "--skip-dirs" in captured[0]
         assert "/proc,/sys,/dev" in captured[0]
+
+
+# ─── Sprint 4: run_trivy_image ────────────────────────────────────────────────
+
+_TRIVY_IMAGE_JSON = json.dumps(
+    {
+        "Results": [
+            {
+                "Target": "python:3.11-slim (debian 12.1)",
+                "Vulnerabilities": [
+                    {
+                        "VulnerabilityID": "CVE-2024-0001",
+                        "PkgName": "libcurl",
+                        "InstalledVersion": "7.88.1",
+                        "FixedVersion": "7.88.1-1+deb12u1",
+                        "Severity": "HIGH",
+                        "CVSS": {"nvd": {"V3Score": 8.1}},
+                        "Title": "curl heap overflow",
+                        "Description": "Heap overflow in curl",
+                    }
+                ],
+                "Secrets": [
+                    {
+                        "RuleID": "aws-access-key-id",
+                        "Category": "AWS",
+                        "Title": "AWS Access Key ID",
+                        "Severity": "CRITICAL",
+                        "Match": "****",
+                    }
+                ],
+                "Misconfigurations": [
+                    {
+                        "ID": "AVD-DS-0001",
+                        "Title": "Missing USER instruction",
+                        "Description": "Image runs as root",
+                        "Severity": "HIGH",
+                        "Resolution": "Add a non-root USER instruction",
+                        "References": ["https://cis.org"],
+                    }
+                ],
+            }
+        ]
+    }
+)
+
+
+def _image_ok(stdout: str = _TRIVY_IMAGE_JSON, returncode: int = 0) -> CompletedProcess[str]:
+    return CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr="")
+
+
+@pytest.mark.unit
+class TestRunTrivyImage:
+    def test_parses_vulnerabilities(self, monkeypatch: Any) -> None:
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _image_ok())
+        vulns, _, _ = run_trivy_image("123.dkr.ecr.us-east-1.amazonaws.com/app", "sha256:abc")
+        assert len(vulns) == 1
+        assert vulns[0]["cve_id"] == "CVE-2024-0001"
+        assert vulns[0]["severity"] == "HIGH"
+        assert vulns[0]["package"] == "libcurl"
+
+    def test_parses_secrets(self, monkeypatch: Any) -> None:
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _image_ok())
+        _, secrets, _ = run_trivy_image("123.dkr.ecr.us-east-1.amazonaws.com/app", "sha256:abc")
+        assert len(secrets) == 1
+        assert secrets[0]["rule_id"] == "aws-access-key-id"
+        assert "Match" not in secrets[0]
+
+    def test_parses_misconfigurations(self, monkeypatch: Any) -> None:
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _image_ok())
+        _, _, misconfigs = run_trivy_image("123.dkr.ecr.us-east-1.amazonaws.com/app", "sha256:abc")
+        assert len(misconfigs) == 1
+        assert misconfigs[0]["id"] == "AVD-DS-0001"
+        assert misconfigs[0]["severity"] == "HIGH"
+
+    def test_nonzero_exit_raises(self, monkeypatch: Any) -> None:
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _image_ok(stdout="", returncode=2))
+        with pytest.raises(RuntimeError, match="trivy image exited 2"):
+            run_trivy_image("img", "sha256:abc")
+
+    def test_empty_output_returns_empty_tuples(self, monkeypatch: Any) -> None:
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _image_ok(stdout=""))
+        vulns, secrets, misconfigs = run_trivy_image("img", "sha256:abc")
+        assert vulns == []
+        assert secrets == []
+        assert misconfigs == []

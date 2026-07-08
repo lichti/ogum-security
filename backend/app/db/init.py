@@ -18,6 +18,7 @@ VERTEX_COLLECTIONS = [
     "audit_log",
     "saved_queries",  # Sprint 6: per-tenant AQL console saved queries
     "sboms",  # Sprint 2 (Epic 03): CycloneDX SBOMs generated per EC2 scan
+    "sarif_reports",  # Sprint 4 (Epic 03): SARIF reports for registry image scans
 ]
 
 ADMIN_VERTEX_COLLECTIONS = [
@@ -90,6 +91,8 @@ PERSISTENT_INDEXES: list[tuple[str, list[str], bool]] = [
     # SBOMs (Sprint 2 Epic 03)
     ("sboms", ["tenant_id"], False),
     ("sboms", ["tenant_id", "resource_id"], False),
+    # SARIF reports (Sprint 4 Epic 03)
+    ("sarif_reports", ["tenant_id", "image_digest"], False),
 ]
 
 ADMIN_PERSISTENT_INDEXES: list[tuple[str, list[str], bool]] = [

@@ -37,6 +37,17 @@ Commit types that trigger version bumps:
 - **3 integration tests** (`test_k8s_webhook.py`): valid token → 202 + task enqueued + scan_jobs created, invalid token → 401, missing header → 422.
 - **`infra/k8s/`** directory created for Kubernetes manifests.
 
+- **Registry image scan (Epic 03 Sprint 4)**: `scan_container_image` Celery task scans ECR and any OCI-registry image via `trivy client image {uri}@{digest}` — no `docker pull`, runs vuln + secret + misconfig scanners. `run_trivy_image()` added to `trivy_analyzer.py` returning `(vulns, secrets, misconfigs)`. `_normalise_misconfig()` normalises Trivy misconfigurations into `Finding` with `resource_type=container_image`. SARIF report generated per scan via `_generate_sarif()` and upserted to the new `sarif_reports` ArangoDB collection (`_persist_sarif()`). Schema additions: `sarif_reports` vertex collection with persistent index on `(tenant_id, image_digest)`.
+- **ECR push webhook**: `POST /api/v1/side-scans/webhooks/ecr` — receives ECR push events, validates `x-ogum-token` against `tenant_config.scanner_token`, creates `scan_jobs` record (`type: ecr`), enqueues `scan_container_image`, returns `202`.
+- **Jobs API**: `GET /api/v1/side-scans/jobs` (list with `status`/`job_type` filters, pagination), `GET /api/v1/side-scans/jobs/{job_id}` (detail with tenant isolation — wrong tenant → 404), `POST /api/v1/side-scans/jobs/{job_id}/retry` (re-enqueues `failed` jobs only — non-failed → 422). All endpoints enforce `X-Tenant-ID` isolation via AQL `FILTER j.tenant_id == @tid`.
+- **Image security badge**: `GET /api/v1/side-scans/images/{digest}/security` — CI/CD badge endpoint returning `overall_status: pass|fail` and CVE counts by severity (CRITICAL/HIGH/MEDIUM/LOW). Returns `fail` when CRITICAL or HIGH findings exist.
+- **`/side-scanning` UI page**: Next.js page with KPI cards (EC2 / Lambda / K8s / Registry job counts), status/type filter dropdowns, jobs table (type, resource, status badge with pulse animation for running, findings count, duration, started-at), and one-click Re-scan button for failed jobs (triggers retry mutation). Sidebar nav updated: "Side Scanning" now routes to `/side-scanning` (previously `disabled badge="Soon"`).
+- **`sideScanApi`** added to `frontend/src/lib/api.ts`: `listJobs`, `getJob`, `retryJob`, `imageSecurityStatus`.
+- **Types**: `SideScanJob`, `SideScanJobStatus`, `SideScanJobType`, `PagedSideScanJobs`, `ImageSecurityStatus` added to `frontend/src/lib/types.ts`.
+- **5 unit tests** (`TestRunTrivyImage`): parse vulnerabilities, parse secrets (no Match field), parse misconfigurations, nonzero exit raises RuntimeError, empty output returns empty tuples.
+- **Integration tests** (`test_side_scanning_registry.py`): ECR webhook enqueues task + creates scan_jobs record (5 tests covering: valid push, invalid token 401, list jobs tenant isolation, status filter, job detail, wrong-tenant 404, not-found 404, retry creates new job + dispatches task, retry non-failed 422, badge pass/fail).
+- **Frontend test** (`SideScanningPage.test.tsx`): 5 unit tests — renders title, KPI cards, status filter, type filter, loading state.
+
 ### Changed
 
 - `delete_snapshot_safe()` now logs but does not raise on failure (previously re-raised). Sprint 1 task cleanup blocks that wrapped it in try/except are unchanged and still safe.

@@ -25,7 +25,7 @@ describe('Sidebar', () => {
 
   it('renders disabled items without links for unimplemented pages', () => {
     render(<Sidebar />)
-    const disabledLabels = ['Side Scanning', 'Pulse (NRT)', 'CDR', 'AI Remediation', 'Integrations', 'Agent']
+    const disabledLabels = ['Pulse (NRT)', 'CDR', 'AI Remediation', 'Integrations', 'Agent']
     const allLinks = screen.getAllByRole('link').map(l => l.textContent)
     disabledLabels.forEach(label => {
       expect(allLinks.join(' ')).not.toContain(label)
@@ -36,7 +36,7 @@ describe('Sidebar', () => {
   it('shows "Soon" badge on all disabled items', () => {
     render(<Sidebar />)
     const soonBadges = screen.getAllByText('Soon')
-    expect(soonBadges.length).toBeGreaterThanOrEqual(6)
+    expect(soonBadges.length).toBeGreaterThanOrEqual(5)
   })
 
   it('renders all navigation sections', () => {

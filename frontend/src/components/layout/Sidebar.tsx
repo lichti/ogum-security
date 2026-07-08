@@ -49,7 +49,7 @@ export function Sidebar() {
           <NavItem icon={ShieldAlert} label="Findings" href="/findings" />
           <NavItem icon={CheckSquare} label="Compliance" href="/compliance" />
           <NavItem icon={GitBranch} label="Attack Paths" href="/attack-paths" />
-          <NavItem icon={ScanLine} label="Side Scanning" disabled badge="Soon" />
+          <NavItem icon={ScanLine} label="Side Scanning" href="/side-scanning" />
         </NavSection>
 
         <NavSection label="Threat Response">
