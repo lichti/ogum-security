@@ -32,7 +32,7 @@ import httpx
 from app.db.init import init_tenant_schema
 from app.models.finding import Finding, FindingSource, FindingStatus, SeverityLevel
 from app.services.side_scanning import cvss_to_severity
-from app.services.side_scanning.analyzers.trivy_analyzer import run_trivy_ebs, run_trivy_fs
+from app.services.side_scanning.analyzers.trivy_analyzer import run_trivy_ebs, run_trivy_fs, run_trivy_rootfs
 from app.services.side_scanning.analyzers.yara_analyzer import run_yara
 from app.services.side_scanning.snapshot_manager import (
     create_scan_snapshot,
@@ -933,3 +933,154 @@ def rescan_sboms(
         new_findings,
     )
     return {"tenant_id": tenant_id, "sboms_scanned": sboms_scanned, "new_findings": new_findings}
+
+
+# ─── Sprint 3 helpers ─────────────────────────────────────────────────────────
+
+
+def _generate_sbom_rootfs(rootfs_path: str, trivy_server_url: str, job_id: str) -> dict[str, Any]:
+    """Generate CycloneDX SBOM for a container rootfs via trivy client. Returns empty dict on failure."""
+    result = subprocess.run(
+        [
+            "trivy",
+            "client",
+            "--server",
+            trivy_server_url,
+            "rootfs",
+            rootfs_path,
+            "--format",
+            "cyclonedx",
+            "--quiet",
+            "--no-progress",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    if result.returncode not in (0, 1) or not result.stdout.strip():
+        logger.warning("Rootfs SBOM generation returned %d for path=%s job=%s", result.returncode, rootfs_path, job_id)
+        return {}
+    try:
+        return json.loads(result.stdout)  # type: ignore[no-any-return]
+    except Exception:
+        logger.exception("Failed to parse rootfs SBOM JSON for path=%s", rootfs_path)
+        return {}
+
+
+# ─── Sprint 3 task ────────────────────────────────────────────────────────────
+
+
+@celery_app.task(bind=True, max_retries=1, default_retry_delay=120, time_limit=900)
+def scan_k8s_container(  # noqa: PLR0913
+    self: Any,
+    tenant_id: str,
+    pod_name: str,
+    pod_namespace: str,
+    container_name: str,
+    pid: int,
+    node_name: str,
+    resource_id: str,
+    provider_id: str,
+    job_id: str,
+    trivy_server_url: str = _TRIVY_SERVER_URL,
+    host_proc_root: str = "/host/proc",
+) -> dict[str, Any]:
+    """
+    Scan a running container's filesystem via /proc/<PID>/root (no pod restart).
+    Runs inside the ogum-scanner DaemonSet pod on the same node as the target container.
+    """
+    db = _get_tenant_db(tenant_id)
+    init_tenant_schema(db)
+    scan_job_id = start_discovery_job(db, tenant_id, "k8s", provider_id)
+    logger.info(
+        "scan_k8s_container start [tenant=%s pod=%s/%s container=%s pid=%d job=%s]",
+        tenant_id,
+        pod_namespace,
+        pod_name,
+        container_name,
+        pid,
+        scan_job_id,
+    )
+
+    scan_path = f"{host_proc_root}/{pid}/root"
+    vulns: list[dict[str, Any]] = []
+    secrets: list[dict[str, Any]] = []
+    sbom_json: dict[str, Any] = {}
+
+    try:
+        if not os.path.exists(scan_path):
+            raise FileNotFoundError(f"Container proc root not found: {scan_path}")
+
+        # 1. Scan rootfs via trivy client + sidecar
+        vulns, secrets = run_trivy_rootfs(scan_path, trivy_server_url=trivy_server_url)
+
+        # 2. SBOM generation
+        sbom_json = _generate_sbom_rootfs(scan_path, trivy_server_url, scan_job_id)
+
+    finally:
+        complete_discovery_job(db, scan_job_id, len(vulns) + len(secrets))
+
+    # 3. Normalise findings — resource_id is the ArangoDB _id of the Pod vertex
+    resource_key = resource_id.replace("/", "_").replace(":", "_")
+    findings: list[Finding] = []
+
+    for v in vulns:
+        findings.append(
+            _normalise_cve_v2(
+                v,
+                tenant_id=tenant_id,
+                resource_id=resource_key,
+                resource_arn=None,
+                provider="k8s",
+                region=node_name,
+                account_id="",
+                scan_job_id=scan_job_id,
+                detection_method="k8s_proc_root",
+            )
+        )
+
+    for s in secrets:
+        findings.append(
+            _normalise_trivy_secret(
+                s,
+                tenant_id=tenant_id,
+                resource_id=resource_key,
+                resource_arn=None,
+                provider="k8s",
+                region=node_name,
+                account_id="",
+                scan_job_id=scan_job_id,
+                resource_type="k8s_container",
+                detection_method="trivy_secret_k8s",
+            )
+        )
+
+    for f in findings:
+        try:
+            _upsert_finding(db, f)
+        except Exception:
+            logger.exception("Failed to persist K8s finding %s", f.check_id)
+
+    # 4. Persist SBOM
+    try:
+        _persist_sbom(db, sbom_json, tenant_id, resource_key, scan_job_id)
+    except Exception:
+        logger.exception("Failed to persist SBOM for pod=%s/%s", pod_namespace, pod_name)
+
+    logger.info(
+        "scan_k8s_container complete [tenant=%s pod=%s/%s findings=%d job=%s]",
+        tenant_id,
+        pod_namespace,
+        pod_name,
+        len(findings),
+        scan_job_id,
+    )
+    return {
+        "job_id": scan_job_id,
+        "pod": f"{pod_namespace}/{pod_name}",
+        "container": container_name,
+        "findings_count": len(findings),
+        "cve_count": len(vulns),
+        "secret_count": len(secrets),
+        "sbom_components": len(sbom_json.get("components", [])),
+    }

@@ -114,6 +114,81 @@ def run_trivy_ebs(
     return vulns, secrets
 
 
+def run_trivy_rootfs(
+    rootfs_path: str,
+    trivy_server_url: str = "http://trivy-server:4954",
+    timeout: int = 600,
+    skip_dirs: str = "/proc,/sys,/dev,/run",
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """
+    Scan a container rootfs via trivy client rootfs.
+    Used by scan_k8s_container for /proc/<PID>/root scanning.
+    Returns (vulnerabilities, secrets).
+    """
+    cmd = [
+        "trivy",
+        "client",
+        "--server",
+        trivy_server_url,
+        "rootfs",
+        rootfs_path,
+        "--scanners",
+        "vuln,secret",
+        "--skip-dirs",
+        skip_dirs,
+        "--ignore-unfixed",
+        "--severity",
+        "HIGH,CRITICAL",
+        "--timeout",
+        "10m",
+        "--format",
+        "json",
+        "--quiet",
+        "--no-progress",
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+
+    if result.returncode not in (0, 1):
+        raise RuntimeError(f"trivy rootfs exited {result.returncode}: {result.stderr[:500]}")
+    if not result.stdout.strip():
+        return [], []
+
+    data = json.loads(result.stdout)
+    vulns: list[dict[str, Any]] = []
+    secrets: list[dict[str, Any]] = []
+
+    for item in data.get("Results", []):
+        target = item.get("Target", "")
+        for v in item.get("Vulnerabilities") or []:
+            vulns.append(
+                {
+                    "cve_id": v.get("VulnerabilityID", ""),
+                    "package": v.get("PkgName", ""),
+                    "installed_version": v.get("InstalledVersion", ""),
+                    "fixed_version": v.get("FixedVersion", ""),
+                    "severity": v.get("Severity", "UNKNOWN"),
+                    "cvss_score": _extract_cvss(v),
+                    "title": v.get("Title", "")[:200],
+                    "description": (v.get("Description") or "")[:500],
+                }
+            )
+        for s in item.get("Secrets") or []:
+            # Never include Match field — redacted by Trivy as ****
+            secrets.append(
+                {
+                    "rule_id": s.get("RuleID", ""),
+                    "category": s.get("Category", ""),
+                    "title": s.get("Title", ""),
+                    "severity": s.get("Severity", "HIGH"),
+                    "target": target,
+                }
+            )
+
+    logger.info("Trivy rootfs scan: %d vulns, %d secrets from %s", len(vulns), len(secrets), rootfs_path)
+    return vulns, secrets
+
+
 def _extract_cvss(vuln: dict[str, Any]) -> float:
     """Extract the best available CVSS v3 score, fallback 0.0."""
     cvss_block = vuln.get("CVSS") or {}

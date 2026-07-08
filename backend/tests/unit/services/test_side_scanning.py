@@ -12,7 +12,7 @@ import pytest
 
 from app.models.finding import SeverityLevel
 from app.services.side_scanning import cvss_to_severity
-from app.services.side_scanning.analyzers.trivy_analyzer import _extract_cvss, run_trivy_ebs
+from app.services.side_scanning.analyzers.trivy_analyzer import _extract_cvss, run_trivy_ebs, run_trivy_rootfs
 from app.services.side_scanning.snapshot_manager import delete_snapshot_safe, scan_with_ebs_direct
 
 
@@ -236,3 +236,81 @@ class TestScanWithEbsDirect:
             tenant_id="t1",
         )
         assert result == {"Results": []}
+
+
+# ─── Sprint 3: run_trivy_rootfs ───────────────────────────────────────────────
+
+_TRIVY_ROOTFS_JSON = json.dumps(
+    {
+        "Results": [
+            {
+                "Target": "usr/lib/python3",
+                "Vulnerabilities": [
+                    {
+                        "VulnerabilityID": "CVE-2025-0001",
+                        "PkgName": "libssl",
+                        "InstalledVersion": "1.1.1",
+                        "FixedVersion": "1.1.1k",
+                        "Severity": "HIGH",
+                        "CVSS": {"nvd": {"V3Score": 7.8}},
+                        "Title": "SSL buffer overflow",
+                        "Description": "Buffer overflow in SSL",
+                    }
+                ],
+                "Secrets": [
+                    {
+                        "RuleID": "private-key",
+                        "Category": "AsymmetricPrivateKey",
+                        "Title": "Asymmetric Private Key",
+                        "Severity": "HIGH",
+                        "Match": "****",
+                    }
+                ],
+            }
+        ]
+    }
+)
+
+
+def _rootfs_ok(stdout: str = _TRIVY_ROOTFS_JSON, returncode: int = 0) -> CompletedProcess[str]:
+    return CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr="")
+
+
+@pytest.mark.unit
+class TestRunTrivyRootfs:
+    def test_parses_vulnerabilities(self, monkeypatch: Any) -> None:
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _rootfs_ok())
+        vulns, _ = run_trivy_rootfs("/host/proc/1234/root")
+        assert len(vulns) == 1
+        assert vulns[0]["cve_id"] == "CVE-2025-0001"
+        assert vulns[0]["package"] == "libssl"
+
+    def test_parses_secrets(self, monkeypatch: Any) -> None:
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _rootfs_ok())
+        _, secrets = run_trivy_rootfs("/host/proc/1234/root")
+        assert len(secrets) == 1
+        assert secrets[0]["rule_id"] == "private-key"
+        assert "Match" not in secrets[0]
+
+    def test_nonzero_exit_raises(self, monkeypatch: Any) -> None:
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _rootfs_ok(stdout="", returncode=2))
+        with pytest.raises(RuntimeError, match="trivy rootfs exited 2"):
+            run_trivy_rootfs("/host/proc/1234/root")
+
+    def test_empty_output_returns_empty_lists(self, monkeypatch: Any) -> None:
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _rootfs_ok(stdout=""))
+        vulns, secrets = run_trivy_rootfs("/host/proc/1234/root")
+        assert vulns == []
+        assert secrets == []
+
+    def test_includes_skip_dirs_in_command(self, monkeypatch: Any) -> None:
+        captured: list[list[str]] = []
+
+        def _run(cmd: list[str], **kw: Any) -> CompletedProcess[str]:
+            captured.append(cmd)
+            return _rootfs_ok()
+
+        monkeypatch.setattr(subprocess, "run", _run)
+        run_trivy_rootfs("/host/proc/1234/root", skip_dirs="/proc,/sys,/dev")
+        assert "--skip-dirs" in captured[0]
+        assert "/proc,/sys,/dev" in captured[0]
