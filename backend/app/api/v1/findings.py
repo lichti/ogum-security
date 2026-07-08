@@ -58,6 +58,7 @@ async def list_findings_endpoint(
     resource_type: str | None = Query(default=None),
     source: str | None = Query(default=None),
     q: str | None = Query(default=None, description="Full-text search in title, check_id, resource_arn"),
+    mitre_ttp: str | None = Query(default=None, description="Filter by MITRE ATT&CK technique ID (e.g. T1078)"),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None),
 ) -> ApiResponse[PagedFindings]:
@@ -76,6 +77,7 @@ async def list_findings_endpoint(
         resource_type=resource_type,
         source=source,
         q=q,
+        mitre_ttp=mitre_ttp,
         limit=limit,
         cursor=cursor,
     )

@@ -282,8 +282,40 @@ export interface AttackPath {
   risk_score: number
   severity: AttackPathSeverity
   is_toxic_combination: boolean
+  mitre_ttps?: string[]
+  mitre_chain?: string[]
+  actively_exploited?: boolean
+  last_runtime_event_at?: string | null
   detected_at: string
   status: string
+}
+
+export interface MitreTechnique {
+  technique_id: string
+  name: string
+  tactic_ids: string[]
+  platforms?: string[]
+  is_subtechnique?: boolean
+}
+
+export interface MitreTactic {
+  tactic_id: string
+  name: string
+  shortname: string
+}
+
+export interface MitreGroup {
+  group_id: string
+  name: string
+  aliases?: string[]
+  country?: string
+}
+
+export interface MitreIntelligence {
+  techniques: MitreTechnique[]
+  tactics: MitreTactic[]
+  apt_groups: MitreGroup[]
+  mitre_chain: string[]
 }
 
 export interface AttackPathStats {

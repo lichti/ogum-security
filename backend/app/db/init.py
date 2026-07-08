@@ -20,6 +20,13 @@ VERTEX_COLLECTIONS = [
 
 ADMIN_VERTEX_COLLECTIONS = [
     "admin_audit_log",
+    "mitre_techniques",
+    "mitre_tactics",
+    "mitre_groups",
+]
+
+ADMIN_EDGE_COLLECTIONS = [
+    "APT_USES",
 ]
 
 EDGE_COLLECTIONS = [
@@ -32,6 +39,8 @@ EDGE_COLLECTIONS = [
     "ATTACHED_TO",
     "MEMBER_OF",
     "HAS_FINDING",
+    "MAPPED_TO",
+    "IMPLEMENTS",
 ]
 
 # (collection_name, fields, unique)
@@ -71,6 +80,10 @@ ADMIN_PERSISTENT_INDEXES: list[tuple[str, list[str], bool]] = [
     ("admin_audit_log", ["tenant_id"], False),
     ("admin_audit_log", ["tenant_id", "timestamp"], False),
     ("admin_audit_log", ["actor_id"], False),
+    ("mitre_techniques", ["technique_id"], True),
+    ("mitre_techniques", ["tactic_ids"], False),
+    ("mitre_groups", ["group_id"], True),
+    ("mitre_tactics", ["tactic_id"], True),
 ]
 
 
@@ -103,5 +116,9 @@ def init_admin_schema(db: StandardDatabase) -> None:
     for name in ADMIN_VERTEX_COLLECTIONS:
         if not db.has_collection(name):
             db.create_collection(name)
+
+    for name in ADMIN_EDGE_COLLECTIONS:
+        if not db.has_collection(name):
+            db.create_collection(name, edge=True)
 
     _ensure_indexes(db, ADMIN_PERSISTENT_INDEXES)

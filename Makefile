@@ -140,6 +140,10 @@ seed-clear: ## Clear and re-seed demo findings for dev-tenant
 seed-tenant: ## Seed a specific tenant: make seed-tenant TENANT=my-tenant
 	cd backend && poetry run python scripts/seed_demo.py --tenant $(TENANT)
 
+.PHONY: mitre-import
+mitre-import: ## Import MITRE ATT&CK Enterprise bundle into ArangoDB (ogum_admin)
+	$(BACKEND) python scripts/import_mitre_bundle.py
+
 # ── Frontend — Code Quality ───────────────────────────────────────────────────
 .PHONY: fe-lint
 fe-lint: ## Run ESLint on frontend

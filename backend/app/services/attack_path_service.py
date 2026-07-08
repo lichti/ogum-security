@@ -19,6 +19,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from app.services.mitre_service import build_mitre_chain_for_tc
 from app.services.risk_score import calculate_path_risk_score, score_to_severity
 
 logger = logging.getLogger(__name__)
@@ -333,6 +334,8 @@ def build_attack_path_docs(
         severity = score_to_severity(path_risk) if path_risk > 0 else default_severity
         pid = _path_id(tenant_id, entry_id, target_id, rule)
 
+        mitre_chain = build_mitre_chain_for_tc(rule) if is_toxic_combination else []
+
         docs.append(
             {
                 "_key": pid,
@@ -350,6 +353,10 @@ def build_attack_path_docs(
                 "risk_score": path_risk,
                 "severity": severity,
                 "is_toxic_combination": is_toxic_combination,
+                "mitre_ttps": mitre_chain,
+                "mitre_chain": mitre_chain,
+                "actively_exploited": False,
+                "last_runtime_event_at": None,
                 "detected_at": now,
                 "status": "active",
             }

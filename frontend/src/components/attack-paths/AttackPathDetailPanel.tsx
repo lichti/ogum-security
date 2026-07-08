@@ -2,9 +2,9 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
-import { X, ArrowRight, Flame, Network, AlertTriangle } from 'lucide-react'
+import { X, ArrowRight, Flame, Network, AlertTriangle, Shield } from 'lucide-react'
 import { attackPathsApi } from '@/lib/api'
-import type { AttackPathSeverity } from '@/lib/types'
+import type { AttackPathSeverity, MitreIntelligence, MitreTechnique } from '@/lib/types'
 
 interface Props {
   pathKey: string | null
@@ -57,6 +57,118 @@ function FindingRow({ finding }: { finding: Record<string, unknown> }) {
         <div className="text-slate-500 text-xs mt-0.5">{String(finding.resource_id ?? '—')}</div>
       </div>
       <span className={`shrink-0 ml-auto text-xs px-1.5 py-0.5 rounded ${sev}`}>{severity}</span>
+    </div>
+  )
+}
+
+function MitreTechniqueChip({ id }: { id: string }) {
+  return (
+    <a
+      href={`https://attack.mitre.org/techniques/${id.replace('.', '/')}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2 py-0.5 rounded font-mono transition-colors"
+    >
+      {id}
+    </a>
+  )
+}
+
+function MitreSection({
+  pathKey,
+  hasMitre,
+  mitreTtps,
+}: {
+  pathKey: string
+  hasMitre: boolean
+  mitreTtps: string[]
+}) {
+  const { data: mitre, isLoading } = useQuery<MitreIntelligence>({
+    queryKey: ['attack-path-mitre', pathKey],
+    queryFn: () => attackPathsApi.getMitre(pathKey).then((r) => r.data.data),
+    enabled: hasMitre,
+  })
+
+  if (!hasMitre && mitreTtps.length === 0) return null
+
+  const tacticById = Object.fromEntries((mitre?.tactics ?? []).map((t) => [t.tactic_id, t]))
+
+  return (
+    <div>
+      <h3 className="text-slate-400 text-xs uppercase tracking-wider mb-3 font-medium flex items-center gap-1.5">
+        <Shield size={12} />
+        MITRE ATT&amp;CK
+      </h3>
+
+      {isLoading && (
+        <div className="h-8 bg-slate-800 rounded animate-pulse" />
+      )}
+
+      {!isLoading && mitre && mitre.techniques.length > 0 && (
+        <div className="space-y-3">
+          {/* Chain breadcrumb for toxic combinations */}
+          {mitre.mitre_chain.length > 1 && (
+            <div className="flex flex-wrap items-center gap-1.5 bg-slate-800/60 rounded-lg p-3">
+              {mitre.mitre_chain.map((id, i) => {
+                const tech = mitre.techniques.find((t: MitreTechnique) => t.technique_id === id)
+                const tacticName = tech?.tactic_ids?.[0]
+                  ? (tacticById[tech.tactic_ids[0]]?.name ?? tech.tactic_ids[0])
+                  : null
+                return (
+                  <span key={id} className="flex items-center gap-1.5">
+                    <span className="flex flex-col items-center">
+                      <MitreTechniqueChip id={id} />
+                      {tacticName && (
+                        <span className="text-slate-600 text-[10px] mt-0.5">{tacticName}</span>
+                      )}
+                    </span>
+                    {i < mitre.mitre_chain.length - 1 && (
+                      <ArrowRight size={10} className="text-slate-600 shrink-0" />
+                    )}
+                  </span>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Technique list */}
+          <div className="space-y-1.5">
+            {mitre.techniques.map((tech: MitreTechnique) => (
+              <div key={tech.technique_id} className="flex items-start gap-2">
+                <MitreTechniqueChip id={tech.technique_id} />
+                <span className="text-slate-300 text-xs leading-5">{tech.name}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* APT groups */}
+          {mitre.apt_groups.length > 0 && (
+            <div>
+              <div className="text-slate-500 text-xs mb-1.5">Associated APT Groups</div>
+              <div className="flex flex-wrap gap-1.5">
+                {mitre.apt_groups.map((g) => (
+                  <span
+                    key={g.group_id}
+                    className="text-xs bg-purple-900/30 text-purple-300 border border-purple-800 px-1.5 py-0.5 rounded"
+                    title={g.aliases?.join(', ')}
+                  >
+                    {g.name} {g.country ? `(${g.country})` : ''}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Fallback: show raw IDs when MITRE data not yet imported */}
+      {!isLoading && (!mitre || mitre.techniques.length === 0) && mitreTtps.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {mitreTtps.map((id) => (
+            <MitreTechniqueChip key={id} id={id} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -187,6 +299,13 @@ export function AttackPathDetailPanel({ pathKey, onClose }: Props) {
                     </div>
                   )}
                 </div>
+
+                {/* MITRE ATT&CK Intelligence */}
+                <MitreSection
+                  pathKey={path.path_id}
+                  hasMitre={!!(path.mitre_ttps?.length || path.mitre_chain?.length)}
+                  mitreTtps={path.mitre_ttps ?? []}
+                />
 
                 {/* Technical IDs */}
                 <div className="border-t border-slate-800 pt-4">

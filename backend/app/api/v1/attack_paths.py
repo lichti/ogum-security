@@ -1,4 +1,4 @@
-"""Attack Paths API — list, detail and stats endpoints for Ogum.Graph (Epic 02 Sprint 2)."""
+"""Attack Paths API — list, detail, stats and MITRE intelligence endpoints for Ogum.Graph."""
 
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ from pydantic import BaseModel
 
 from app.api.v1.inventory import get_tenant_db
 from app.models.api_responses import ApiResponse
+from app.services.admin_service import get_admin_db
+from app.services.mitre_service import get_techniques_for_path
 
 router = APIRouter(prefix="/api/v1/attack-paths", tags=["attack-paths"])
 
@@ -57,6 +59,7 @@ async def list_attack_paths(
     severity: str | None = Query(default=None),
     is_toxic_combination: bool | None = Query(default=None),
     provider: str | None = Query(default=None),
+    actively_exploited: bool | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None),
 ) -> ApiResponse[PagedAttackPaths]:
@@ -77,6 +80,10 @@ async def list_attack_paths(
     if provider:
         filters.append("CONTAINS(LOWER(ap.entry_point_type), @provider) OR CONTAINS(LOWER(ap.target_type), @provider)")
         bind["provider"] = provider.lower()
+
+    if actively_exploited is not None:
+        filters.append("ap.actively_exploited == @actively_exploited")
+        bind["actively_exploited"] = actively_exploited
 
     cursor_clause = ""
     if cursor:
@@ -145,6 +152,33 @@ async def get_attack_path_stats(
     return ApiResponse(
         data=AttackPathStats(total=total, by_severity=by_severity, new_24h=int(result.get("new_24h", 0)))
     )
+
+
+@router.get("/{path_id}/mitre", response_model=ApiResponse[dict])
+async def get_attack_path_mitre(
+    path_id: str,
+    x_tenant_id: str = Header(..., alias="X-Tenant-Id"),
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> ApiResponse[dict]:
+    """Return MITRE ATT&CK techniques, tactics and APT groups for an attack path."""
+    path_doc: dict[str, Any] | None = None
+    try:
+        result = db.collection("attack_paths").get(path_id)
+        if isinstance(result, dict):
+            path_doc = result
+    except Exception:
+        pass
+
+    if not path_doc or path_doc.get("tenant_id") != x_tenant_id:
+        raise HTTPException(status_code=404, detail="Attack path not found")
+
+    try:
+        admin_db = get_admin_db()
+    except Exception:
+        admin_db = None
+
+    mitre_data = get_techniques_for_path(path_doc, admin_db)
+    return ApiResponse(data=mitre_data)
 
 
 @router.get("/{path_id}", response_model=ApiResponse[AttackPathDetail])
