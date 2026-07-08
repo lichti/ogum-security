@@ -44,9 +44,9 @@ EDGE_COLLECTIONS = [
     "IMPLEMENTS",
     # IAM deep model (Sprint 6)
     "STS_ASSUMEROLE_ALLOW",  # identity A can assume role B (derived from trust policy)
-    "ASSUMES",               # identity A is actively assuming role B
-    "ATTACHED_POLICY",       # identity has policy attached
-    "HAS_ACTIVE_SESSION",    # identity has an active session credential
+    "ASSUMES",  # identity A is actively assuming role B
+    "ATTACHED_POLICY",  # identity has policy attached
+    "HAS_ACTIVE_SESSION",  # identity has an active session credential
 ]
 
 # (collection_name, fields, unique)

@@ -3,8 +3,8 @@
 import pytest
 
 from app.services.graph.privilege_escalation import (
-    ESCALATION_PATTERNS,
     _DANGEROUS_PERMISSION_PATTERNS,
+    ESCALATION_PATTERNS,
 )
 
 

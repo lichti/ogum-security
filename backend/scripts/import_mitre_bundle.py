@@ -190,10 +190,7 @@ def _ensure_admin_schema(db: Any) -> None:
     for col_name, field, unique in _MITRE_INDEXES:
         col = db.collection(col_name)
         existing = col.indexes()
-        already = any(
-            idx.get("fields") == [field] and idx.get("type") == "persistent"
-            for idx in existing
-        )
+        already = any(idx.get("fields") == [field] and idx.get("type") == "persistent" for idx in existing)
         if not already:
             col.add_index({"type": "persistent", "fields": [field], "unique": unique})
 
