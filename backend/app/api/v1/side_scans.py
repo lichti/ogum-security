@@ -214,13 +214,14 @@ async def get_scan_job(
     try:
         if not db.collection("scan_jobs").has(job_id):
             raise HTTPException(status_code=404, detail="Scan job not found")
-        doc: dict[str, Any] = db.collection("scan_jobs").get(job_id)
+        raw = db.collection("scan_jobs").get(job_id)
+        doc: dict[str, Any] = raw if isinstance(raw, dict) else {}
     except HTTPException:
         raise
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to retrieve scan job")
 
-    if doc.get("tenant_id") != x_tenant_id:
+    if not doc or doc.get("tenant_id") != x_tenant_id:
         raise HTTPException(status_code=404, detail="Scan job not found")
 
     return doc
@@ -236,7 +237,8 @@ async def retry_scan_job(
     try:
         if not db.collection("scan_jobs").has(job_id):
             raise HTTPException(status_code=404, detail="Scan job not found")
-        doc: dict[str, Any] = db.collection("scan_jobs").get(job_id)
+        raw = db.collection("scan_jobs").get(job_id)
+        doc: dict[str, Any] = raw if isinstance(raw, dict) else {}
     except HTTPException:
         raise
     except Exception:
