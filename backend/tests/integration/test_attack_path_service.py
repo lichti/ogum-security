@@ -189,3 +189,37 @@ def test_toxic_combinations_flagged_correctly(db_tenant_a) -> None:  # type: ign
     assert len(stored) >= 1, "Expected at least one toxic combination to be persisted"
     for path in stored:
         assert path.get("rule") in {"TC-02", "TC-03", "TC-04"}
+
+
+@pytest.mark.integration
+def test_attack_path_docs_include_mitre_chain_for_toxic_combinations(db_tenant_a) -> None:  # type: ignore[no-untyped-def]
+    """Toxic combination docs must include mitre_chain and mitre_ttps from MITRE_CHAINS."""
+    from app.services.attack_path_service import (
+        build_attack_path_docs,
+        detect_all_toxic_combinations,
+    )
+    from app.services.mitre_service import MITRE_CHAINS
+
+    toxic_raw = detect_all_toxic_combinations(db_tenant_a, TENANT_ID)
+    docs = build_attack_path_docs(db_tenant_a, TENANT_ID, toxic_raw, is_toxic_combination=True)
+
+    for doc in docs:
+        rule = doc.get("rule", "")
+        if rule in MITRE_CHAINS:
+            assert doc.get("mitre_chain") == MITRE_CHAINS[rule], f"Wrong chain for {rule}"
+            assert doc.get("mitre_ttps") == MITRE_CHAINS[rule], f"mitre_ttps mismatch for {rule}"
+        assert "actively_exploited" in doc
+        assert doc["actively_exploited"] is False
+        assert "last_runtime_event_at" in doc
+
+
+@pytest.mark.integration
+def test_non_toxic_paths_have_empty_mitre_chain(db_tenant_a) -> None:  # type: ignore[no-untyped-def]
+    from app.services.attack_path_service import build_attack_path_docs, find_paths_from_internet
+
+    raw = find_paths_from_internet(db_tenant_a, TENANT_ID, max_depth=4)
+    docs = build_attack_path_docs(db_tenant_a, TENANT_ID, raw, is_toxic_combination=False)
+
+    for doc in docs:
+        assert doc.get("mitre_chain") == []
+        assert doc.get("actively_exploited") is False

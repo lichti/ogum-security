@@ -38,6 +38,7 @@ def list_findings(
     resource_type: str | None = None,
     source: str | None = None,
     q: str | None = None,
+    mitre_ttp: str | None = None,
     limit: int = 50,
     cursor: str | None = None,
 ) -> tuple[list[dict[str, Any]], str | None]:
@@ -76,6 +77,9 @@ def list_findings(
             "CONTAINS(f.resource_arn, @q))"
         )
         bind["q"] = q
+    if mitre_ttp:
+        filters.append("@mitre_ttp IN (f.mitre_ttps != null ? f.mitre_ttps : [])")
+        bind["mitre_ttp"] = mitre_ttp
 
     cursor_clause = ""
     if cursor:

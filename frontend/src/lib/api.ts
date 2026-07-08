@@ -174,6 +174,9 @@ export const attackPathsApi = {
 
   get: (pathKey: string) =>
     apiClient.get<ApiResponse<AttackPathDetail>>(`/api/v1/attack-paths/${pathKey}`),
+
+  getMitre: (pathKey: string) =>
+    apiClient.get<ApiResponse<import('./types').MitreIntelligence>>(`/api/v1/attack-paths/${pathKey}/mitre`),
 }
 
 export const identitiesApi = {
