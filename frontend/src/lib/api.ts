@@ -12,8 +12,10 @@ import type {
   FindingsStats,
   IdentityPermissions,
   IdentitySummary,
+  ImageSecurityStatus,
   PagedAttackPaths,
   PagedFindings,
+  PagedSideScanJobs,
   ResourceSummary,
   ResourceDetail,
   InventoryStats,
@@ -29,6 +31,7 @@ import type {
   ScanJob,
   ScanTriggerRequest,
   ScanTriggerResponse,
+  SideScanJob,
 } from './types'
 
 export const apiClient = axios.create({
@@ -228,4 +231,20 @@ export const graphApi = {
 
   exposureSummary: () =>
     apiClient.get<ApiResponse<ExposureSummary>>('/api/v1/graph/exposure'),
+}
+
+export const sideScanApi = {
+  listJobs: (params?: { status?: string; job_type?: string; limit?: number; offset?: number }) =>
+    apiClient.get<PagedSideScanJobs>('/api/v1/side-scans/jobs', { params }),
+
+  getJob: (jobId: string) =>
+    apiClient.get<SideScanJob>(`/api/v1/side-scans/jobs/${jobId}`),
+
+  retryJob: (jobId: string) =>
+    apiClient.post<{ job_id: string; status: string; original_job_id: string }>(
+      `/api/v1/side-scans/jobs/${jobId}/retry`,
+    ),
+
+  imageSecurityStatus: (imageDigest: string) =>
+    apiClient.get<ImageSecurityStatus>(`/api/v1/side-scans/images/${encodeURIComponent(imageDigest)}/security`),
 }

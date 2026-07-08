@@ -32,7 +32,12 @@ import httpx
 from app.db.init import init_tenant_schema
 from app.models.finding import Finding, FindingSource, FindingStatus, SeverityLevel
 from app.services.side_scanning import cvss_to_severity
-from app.services.side_scanning.analyzers.trivy_analyzer import run_trivy_ebs, run_trivy_fs, run_trivy_rootfs
+from app.services.side_scanning.analyzers.trivy_analyzer import (
+    run_trivy_ebs,
+    run_trivy_fs,
+    run_trivy_image,
+    run_trivy_rootfs,
+)
 from app.services.side_scanning.analyzers.yara_analyzer import run_yara
 from app.services.side_scanning.snapshot_manager import (
     create_scan_snapshot,
@@ -1083,4 +1088,219 @@ def scan_k8s_container(  # noqa: PLR0913
         "cve_count": len(vulns),
         "secret_count": len(secrets),
         "sbom_components": len(sbom_json.get("components", [])),
+    }
+
+
+# ─── Sprint 4 helpers ─────────────────────────────────────────────────────────
+
+
+def _generate_sarif(image_uri: str, image_digest: str, trivy_server_url: str) -> dict[str, Any]:
+    """Generate SARIF report for CI/CD integration via trivy image --format sarif."""
+    result = subprocess.run(
+        [
+            "trivy",
+            "client",
+            "--server",
+            trivy_server_url,
+            "image",
+            f"{image_uri}@{image_digest}",
+            "--format",
+            "sarif",
+            "--quiet",
+            "--no-progress",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    if result.returncode not in (0, 1) or not result.stdout.strip():
+        logger.warning("SARIF generation returned %d for %s@%s", result.returncode, image_uri, image_digest[:16])
+        return {}
+    try:
+        parsed: dict[str, Any] = json.loads(result.stdout)
+        return parsed
+    except Exception:
+        logger.exception("Failed to parse SARIF JSON for %s", image_uri)
+        return {}
+
+
+def _persist_sarif(
+    db: Any,
+    sarif_json: dict[str, Any],
+    tenant_id: str,
+    image_uri: str,
+    image_digest: str,
+    job_id: str,
+) -> None:
+    """Upsert a SARIF report document in the sarif_reports collection."""
+    if not sarif_json:
+        return
+    digest_key = image_digest.replace(":", "_").replace("/", "_")[:40]
+    key = f"{tenant_id}_{digest_key}"[:240]
+    doc = {
+        "_key": key,
+        "tenant_id": tenant_id,
+        "image_uri": image_uri,
+        "image_digest": image_digest,
+        "format": "sarif",
+        "content": sarif_json,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "job_id": job_id,
+    }
+    _upsert(db, "sarif_reports", doc, {"generated_at": doc["generated_at"]})
+
+
+def _normalise_misconfig(
+    misconfig: dict[str, Any],
+    *,
+    tenant_id: str,
+    resource_id: str,
+    provider: str,
+    region: str,
+    account_id: str,
+    scan_job_id: str,
+    detection_method: str = "trivy_misconfig",
+) -> Finding:
+    """Normalise a Trivy misconfiguration dict into a Finding."""
+    misconfig_id = misconfig.get("id", "UNKNOWN")
+    check_id = f"misconfig/{misconfig_id}"
+    severity = _trivy_severity(misconfig.get("severity", "UNKNOWN"), 0.0)
+    title = misconfig.get("title") or f"Misconfiguration {misconfig_id}"
+    description = misconfig.get("description") or title
+    return Finding(
+        finding_id=str(uuid.uuid4()),
+        tenant_id=tenant_id,
+        check_id=check_id,
+        title=title[:200],
+        description=description[:500],
+        resource_id=resource_id,
+        resource_type="container_image",
+        severity=severity,
+        status=FindingStatus.FAIL,
+        provider=provider,
+        region=region,
+        account_id=account_id,
+        source=FindingSource.SIDE_SCANNING,
+        scan_job_id=scan_job_id,
+        raw_output={
+            "id": misconfig_id,
+            "resolution": misconfig.get("resolution", ""),
+            "references": misconfig.get("references", []),
+            "target": misconfig.get("target", ""),
+            "detection_method": detection_method,
+        },
+    )
+
+
+# ─── Sprint 4 task ────────────────────────────────────────────────────────────
+
+
+@celery_app.task(bind=True, max_retries=1, default_retry_delay=120, time_limit=1800)
+def scan_container_image(  # noqa: PLR0913
+    self: Any,
+    tenant_id: str,
+    image_uri: str,
+    image_digest: str,
+    provider_id: str,
+    job_id: str,
+    trivy_server_url: str = _TRIVY_SERVER_URL,
+    scanners: str = "vuln,secret,misconfig",
+    region: str = "",
+    account_id: str = "",
+) -> dict[str, Any]:
+    """
+    Scan a container image in ECR/registry via trivy image (no docker run).
+    Generates findings and a SARIF report for CI/CD integration.
+    """
+    db = _get_tenant_db(tenant_id)
+    init_tenant_schema(db)
+    scan_job_id = start_discovery_job(db, tenant_id, "ecr", provider_id)
+    logger.info(
+        "scan_container_image start [tenant=%s image=%s digest=%s job=%s]",
+        tenant_id,
+        image_uri,
+        image_digest[:16],
+        scan_job_id,
+    )
+
+    vulns: list[dict[str, Any]] = []
+    secrets: list[dict[str, Any]] = []
+    misconfigs: list[dict[str, Any]] = []
+    sarif_json: dict[str, Any] = {}
+
+    try:
+        # 1. Scan image — vuln + secret + misconfig
+        vulns, secrets, misconfigs = run_trivy_image(
+            image_uri,
+            image_digest,
+            trivy_server_url=trivy_server_url,
+            scanners=scanners,
+        )
+
+        # 2. SARIF report for CI/CD
+        sarif_json = _generate_sarif(image_uri, image_digest, trivy_server_url)
+
+    finally:
+        complete_discovery_job(db, scan_job_id, len(vulns) + len(secrets) + len(misconfigs))
+
+    # 3. Normalise findings — resource_id is the image digest (stable across tags)
+    resource_id = image_digest.replace(":", "_").replace("/", "_")[:120]
+    findings: list[Finding] = []
+    common = dict(
+        tenant_id=tenant_id,
+        resource_id=resource_id,
+        resource_arn=f"{image_uri}@{image_digest}",
+        provider=provider_id or "aws",
+        region=region,
+        account_id=account_id,
+        scan_job_id=scan_job_id,
+    )
+
+    for v in vulns:
+        findings.append(_normalise_cve_v2(v, **common, detection_method="registry_scan"))
+
+    for s in secrets:
+        findings.append(_normalise_trivy_secret(s, **common, detection_method="trivy_secret_registry"))
+
+    for m in misconfigs:
+        findings.append(
+            _normalise_misconfig(
+                m,
+                tenant_id=tenant_id,
+                resource_id=resource_id,
+                provider=provider_id or "aws",
+                region=region,
+                account_id=account_id,
+                scan_job_id=scan_job_id,
+                detection_method="trivy_misconfig",
+            )
+        )
+
+    for f in findings:
+        try:
+            _upsert_finding(db, f)
+        except Exception:
+            logger.exception("Failed to persist registry finding %s", f.check_id)
+
+    # 4. Persist SARIF
+    try:
+        _persist_sarif(db, sarif_json, tenant_id, image_uri, image_digest, scan_job_id)
+    except Exception:
+        logger.exception("Failed to persist SARIF for %s", image_uri)
+
+    logger.info(
+        "scan_container_image complete [tenant=%s image=%s findings=%d job=%s]",
+        tenant_id,
+        image_uri,
+        len(findings),
+        scan_job_id,
+    )
+    return {
+        "job_id": scan_job_id,
+        "image_uri": image_uri,
+        "digest": image_digest,
+        "findings": len(findings),
+        "cve_count": len(vulns),
+        "secret_count": len(secrets),
+        "misconfig_count": len(misconfigs),
     }

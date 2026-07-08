@@ -407,6 +407,47 @@ export interface EscalationChain {
   chain: string[]
 }
 
+// ─── Side Scanning ────────────────────────────────────────────────────────────
+
+export type SideScanJobStatus = 'queued' | 'running' | 'completed' | 'failed'
+export type SideScanJobType = 'ec2' | 'lambda' | 'k8s_container' | 'ecr' | 'sbom_rescan'
+
+export interface SideScanJob {
+  _key: string
+  tenant_id: string
+  type: SideScanJobType
+  status: SideScanJobStatus
+  resource_id?: string
+  image_uri?: string
+  image_digest?: string
+  pod_name?: string
+  pod_namespace?: string
+  container_name?: string
+  node_name?: string
+  provider_id?: string
+  findings_count?: number
+  error_message?: string | null
+  created_at: string
+  started_at?: string | null
+  completed_at?: string | null
+}
+
+export interface PagedSideScanJobs {
+  items: SideScanJob[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface ImageSecurityStatus {
+  overall_status: 'pass' | 'fail'
+  critical: number
+  high: number
+  medium: number
+  low: number
+  image_digest: string
+}
+
 export interface IdentityPermissions {
   identity_id: string
   identity_key: string

@@ -1,28 +1,21 @@
-"""Side-scanning API — trigger K8s container scans from DaemonSet webhook."""
+"""Side-scanning API — K8s DaemonSet webhook, ECR webhook, jobs management."""
 
 from __future__ import annotations
 
 import time
+from typing import Any
 
 from arango.database import StandardDatabase
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from app.api.v1.inventory import get_tenant_db
-from app.workers.tasks.side_scanning import scan_k8s_container
+from app.workers.tasks.side_scanning import scan_container_image, scan_k8s_container
 
 router = APIRouter(prefix="/api/v1/side-scans", tags=["side-scans"])
 
 
-class K8sScanWebhookPayload(BaseModel):
-    pod_name: str
-    pod_namespace: str
-    container_name: str
-    pid: int
-    node_name: str
-    resource_id: str
-    provider_id: str
-    job_id: str | None = None
+# ─── Token validation ─────────────────────────────────────────────────────────
 
 
 def _validate_scanner_token(db: StandardDatabase, tenant_id: str, token: str) -> None:
@@ -44,6 +37,20 @@ def _validate_scanner_token(db: StandardDatabase, tenant_id: str, token: str) ->
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+# ─── K8s DaemonSet webhook ───────────────────────────────────────────────────
+
+
+class K8sScanWebhookPayload(BaseModel):
+    pod_name: str
+    pod_namespace: str
+    container_name: str
+    pid: int
+    node_name: str
+    resource_id: str
+    provider_id: str
+    job_id: str | None = None
+
+
 @router.post("/webhooks/k8s-scan", status_code=202)
 async def receive_k8s_scan_trigger(
     payload: K8sScanWebhookPayload,
@@ -59,7 +66,6 @@ async def receive_k8s_scan_trigger(
 
     job_id = payload.job_id or f"k8s-{payload.pod_namespace}-{payload.pod_name}-{int(time.time())}"
 
-    # Create a queued scan_jobs record
     job_doc = {
         "_key": job_id,
         "tenant_id": x_ogum_tenant_id,
@@ -91,3 +97,246 @@ async def receive_k8s_scan_trigger(
     )
 
     return {"job_id": job_id, "status": "queued"}
+
+
+# ─── ECR push webhook ─────────────────────────────────────────────────────────
+
+
+class ECRWebhookPayload(BaseModel):
+    image_uri: str
+    image_digest: str
+    repository_name: str
+    registry_id: str
+    provider_id: str
+    job_id: str | None = None
+
+
+@router.post("/webhooks/ecr", status_code=202)
+async def receive_ecr_push_event(
+    payload: ECRWebhookPayload,
+    x_ogum_tenant_id: str = Header(...),
+    x_ogum_token: str = Header(...),
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> dict:
+    """Receive an ECR push event, enqueue scan_container_image. Returns 202 Accepted."""
+    _validate_scanner_token(db, x_ogum_tenant_id, x_ogum_token)
+
+    job_id = payload.job_id or f"ecr-{payload.registry_id}-{int(time.time())}"
+
+    job_doc = {
+        "_key": job_id,
+        "tenant_id": x_ogum_tenant_id,
+        "type": "ecr",
+        "status": "queued",
+        "image_uri": payload.image_uri,
+        "image_digest": payload.image_digest,
+        "repository_name": payload.repository_name,
+        "registry_id": payload.registry_id,
+        "provider_id": payload.provider_id,
+        "created_at": str(int(time.time())),
+    }
+    try:
+        if not db.collection("scan_jobs").has(job_id):
+            db.collection("scan_jobs").insert(job_doc)
+    except Exception:
+        pass
+
+    scan_container_image.delay(
+        tenant_id=x_ogum_tenant_id,
+        image_uri=payload.image_uri,
+        image_digest=payload.image_digest,
+        provider_id=payload.provider_id,
+        job_id=job_id,
+    )
+
+    return {"job_id": job_id, "status": "queued"}
+
+
+# ─── Jobs API ─────────────────────────────────────────────────────────────────
+
+_RETRY_TASK_MAP: dict[str, str] = {
+    "k8s_container": "app.workers.tasks.side_scanning.scan_k8s_container",
+    "ecr": "app.workers.tasks.side_scanning.scan_container_image",
+    "ec2": "app.workers.tasks.side_scanning.scan_ec2_instance_v2",
+    "lambda": "app.workers.tasks.side_scanning.scan_lambda_function",
+    "sbom_rescan": "app.workers.tasks.side_scanning.rescan_sboms",
+}
+
+
+@router.get("/jobs")
+async def list_scan_jobs(
+    status: str | None = Query(None),
+    job_type: str | None = Query(None),
+    limit: int = Query(50, le=200),
+    offset: int = Query(0),
+    db: StandardDatabase = Depends(get_tenant_db),
+    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+) -> dict[str, Any]:
+    """List scan jobs for the tenant with optional status/type filters."""
+    filters = "FILTER j.tenant_id == @tid"
+    bind_vars: dict[str, Any] = {"tid": x_tenant_id, "limit": limit, "offset": offset}
+
+    if status:
+        filters += " AND j.status == @status"
+        bind_vars["status"] = status
+    if job_type:
+        filters += " AND j.type == @job_type"
+        bind_vars["job_type"] = job_type
+
+    aql = f"""
+        LET total = LENGTH(FOR j IN scan_jobs {filters} RETURN 1)
+        LET items = (
+            FOR j IN scan_jobs
+            {filters}
+            SORT j.created_at DESC
+            LIMIT @offset, @limit
+            RETURN j
+        )
+        RETURN {{total, items}}
+    """
+    try:
+        result = list(db.aql.execute(aql, bind_vars=bind_vars))
+        if not result:
+            return {"items": [], "total": 0, "limit": limit, "offset": offset}
+        row = result[0]
+        return {"items": row.get("items", []), "total": row.get("total", 0), "limit": limit, "offset": offset}
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to query scan jobs")
+
+
+@router.get("/jobs/{job_id}")
+async def get_scan_job(
+    job_id: str,
+    db: StandardDatabase = Depends(get_tenant_db),
+    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+) -> dict[str, Any]:
+    """Get a specific scan job by ID. Returns 404 if not found or belongs to another tenant."""
+    try:
+        if not db.collection("scan_jobs").has(job_id):
+            raise HTTPException(status_code=404, detail="Scan job not found")
+        doc: dict[str, Any] = db.collection("scan_jobs").get(job_id)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to retrieve scan job")
+
+    if doc.get("tenant_id") != x_tenant_id:
+        raise HTTPException(status_code=404, detail="Scan job not found")
+
+    return doc
+
+
+@router.post("/jobs/{job_id}/retry")
+async def retry_scan_job(
+    job_id: str,
+    db: StandardDatabase = Depends(get_tenant_db),
+    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+) -> dict[str, Any]:
+    """Re-enqueue a failed scan job. Returns 404 if not found, 422 if not in failed state."""
+    try:
+        if not db.collection("scan_jobs").has(job_id):
+            raise HTTPException(status_code=404, detail="Scan job not found")
+        doc: dict[str, Any] = db.collection("scan_jobs").get(job_id)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to retrieve scan job")
+
+    if doc.get("tenant_id") != x_tenant_id:
+        raise HTTPException(status_code=404, detail="Scan job not found")
+
+    if doc.get("status") != "failed":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Job status is '{doc.get('status')}', only 'failed' jobs can be retried",
+        )
+
+    job_type = doc.get("type", "")
+    new_job_id = f"retry-{job_id}-{int(time.time())}"
+
+    # Create new queued job record
+    new_doc = {
+        **doc,
+        "_key": new_job_id,
+        "status": "queued",
+        "created_at": str(int(time.time())),
+        "error_message": None,
+    }
+    new_doc.pop("_id", None)
+    new_doc.pop("_rev", None)
+    try:
+        db.collection("scan_jobs").insert(new_doc)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to create retry job")
+
+    # Dispatch appropriate task based on job type
+    if job_type == "ecr":
+        scan_container_image.delay(
+            tenant_id=x_tenant_id,
+            image_uri=doc.get("image_uri", ""),
+            image_digest=doc.get("image_digest", ""),
+            provider_id=doc.get("provider_id", ""),
+            job_id=new_job_id,
+        )
+    elif job_type == "k8s_container":
+        scan_k8s_container.delay(
+            tenant_id=x_tenant_id,
+            pod_name=doc.get("pod_name", ""),
+            pod_namespace=doc.get("pod_namespace", ""),
+            container_name=doc.get("container_name", ""),
+            pid=doc.get("pid", 0),
+            node_name=doc.get("node_name", ""),
+            resource_id=doc.get("resource_id", ""),
+            provider_id=doc.get("provider_id", ""),
+            job_id=new_job_id,
+        )
+    else:
+        # Generic retry — update status to queued, caller must handle
+        pass
+
+    return {"job_id": new_job_id, "status": "queued", "original_job_id": job_id}
+
+
+# ─── Image security badge ────────────────────────────────────────────────────
+
+
+@router.get("/images/{image_digest}/security")
+async def get_image_security_status(
+    image_digest: str,
+    db: StandardDatabase = Depends(get_tenant_db),
+    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+) -> dict[str, Any]:
+    """
+    Badge endpoint for CI/CD pipelines.
+    Returns overall_status (pass|fail) and CVE counts by severity.
+    """
+    digest_resource_id = image_digest.replace(":", "_").replace("/", "_")[:120]
+
+    aql = """
+        FOR f IN findings
+        FILTER f.tenant_id == @tid
+        AND f.resource_id == @resource_id
+        AND f.status == "FAIL"
+        COLLECT severity = f.severity WITH COUNT INTO cnt
+        RETURN {severity, cnt}
+    """
+    try:
+        rows = list(db.aql.execute(aql, bind_vars={"tid": x_tenant_id, "resource_id": digest_resource_id}))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to query findings")
+
+    counts: dict[str, int] = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    for row in rows:
+        sev = row.get("severity", "")
+        if sev in counts:
+            counts[sev] = row.get("cnt", 0)
+
+    has_critical_or_high = counts["CRITICAL"] > 0 or counts["HIGH"] > 0
+    return {
+        "overall_status": "fail" if has_critical_or_high else "pass",
+        "critical": counts["CRITICAL"],
+        "high": counts["HIGH"],
+        "medium": counts["MEDIUM"],
+        "low": counts["LOW"],
+        "image_digest": image_digest,
+    }
