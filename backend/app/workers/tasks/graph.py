@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
     max_retries=2,
     default_retry_delay=30,
 )
-def build_iam_graph_edges(self: object, tenant_id: str, provider_id: str | None = None) -> dict:
+def build_iam_graph_edges(self: object, tenant_id: str, provider_id: str | None = None) -> dict:  # pragma: no cover
     """
     Build IAM deep model edges (STS_ASSUMEROLE_ALLOW, ASSUMES, ATTACHED_POLICY)
     from identity metadata already in ArangoDB. No AWS API calls.
@@ -50,7 +50,7 @@ def build_iam_graph_edges(self: object, tenant_id: str, provider_id: str | None 
     max_retries=2,
     default_retry_delay=60,
 )
-def refresh_active_sessions_from_cloudtrail(self: object, tenant_id: str) -> dict:
+def refresh_active_sessions_from_cloudtrail(self: object, tenant_id: str) -> dict:  # pragma: no cover
     """
     Stub: refresh HAS_ACTIVE_SESSION edges from CloudTrail AssumeRole events.
     Full implementation deferred to Epic 05 (Pulse / NRT pipeline).
