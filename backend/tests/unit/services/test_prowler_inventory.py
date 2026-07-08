@@ -403,6 +403,7 @@ class TestToJsonable:
 
     def test_datetime_becomes_isoformat(self):
         from datetime import UTC, datetime
+
         dt = datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC)
         result = _to_jsonable(dt)
         assert result == "2024-01-15T12:00:00+00:00"
@@ -411,6 +412,7 @@ class TestToJsonable:
         class Opaque:
             def __str__(self):
                 return "opaque-value"
+
         assert _to_jsonable(Opaque()) == "opaque-value"
 
     def test_pydantic_v1_model_serialized(self):
