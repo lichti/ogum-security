@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import urllib.request
 from typing import Any
@@ -167,6 +168,37 @@ def _upsert_all(db: Any, collection: str, docs: list[dict[str, Any]], *, edge: b
 
 
 # ---------------------------------------------------------------------------
+# Schema bootstrap (standalone — no dependency on app package)
+# ---------------------------------------------------------------------------
+
+_MITRE_VERTEX_COLLECTIONS = ["mitre_techniques", "mitre_tactics", "mitre_groups"]
+_MITRE_EDGE_COLLECTIONS = ["APT_USES"]
+_MITRE_INDEXES = [
+    ("mitre_techniques", "technique_id", True),
+    ("mitre_groups", "group_id", True),
+    ("mitre_tactics", "tactic_id", True),
+]
+
+
+def _ensure_admin_schema(db: Any) -> None:
+    for name in _MITRE_VERTEX_COLLECTIONS:
+        if not db.has_collection(name):
+            db.create_collection(name)
+    for name in _MITRE_EDGE_COLLECTIONS:
+        if not db.has_collection(name):
+            db.create_collection(name, edge=True)
+    for col_name, field, unique in _MITRE_INDEXES:
+        col = db.collection(col_name)
+        existing = col.indexes()
+        already = any(
+            idx.get("fields") == [field] and idx.get("type") == "persistent"
+            for idx in existing
+        )
+        if not already:
+            col.add_index({"type": "persistent", "fields": [field], "unique": unique})
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -174,10 +206,10 @@ def _upsert_all(db: Any, collection: str, docs: list[dict[str, Any]], *, edge: b
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Import MITRE ATT&CK bundle into ArangoDB")
     parser.add_argument("--bundle-url", default=_DEFAULT_BUNDLE_URL, help="URL of enterprise-attack.json")
-    parser.add_argument("--db-host", default="localhost")
-    parser.add_argument("--db-port", type=int, default=8529)
-    parser.add_argument("--db-user", default="root")
-    parser.add_argument("--db-password", default="changeme")
+    parser.add_argument("--db-host", default=os.environ.get("ARANGO_HOST", "localhost"))
+    parser.add_argument("--db-port", type=int, default=int(os.environ.get("ARANGO_PORT", "8529")))
+    parser.add_argument("--db-user", default=os.environ.get("ARANGO_USER", "root"))
+    parser.add_argument("--db-password", default=os.environ.get("ARANGO_PASSWORD", "changeme"))
     parser.add_argument("--local-file", default=None, help="Use a local STIX bundle file instead of downloading")
     args = parser.parse_args(argv)
 
@@ -217,9 +249,7 @@ def main(argv: list[str] | None = None) -> int:
             sys_db.create_database("ogum_admin")
         db = client.db("ogum_admin", username=args.db_user, password=args.db_password)
 
-        from app.db.init import init_admin_schema
-
-        init_admin_schema(db)
+        _ensure_admin_schema(db)
     except Exception as exc:
         logger.error("Failed to connect to ArangoDB: %s", exc)
         return 1
