@@ -154,7 +154,8 @@ def scan_with_ebs_direct(
         raise RuntimeError(f"trivy client exited {result.returncode} for snapshot {snapshot_id}: {result.stderr[:500]}")
     if not result.stdout.strip():
         return {"Results": []}
-    return json.loads(result.stdout)
+    parsed: dict[str, Any] = json.loads(result.stdout)
+    return parsed
 
 
 def list_ogum_snapshots(ec2_client: Any) -> list[dict[str, Any]]:
