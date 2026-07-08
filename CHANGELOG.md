@@ -29,6 +29,14 @@ Commit types that trigger version bumps:
 - **16 unit tests for Sprint 2**: `TestRunTrivyEbs` (7 tests — parse vulns, parse secrets, severity precedence, empty output, nonzero exit, ignorefile flag, target field); `TestDeleteSnapshotSafe` (2 tests — success and non-raising error); `TestScanWithEbsDirect` (4 tests — command structure, ignorefile, nonzero exit, empty stdout).
 - **9 integration tests for Sprint 2** in `test_side_scanning_v2.py`: `TestScanEc2InstanceV2` (snapshot lifecycle, 2+1 findings persisted, SBOM+edge stored, cleanup on trivy error, severity from Trivy field not CVSS); `TestScanLambdaFunction` (ZIP download+scan+finding, cleanup on error); `TestRescanSboms` (SBOM found+rescanned, empty DB, severity from Trivy field).
 
+- **K8s container scan via DaemonSet (Epic 03 Sprint 3)**: `scan_k8s_container` Celery task scans running containers via `/proc/<PID>/root` without restarting pods. `run_trivy_rootfs()` added to `trivy_analyzer.py` — calls `trivy client rootfs {path}` against the sidecar server with `--skip-dirs /proc,/sys,/dev,/run` to avoid virtual filesystem loops. SBOM generated per container scan via `_generate_sbom_rootfs()`. Findings use `detection_method: k8s_proc_root` (CVEs) and `trivy_secret_k8s` (secrets), linked to the Pod vertex via `HAS_FINDING`.
+- **DaemonSet manifest**: `infra/k8s/ogum-scanner-daemonset.yaml` — `hostPID: true`, `privileged: true`, `hostPath: /proc` mounted at `/host/proc`, minimal ClusterRole (`get/list` on `pods/nodes` only — no access to Secrets or ConfigMaps), `hostNetwork: false`.
+- **K8s scan webhook**: `POST /api/v1/side-scans/webhooks/k8s-scan` — DaemonSet posts scan trigger; backend validates `x-ogum-token` against `tenant_config.scanner_token`, creates `scan_jobs` record, enqueues `scan_k8s_container` task, returns `202`.
+- **5 unit tests** for `run_trivy_rootfs`: parse vulns, parse secrets (no Match field), nonzero exit raises RuntimeError, empty output returns empty lists, `--skip-dirs` included in command.
+- **5 integration tests** (`test_side_scanning_k8s.py`): findings persisted in ArangoDB, SBOM+edge stored, FileNotFoundError on missing proc path, tenant isolation (security), severity from Trivy field.
+- **3 integration tests** (`test_k8s_webhook.py`): valid token → 202 + task enqueued + scan_jobs created, invalid token → 401, missing header → 422.
+- **`infra/k8s/`** directory created for Kubernetes manifests.
+
 ### Changed
 
 - `delete_snapshot_safe()` now logs but does not raise on failure (previously re-raised). Sprint 1 task cleanup blocks that wrapped it in try/except are unchanged and still safe.
