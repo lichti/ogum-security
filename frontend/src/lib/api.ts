@@ -4,7 +4,9 @@ import type {
   AttackPathDetail,
   AttackPathFilters,
   AttackPathStats,
+  AqlResult,
   ComplianceSummary,
+  ExposureSummary,
   FindingDetail,
   FindingsFilter,
   FindingsStats,
@@ -22,6 +24,8 @@ import type {
   ProviderUpdateRequest,
   DiscoverRequest,
   DiscoverResponse,
+  SavedQuery,
+  ShortestPathResult,
   ScanJob,
   ScanTriggerRequest,
   ScanTriggerResponse,
@@ -185,4 +189,43 @@ export const identitiesApi = {
 
   permissions: (identityKey: string) =>
     apiClient.get<ApiResponse<IdentityPermissions>>(`/api/v1/identities/${identityKey}/permissions`),
+}
+
+export const graphApi = {
+  setCrownJewel: (resourceId: string, isCrownJewel: boolean) =>
+    apiClient.patch<ApiResponse<{ resource_id: string; is_crown_jewel: boolean }>>(
+      `/api/v1/graph/resources/${resourceId}/crown-jewel`,
+      { is_crown_jewel: isCrownJewel },
+    ),
+
+  listCrownJewels: () =>
+    apiClient.get<ApiResponse<Record<string, unknown>[]>>('/api/v1/graph/crown-jewels'),
+
+  executeAql: (query: string, bindVars?: Record<string, unknown>) =>
+    apiClient.post<ApiResponse<AqlResult>>('/api/v1/graph/aql', {
+      query,
+      bind_vars: bindVars ?? {},
+    }),
+
+  listSavedQueries: () =>
+    apiClient.get<ApiResponse<SavedQuery[]>>('/api/v1/graph/queries'),
+
+  saveQuery: (name: string, query: string, description?: string) =>
+    apiClient.post<ApiResponse<SavedQuery>>('/api/v1/graph/queries', {
+      name,
+      query,
+      description: description ?? '',
+    }),
+
+  deleteQuery: (queryId: string) =>
+    apiClient.delete<ApiResponse<{ deleted: string }>>(`/api/v1/graph/queries/${queryId}`),
+
+  shortestPath: (fromId: string, toId: string, maxDepth?: number) =>
+    apiClient.get<ApiResponse<ShortestPathResult>>(
+      `/api/v1/graph/paths/${encodeURIComponent(fromId)}/${encodeURIComponent(toId)}`,
+      { params: { max_depth: maxDepth } },
+    ),
+
+  exposureSummary: () =>
+    apiClient.get<ApiResponse<ExposureSummary>>('/api/v1/graph/exposure'),
 }

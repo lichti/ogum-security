@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import attack_paths, compliance, findings, iac_scans, identities, inventory, providers, scans
+from app.api.v1 import attack_paths, compliance, findings, graph, iac_scans, identities, inventory, providers, scans
 from app.api.v1 import dev as dev_module
 from app.api.v1.admin import jobs as admin_jobs
 from app.core.config import settings
@@ -36,5 +36,6 @@ app.include_router(findings.router)
 app.include_router(compliance.router)
 app.include_router(iac_scans.router)
 app.include_router(attack_paths.router)
+app.include_router(graph.router)
 app.include_router(admin_jobs.router)
 app.include_router(dev_module.router)  # endpoints return 404 unless DEV_MODE=true
