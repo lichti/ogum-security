@@ -53,6 +53,47 @@ output "test_resources" {
       privesc_05_role = aws_iam_role.privesc_attach_role_policy.name
       privesc_10_role = aws_iam_role.privesc_passrole_ec2.name
     }
+    crown_jewels = {
+      dynamodb_customer_data = aws_dynamodb_table.customer_data.arn
+      dynamodb_audit_log     = aws_dynamodb_table.audit_log.arn
+      secret_db_credentials  = aws_secretsmanager_secret.db_credentials.arn
+      ssm_api_config         = aws_ssm_parameter.api_config.arn
+    }
+  }
+}
+
+output "attack_paths" {
+  description = "Expected attack paths for Ogum.Graph validation"
+  value = {
+    toxic_combination_1 = {
+      description = "Internet-exposed EC2 with wildcard IAM role reaching Crown Jewel data"
+      severity    = "CRITICAL"
+      path = var.create_ec2_instances ? [
+        "Internet (0.0.0.0/0)",
+        "EC2 ${aws_instance.public_exposed[0].id} (SSH open, IMDSv2 optional)",
+        "IAM role ${aws_iam_role.overprivileged.name} (Action: *)",
+        "DynamoDB ${aws_dynamodb_table.customer_data.name} (PII, CrownJewel=true)",
+      ] : ["Create EC2 instances to enable this path (create_ec2_instances=true)"]
+    }
+    toxic_combination_2 = {
+      description = "Lambda with access to secrets and PII data (if Lambda is compromised)"
+      severity    = "HIGH"
+      path = [
+        "Lambda ${aws_lambda_function.hello_clean.function_name}",
+        "IAM role ${aws_iam_role.lambda_exec.name} (crown-jewel-read policy)",
+        "SecretsManager ${aws_secretsmanager_secret.db_credentials.name} (CrownJewel=true)",
+        "DynamoDB ${aws_dynamodb_table.customer_data.name} (PII, CrownJewel=true)",
+      ]
+    }
+    privesc_chain_1 = {
+      description = "Developer to AdminAccess via 2-hop assume-role chain"
+      severity    = "CRITICAL"
+      path = [
+        "IAM user ${aws_iam_user.dev_user.name}",
+        "IAM role ${aws_iam_role.devops_role.name} (mid-tier)",
+        "IAM role ${aws_iam_role.privesc_admin_target.name} (AdministratorAccess)",
+      ]
+    }
   }
 }
 
