@@ -642,20 +642,23 @@ class TestIAMEnrichment:
             init_tenant_schema(db_tenant_a)
 
             # Simulate Prowler CSPM inserting a DynamoDB data_asset before discovery runs
-            db_tenant_a.collection("data_assets").insert({
-                "_key": "prowler_dynamo_customer_data",
-                "tenant_id": TEST_TENANT_A,
-                "resource_type": "dynamo_db_table",
-                "name": "customer-data",
-                "status": "active",
-            })
+            db_tenant_a.collection("data_assets").insert(
+                {
+                    "_key": "prowler_dynamo_customer_data",
+                    "tenant_id": TEST_TENANT_A,
+                    "resource_type": "dynamo_db_table",
+                    "name": "customer-data",
+                    "status": "active",
+                }
+            )
 
             discover_aws_basic.apply(args=[TEST_TENANT_A, ["us-east-1"]]).get()
 
         edges = list(db_tenant_a.collection("STORES_SENSITIVE_DATA").all())
         targets = {e["_to"] for e in edges}
-        assert "data_assets/prowler_dynamo_customer_data" in targets, \
+        assert "data_assets/prowler_dynamo_customer_data" in targets, (
             "Prowler-discovered DynamoDB must receive STORES_SENSITIVE_DATA edge from admin role"
+        )
 
     def test_s3_public_access_block_disabled_sets_is_public(self, db_tenant_a, mocker) -> None:
         """S3 bucket without public access block must be discovered with is_public=true."""
