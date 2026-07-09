@@ -462,12 +462,14 @@ def _list_s3_buckets(s3_client: Any, tenant_id: str) -> list[DataAsset]:
         is_public = False
         try:
             pab = s3_client.get_public_access_block(Bucket=name).get("PublicAccessBlockConfiguration", {})
-            is_public = not all([
-                pab.get("BlockPublicAcls", True),
-                pab.get("BlockPublicPolicy", True),
-                pab.get("IgnorePublicAcls", True),
-                pab.get("RestrictPublicBuckets", True),
-            ])
+            is_public = not all(
+                [
+                    pab.get("BlockPublicAcls", True),
+                    pab.get("BlockPublicPolicy", True),
+                    pab.get("IgnorePublicAcls", True),
+                    pab.get("RestrictPublicBuckets", True),
+                ]
+            )
         except ClientError:
             # NoSuchPublicAccessBlockConfiguration → bucket has no block config → potentially public
             is_public = True
