@@ -15,6 +15,12 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Attack path `STORES_SENSITIVE_DATA` edge coverage**: `_create_data_access_edges` now queries the full `data_assets` collection instead of only S3 buckets from the current discovery run. DynamoDB tables, SecretsManager secrets, and any other data assets discovered by Prowler CSPM now correctly receive edges from admin IAM identities, enabling TC-03 detection.
+- **EC2 → IAM role `ASSUMES_ROLE` edge (profile name mismatch)**: `_create_resource_edges` now uses `_build_profile_role_map` (one paginated `list_instance_profiles` call) to resolve instance profile names to role arango keys. Previously the lookup silently failed when the profile name differed from the role name (e.g., `foo-profile` vs `foo-role`).
+- **S3 `is_public` detection**: `_list_s3_buckets` now calls `get_public_access_block` per bucket and sets `is_public=true` when any block setting is disabled. Buckets with no public access block configuration (the default prior to 2023) are also marked `is_public=true`.
+
 ### Added
 
 - **Side-scanning EBS Direct API (Epic 03 Sprint 2)**: `scan_ec2_instance_v2` Celery task replaces the volume/mount pipeline with `trivy client vm ebs:{snapshot_id}` — no volume creation, no OS mount required. Snapshots are deleted in `finally` via `delete_snapshot_safe` (now non-raising). New `run_trivy_ebs()` in `trivy_analyzer.py` returns `(vulnerabilities, secrets)` using Trivy's `Severity` field as the primary severity source (CVSS only as fallback for `UNKNOWN`).
