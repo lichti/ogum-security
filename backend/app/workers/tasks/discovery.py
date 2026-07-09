@@ -29,6 +29,7 @@ from app.models.inventory import (
     Provider,
     ResourceStatus,
 )
+from app.services.graph.iam_edges import build_iam_edges
 from app.workers.celery_app import celery_app
 from app.workers.tasks._job_tracking import complete_discovery_job, fail_discovery_job, start_discovery_job
 
@@ -316,20 +317,99 @@ def _list_ec2_instances(ec2_client: Any, tenant_id: str, region: str) -> list[AW
     return instances
 
 
-@retry_with_backoff()
+_DANGEROUS_IAM_ACTIONS = frozenset(
+    [
+        "iam:createpolicyversion",
+        "iam:setdefaultpolicyversion",
+        "iam:attachrolepolicy",
+        "iam:attachuserpolicy",
+        "iam:putuserpolicy",
+        "iam:createaccesskey",
+        "lambda:updatefunctioncode",
+        "iam:passrole",
+    ]
+)
+
+_ADMIN_POLICY_NAME_SUFFIXES = frozenset(
+    [
+        "/AdministratorAccess",
+        "/PowerUserAccess",
+    ]
+)
+
+
+def _classify_iam_role(
+    iam_client: Any,
+    role_name: str,
+    attached_policy_arns: list[str],
+) -> tuple[bool, list[str]]:
+    """
+    Return (has_admin_policy, dangerous_permissions) for a role.
+
+    Checks attached managed policy ARNs for known admin policies (by name suffix
+    so it works with both AWS-managed and customer-managed policies in tests),
+    then inspects inline policies for wildcard or dangerous actions.
+    """
+    has_admin = any(arn.endswith(suffix) for arn in attached_policy_arns for suffix in _ADMIN_POLICY_NAME_SUFFIXES)
+    dangerous: list[str] = []
+
+    try:
+        inline_resp = iam_client.list_role_policies(RoleName=role_name)
+        for policy_name in inline_resp.get("PolicyNames", []):
+            try:
+                doc_resp = iam_client.get_role_policy(RoleName=role_name, PolicyName=policy_name)
+                doc = doc_resp.get("PolicyDocument", {})
+                for stmt in doc.get("Statement", []):
+                    if str(stmt.get("Effect", "")).upper() != "ALLOW":
+                        continue
+                    actions_raw = stmt.get("Action", [])
+                    actions: list[str] = [actions_raw] if isinstance(actions_raw, str) else actions_raw
+                    for action in actions:
+                        a = action.lower()
+                        if a == "*" or a == "iam:*":
+                            has_admin = True
+                            if "*" not in dangerous:
+                                dangerous.append("*")
+                        elif a in _DANGEROUS_IAM_ACTIONS and a not in dangerous:
+                            dangerous.append(action)
+            except ClientError:
+                pass
+    except ClientError:
+        pass
+
+    return has_admin, dangerous
+
+
 def _list_iam_roles(iam_client: Any, tenant_id: str) -> list[Identity]:
     identities: list[Identity] = []
     paginator = iam_client.get_paginator("list_roles")
 
     for page in paginator.paginate():
         for role in page.get("Roles", []):
+            role_name: str = role["RoleName"]
+            trust_policy: dict[str, Any] = role.get("AssumeRolePolicyDocument", {})
+
+            # Fetch attached managed policies (extra call per role)
+            policy_arns: list[str] = []
+            try:
+                attached = iam_client.list_attached_role_policies(RoleName=role_name)
+                policy_arns = [p["PolicyArn"] for p in attached.get("AttachedPolicies", [])]
+            except ClientError:
+                pass
+
+            has_admin, dangerous = _classify_iam_role(iam_client, role_name, policy_arns)
+
             identities.append(
                 Identity(
                     tenant_id=tenant_id,
                     provider=Provider.AWS,
                     identity_type=IdentityType.IAM_ROLE,
-                    name=role["RoleName"],
+                    name=role_name,
                     arn=role["Arn"],
+                    policies=policy_arns,
+                    has_admin_policy=has_admin,
+                    dangerous_permissions=dangerous,
+                    trust_policy=trust_policy,
                     raw_metadata={
                         "role_id": role.get("RoleId"),
                         "path": role.get("Path"),
@@ -909,6 +989,38 @@ def _create_resource_edges(
     return count
 
 
+def _create_data_access_edges(
+    db: Any,
+    tenant_id: str,
+    admin_identity_keys: list[str],
+    data_asset_keys: list[str],
+) -> int:
+    """
+    Create STORES_SENSITIVE_DATA edges from admin identities to all data assets.
+
+    These edges are required for TC-03 (overpermissioned identity → data asset)
+    and for find_paths_from_internet traversal to reach data_assets.
+    Only run when both collections are non-empty.
+    """
+    if not admin_identity_keys or not data_asset_keys:
+        return 0
+
+    extra = {"tenant_id": tenant_id}
+    count = 0
+    for identity_key in admin_identity_keys:
+        for asset_key in data_asset_keys:
+            _upsert_edge(
+                db,
+                "STORES_SENSITIVE_DATA",
+                f"identities/{identity_key}",
+                f"data_assets/{asset_key}",
+                extra,
+            )
+            count += 1
+
+    return count
+
+
 # ─── Celery tasks ──────────────────────────────────────────────────────────────
 
 
@@ -965,6 +1077,13 @@ def discover_aws_basic(
         _upsert(db, "data_assets", asset.to_arango_doc(), asset.to_arango_update())
         data_asset_keys.add(asset.arango_key())
     logger.info("S3: %d buckets discovered [tenant=%s]", len(buckets), tenant_id)
+
+    # IAM deep model: STS_ASSUMEROLE_ALLOW edges from trust policies
+    build_iam_edges(db, tenant_id)
+
+    # STORES_SENSITIVE_DATA: admin identities → all data assets
+    admin_keys = [r.arango_key() for r in roles if r.has_admin_policy]
+    _create_data_access_edges(db, tenant_id, admin_keys, list(data_asset_keys))
 
     # ── Soft-delete stale resources ───────────────────────────────────────────
     deleted_resources = _mark_stale_deleted(
@@ -1257,6 +1376,22 @@ def discover_aws(
         role_key_map=role_key_map,
         iam_groups=iam_groups,
         user_arn_to_key=user_arn_to_key,
+    )
+
+    # IAM deep model: STS_ASSUMEROLE_ALLOW edges from trust policies
+    iam_edge_counts = build_iam_edges(db, tenant_id)
+    logger.info("IAM deep model edges [tenant=%s]: %s", tenant_id, iam_edge_counts)
+
+    # STORES_SENSITIVE_DATA: admin identities → all data assets (enables TC-03 + internet path detection)
+    admin_keys = [r.arango_key() for r in roles if r.has_admin_policy]
+    data_edges = _create_data_access_edges(db, tenant_id, admin_keys, list(data_asset_keys))
+    total_edges += data_edges
+    logger.info(
+        "Data access edges [tenant=%s]: %d STORES_SENSITIVE_DATA from %d admin roles to %d data assets",
+        tenant_id,
+        data_edges,
+        len(admin_keys),
+        len(data_asset_keys),
     )
 
     # ── Soft-delete stale resources ───────────────────────────────────────────

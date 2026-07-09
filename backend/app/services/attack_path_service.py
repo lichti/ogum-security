@@ -118,11 +118,13 @@ def find_privilege_escalation_paths(
 
     Returns a list of escalation path dicts.
     """
+    # STS_ASSUMEROLE_ALLOW and ASSUMES edges connect identities to identities.
+    # ASSUMES_ROLE is used for resources→identities (EC2/Lambda → IAM role) only.
     aql = """
     FOR start IN identities
         FILTER start.tenant_id == @tenant_id
         FOR v, e, p IN 1..@max_depth OUTBOUND start
-            ASSUMES_ROLE
+            STS_ASSUMEROLE_ALLOW, ASSUMES
             PRUNE v.tenant_id != @tenant_id
             FILTER v.tenant_id == @tenant_id
             FILTER STARTS_WITH(v._id, "identities/")
@@ -225,7 +227,7 @@ def _detect_tc03_overpermissioned_to_db(db: Any, tenant_id: str) -> list[dict[st
         FILTER i.has_admin_policy == true
             OR (i.dangerous_permissions != null AND LENGTH(i.dangerous_permissions) > 0)
         FOR v, e, p IN 1..3 OUTBOUND i
-            ASSUMES_ROLE, STORES_SENSITIVE_DATA
+            STS_ASSUMEROLE_ALLOW, ASSUMES, STORES_SENSITIVE_DATA
             PRUNE v.tenant_id != @tenant_id
             FILTER v.tenant_id == @tenant_id
             FILTER STARTS_WITH(v._id, "data_assets/")

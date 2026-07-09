@@ -135,6 +135,10 @@ class Identity(BaseModel):
     granted_actions: list[str] = Field(default_factory=list)
     used_actions_90d: list[str] = Field(default_factory=list)
     privilege_gap_score: int = 0
+    # Graph enrichment fields — set during IAM classification after discovery
+    has_admin_policy: bool = False
+    dangerous_permissions: list[str] = Field(default_factory=list)
+    trust_policy: dict[str, Any] | None = None
     status: ResourceStatus = ResourceStatus.ACTIVE
     last_scanned_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
@@ -166,6 +170,9 @@ class Identity(BaseModel):
             "status": self.status,
             "policies": self.policies,
             "granted_actions": self.granted_actions,
+            "has_admin_policy": self.has_admin_policy,
+            "dangerous_permissions": self.dangerous_permissions,
+            "trust_policy": self.trust_policy,
             "raw_metadata": self.raw_metadata,
         }
 

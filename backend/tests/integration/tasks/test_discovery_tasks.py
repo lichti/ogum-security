@@ -511,3 +511,110 @@ class TestRelationshipEdgeCreation:
         """)
         results = list(cursor)
         assert len(results) >= 1, "2-hop traversal IGW→VPC→EC2 must return at least one instance"
+
+
+@pytest.mark.integration
+class TestIAMEnrichment:
+    """IAM enrichment: has_admin_policy, dangerous_permissions, STORES_SENSITIVE_DATA edges."""
+
+    def test_admin_role_sets_has_admin_policy(self, db_tenant_a, mocker) -> None:
+        """A role with AdministratorAccess must have has_admin_policy=true in the graph."""
+        mocker.patch("app.workers.tasks.discovery._get_tenant_db", return_value=db_tenant_a)
+
+        with mock_aws():
+            iam = boto3.client("iam", region_name="us-east-1")
+            iam.create_role(
+                RoleName="AdminRole",
+                AssumeRolePolicyDocument='{"Version":"2012-10-17","Statement":[]}',
+            )
+            # moto does not ship AWS managed policies — create it explicitly
+            policy = iam.create_policy(
+                PolicyName="AdministratorAccess",
+                PolicyDocument='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"*","Resource":"*"}]}',
+            )
+            iam.attach_role_policy(RoleName="AdminRole", PolicyArn=policy["Policy"]["Arn"])
+            s3 = boto3.client("s3", region_name="us-east-1")
+            s3.create_bucket(Bucket="some-bucket")
+
+            init_tenant_schema(db_tenant_a)
+            discover_aws_basic.apply(args=[TEST_TENANT_A, ["us-east-1"]]).get()
+
+        identities = list(db_tenant_a.collection("identities").all())
+        admin_roles = [i for i in identities if i["name"] == "AdminRole"]
+        assert len(admin_roles) == 1
+        assert admin_roles[0]["has_admin_policy"] is True
+
+    def test_inline_wildcard_sets_has_admin_policy(self, db_tenant_a, mocker) -> None:
+        """A role with an inline policy containing Action:* must have has_admin_policy=true."""
+        mocker.patch("app.workers.tasks.discovery._get_tenant_db", return_value=db_tenant_a)
+
+        with mock_aws():
+            iam = boto3.client("iam", region_name="us-east-1")
+            iam.create_role(
+                RoleName="WildcardRole",
+                AssumeRolePolicyDocument='{"Version":"2012-10-17","Statement":[]}',
+            )
+            iam.put_role_policy(
+                RoleName="WildcardRole",
+                PolicyName="wildcard",
+                PolicyDocument='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"*","Resource":"*"}]}',
+            )
+
+            init_tenant_schema(db_tenant_a)
+            discover_aws_basic.apply(args=[TEST_TENANT_A, ["us-east-1"]]).get()
+
+        identities = list(db_tenant_a.collection("identities").all())
+        wildcard_roles = [i for i in identities if i["name"] == "WildcardRole"]
+        assert len(wildcard_roles) == 1
+        assert wildcard_roles[0]["has_admin_policy"] is True
+
+    def test_admin_role_creates_stores_sensitive_data_edges(self, db_tenant_a, mocker) -> None:
+        """Admin identity must have STORES_SENSITIVE_DATA edges to all data_assets."""
+        mocker.patch("app.workers.tasks.discovery._get_tenant_db", return_value=db_tenant_a)
+
+        with mock_aws():
+            iam = boto3.client("iam", region_name="us-east-1")
+            iam.create_role(
+                RoleName="AdminRole2",
+                AssumeRolePolicyDocument='{"Version":"2012-10-17","Statement":[]}',
+            )
+            policy = iam.create_policy(
+                PolicyName="AdministratorAccess",
+                PolicyDocument='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"*","Resource":"*"}]}',
+            )
+            iam.attach_role_policy(RoleName="AdminRole2", PolicyArn=policy["Policy"]["Arn"])
+            s3 = boto3.client("s3", region_name="us-east-1")
+            s3.create_bucket(Bucket="bucket-a")
+            s3.create_bucket(Bucket="bucket-b")
+
+            init_tenant_schema(db_tenant_a)
+            discover_aws_basic.apply(args=[TEST_TENANT_A, ["us-east-1"]]).get()
+
+        edges = list(db_tenant_a.collection("STORES_SENSITIVE_DATA").all())
+        assert len(edges) >= 2, "admin role must have STORES_SENSITIVE_DATA edge to each data asset"
+        froms = {e["_from"] for e in edges}
+        assert any("AdminRole2" in f for f in froms)
+
+    def test_non_admin_role_has_no_data_access_edges(self, db_tenant_a, mocker) -> None:
+        """Least-privilege roles must not get STORES_SENSITIVE_DATA edges."""
+        mocker.patch("app.workers.tasks.discovery._get_tenant_db", return_value=db_tenant_a)
+
+        with mock_aws():
+            iam = boto3.client("iam", region_name="us-east-1")
+            iam.create_role(
+                RoleName="ReadOnlyRole",
+                AssumeRolePolicyDocument='{"Version":"2012-10-17","Statement":[]}',
+            )
+            read_policy = iam.create_policy(
+                PolicyName="AmazonS3ReadOnlyAccess",
+                PolicyDocument='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:Get*","s3:List*"],"Resource":"*"}]}',
+            )
+            iam.attach_role_policy(RoleName="ReadOnlyRole", PolicyArn=read_policy["Policy"]["Arn"])
+            s3 = boto3.client("s3", region_name="us-east-1")
+            s3.create_bucket(Bucket="some-data-bucket")
+
+            init_tenant_schema(db_tenant_a)
+            discover_aws_basic.apply(args=[TEST_TENANT_A, ["us-east-1"]]).get()
+
+        edges = list(db_tenant_a.collection("STORES_SENSITIVE_DATA").all())
+        assert len(edges) == 0, "read-only role must not create STORES_SENSITIVE_DATA edges"
