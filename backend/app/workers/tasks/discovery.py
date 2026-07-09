@@ -458,6 +458,20 @@ def _list_s3_buckets(s3_client: Any, tenant_id: str) -> list[DataAsset]:
         except ClientError:
             region = "us-east-1"
 
+        # A bucket is potentially public if any public access block setting is disabled.
+        is_public = False
+        try:
+            pab = s3_client.get_public_access_block(Bucket=name).get("PublicAccessBlockConfiguration", {})
+            is_public = not all([
+                pab.get("BlockPublicAcls", True),
+                pab.get("BlockPublicPolicy", True),
+                pab.get("IgnorePublicAcls", True),
+                pab.get("RestrictPublicBuckets", True),
+            ])
+        except ClientError:
+            # NoSuchPublicAccessBlockConfiguration → bucket has no block config → potentially public
+            is_public = True
+
         assets.append(
             DataAsset(
                 tenant_id=tenant_id,
@@ -465,6 +479,7 @@ def _list_s3_buckets(s3_client: Any, tenant_id: str) -> list[DataAsset]:
                 asset_type="s3_bucket",
                 name=name,
                 arn=f"arn:aws:s3:::{name}",
+                is_public=is_public,
                 raw_metadata={
                     "creation_date": str(bucket.get("CreationDate", "")),
                     "region": region,
@@ -896,6 +911,29 @@ def _list_iam_groups(iam_client: Any, tenant_id: str) -> list[Identity]:
 # ─── Relationship edge creation ───────────────────────────────────────────────
 
 
+@retry_with_backoff()
+def _build_profile_role_map(iam_client: Any, role_key_map: dict[str, str]) -> dict[str, str]:
+    """Map instance profile names → role arango keys via list_instance_profiles.
+
+    Instance profile names often differ from role names (e.g., "foo-profile" vs "foo-role"),
+    so a direct role_key_map lookup fails. This function resolves the correct role key
+    for any profile name seen on EC2 instances.
+    """
+    profile_map: dict[str, str] = {}
+    try:
+        paginator = iam_client.get_paginator("list_instance_profiles")
+        for page in paginator.paginate():
+            for profile in page.get("InstanceProfiles", []):
+                profile_name = profile["InstanceProfileName"]
+                for role in profile.get("Roles", []):
+                    role_name = role["RoleName"]
+                    if role_name in role_key_map:
+                        profile_map[profile_name] = role_key_map[role_name]
+    except ClientError:
+        logger.warning("Unable to list IAM instance profiles for edge mapping")
+    return profile_map
+
+
 def _create_resource_edges(
     db: Any,
     *,
@@ -906,6 +944,7 @@ def _create_resource_edges(
     vpc_key_map: dict[str, str],
     sg_key_map: dict[str, str],
     role_key_map: dict[str, str],
+    profile_to_role_key: dict[str, str],
     iam_groups: list[Identity],
     user_arn_to_key: dict[str, str],
 ) -> int:
@@ -928,18 +967,14 @@ def _create_resource_edges(
                 _upsert_edge(db, "ATTACHED_TO", f"resources/{sg_key_map[sg_id]}", ec2_handle, extra)
                 count += 1
 
-        # ASSUMES_ROLE: EC2 → IAM Role (via instance profile, same-name heuristic)
+        # ASSUMES_ROLE: EC2 → IAM Role (via instance profile)
+        # profile_to_role_key handles the case where profile name ≠ role name
         profile_arn = ec2.raw_metadata.get("iam_instance_profile")
         if profile_arn:
             profile_name = profile_arn.rstrip("/").split("/")[-1]
-            if profile_name in role_key_map:
-                _upsert_edge(
-                    db,
-                    "ASSUMES_ROLE",
-                    ec2_handle,
-                    f"identities/{role_key_map[profile_name]}",
-                    extra,
-                )
+            role_key = profile_to_role_key.get(profile_name) or role_key_map.get(profile_name)
+            if role_key:
+                _upsert_edge(db, "ASSUMES_ROLE", ec2_handle, f"identities/{role_key}", extra)
                 count += 1
 
     # ROUTES_TRAFFIC: IGW → VPC
@@ -993,16 +1028,29 @@ def _create_data_access_edges(
     db: Any,
     tenant_id: str,
     admin_identity_keys: list[str],
-    data_asset_keys: list[str],
 ) -> int:
     """
     Create STORES_SENSITIVE_DATA edges from admin identities to all data assets.
 
-    These edges are required for TC-03 (overpermissioned identity → data asset)
-    and for find_paths_from_internet traversal to reach data_assets.
-    Only run when both collections are non-empty.
+    Queries the full data_assets collection (including Prowler-discovered assets
+    such as DynamoDB, SecretsManager, etc.) instead of relying on the current
+    discovery run's key list.
     """
-    if not admin_identity_keys or not data_asset_keys:
+    if not admin_identity_keys:
+        return 0
+
+    # Include data_assets discovered by Prowler CSPM (DynamoDB, SecretsManager, etc.)
+    # that are not returned by _list_s3_buckets alone.
+    aql = """
+    FOR d IN data_assets
+        FILTER d.tenant_id == @tenant_id
+        FILTER d.status != "deleted"
+        RETURN d._key
+    """
+    cursor = db.aql.execute(aql, bind_vars={"tenant_id": tenant_id})
+    data_asset_keys = list(cursor)
+
+    if not data_asset_keys:
         return 0
 
     extra = {"tenant_id": tenant_id}
@@ -1081,9 +1129,9 @@ def discover_aws_basic(
     # IAM deep model: STS_ASSUMEROLE_ALLOW edges from trust policies
     build_iam_edges(db, tenant_id)
 
-    # STORES_SENSITIVE_DATA: admin identities → all data assets
+    # STORES_SENSITIVE_DATA: admin identities → all data assets (S3 + Prowler-discovered)
     admin_keys = [r.arango_key() for r in roles if r.has_admin_policy]
-    _create_data_access_edges(db, tenant_id, admin_keys, list(data_asset_keys))
+    _create_data_access_edges(db, tenant_id, admin_keys)
 
     # ── Soft-delete stale resources ───────────────────────────────────────────
     deleted_resources = _mark_stale_deleted(
@@ -1364,6 +1412,9 @@ def discover_aws(
         _upsert(db, "data_assets", asset.to_arango_doc(), asset.to_arango_update())
         data_asset_keys.add(asset.arango_key())
 
+    # Instance profile → role key map (profile name often differs from role name)
+    profile_to_role_key = _build_profile_role_map(iam_client, role_key_map)
+
     # ── Relationship edges ────────────────────────────────────────────────────
     total_edges = _create_resource_edges(
         db,
@@ -1374,6 +1425,7 @@ def discover_aws(
         vpc_key_map=vpc_key_map,
         sg_key_map=sg_key_map,
         role_key_map=role_key_map,
+        profile_to_role_key=profile_to_role_key,
         iam_groups=iam_groups,
         user_arn_to_key=user_arn_to_key,
     )
@@ -1382,16 +1434,15 @@ def discover_aws(
     iam_edge_counts = build_iam_edges(db, tenant_id)
     logger.info("IAM deep model edges [tenant=%s]: %s", tenant_id, iam_edge_counts)
 
-    # STORES_SENSITIVE_DATA: admin identities → all data assets (enables TC-03 + internet path detection)
+    # STORES_SENSITIVE_DATA: admin identities → all data assets (S3 + Prowler-discovered DynamoDB, SM, etc.)
     admin_keys = [r.arango_key() for r in roles if r.has_admin_policy]
-    data_edges = _create_data_access_edges(db, tenant_id, admin_keys, list(data_asset_keys))
+    data_edges = _create_data_access_edges(db, tenant_id, admin_keys)
     total_edges += data_edges
     logger.info(
-        "Data access edges [tenant=%s]: %d STORES_SENSITIVE_DATA from %d admin roles to %d data assets",
+        "Data access edges [tenant=%s]: %d STORES_SENSITIVE_DATA from %d admin roles",
         tenant_id,
         data_edges,
         len(admin_keys),
-        len(data_asset_keys),
     )
 
     # ── Soft-delete stale resources ───────────────────────────────────────────

@@ -618,3 +618,86 @@ class TestIAMEnrichment:
 
         edges = list(db_tenant_a.collection("STORES_SENSITIVE_DATA").all())
         assert len(edges) == 0, "read-only role must not create STORES_SENSITIVE_DATA edges"
+
+    def test_prowler_discovered_assets_get_stores_sensitive_data_edges(self, db_tenant_a, mocker) -> None:
+        """STORES_SENSITIVE_DATA edges must cover ALL data_assets, including Prowler-discovered ones.
+
+        Simulates a DynamoDB table added directly to the DB (as Prowler CSPM would do) before
+        discover_aws_basic runs. The admin role must receive a STORES_SENSITIVE_DATA edge to it.
+        """
+        mocker.patch("app.workers.tasks.discovery._get_tenant_db", return_value=db_tenant_a)
+
+        with mock_aws():
+            iam = boto3.client("iam", region_name="us-east-1")
+            iam.create_role(
+                RoleName="AdminRoleProwler",
+                AssumeRolePolicyDocument='{"Version":"2012-10-17","Statement":[]}',
+            )
+            policy = iam.create_policy(
+                PolicyName="AdministratorAccess",
+                PolicyDocument='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"*","Resource":"*"}]}',
+            )
+            iam.attach_role_policy(RoleName="AdminRoleProwler", PolicyArn=policy["Policy"]["Arn"])
+
+            init_tenant_schema(db_tenant_a)
+
+            # Simulate Prowler CSPM inserting a DynamoDB data_asset before discovery runs
+            db_tenant_a.collection("data_assets").insert({
+                "_key": "prowler_dynamo_customer_data",
+                "tenant_id": TEST_TENANT_A,
+                "resource_type": "dynamo_db_table",
+                "name": "customer-data",
+                "status": "active",
+            })
+
+            discover_aws_basic.apply(args=[TEST_TENANT_A, ["us-east-1"]]).get()
+
+        edges = list(db_tenant_a.collection("STORES_SENSITIVE_DATA").all())
+        targets = {e["_to"] for e in edges}
+        assert "data_assets/prowler_dynamo_customer_data" in targets, \
+            "Prowler-discovered DynamoDB must receive STORES_SENSITIVE_DATA edge from admin role"
+
+    def test_s3_public_access_block_disabled_sets_is_public(self, db_tenant_a, mocker) -> None:
+        """S3 bucket without public access block must be discovered with is_public=true."""
+        mocker.patch("app.workers.tasks.discovery._get_tenant_db", return_value=db_tenant_a)
+
+        with mock_aws():
+            iam = boto3.client("iam", region_name="us-east-1")
+            iam.create_role(
+                RoleName="MinimalRole",
+                AssumeRolePolicyDocument='{"Version":"2012-10-17","Statement":[]}',
+            )
+            s3 = boto3.client("s3", region_name="us-east-1")
+            # Public bucket: disable all public access block settings
+            s3.create_bucket(Bucket="public-test-bucket")
+            s3.put_public_access_block(
+                Bucket="public-test-bucket",
+                PublicAccessBlockConfiguration={
+                    "BlockPublicAcls": False,
+                    "BlockPublicPolicy": False,
+                    "IgnorePublicAcls": False,
+                    "RestrictPublicBuckets": False,
+                },
+            )
+            # Private bucket: all blocks enabled
+            s3.create_bucket(Bucket="private-test-bucket")
+            s3.put_public_access_block(
+                Bucket="private-test-bucket",
+                PublicAccessBlockConfiguration={
+                    "BlockPublicAcls": True,
+                    "BlockPublicPolicy": True,
+                    "IgnorePublicAcls": True,
+                    "RestrictPublicBuckets": True,
+                },
+            )
+
+            init_tenant_schema(db_tenant_a)
+            discover_aws_basic.apply(args=[TEST_TENANT_A, ["us-east-1"]]).get()
+
+        assets = {
+            a["name"]: a["is_public"]
+            for a in db_tenant_a.collection("data_assets").all()
+            if "test-bucket" in a.get("name", "")
+        }
+        assert assets.get("public-test-bucket") is True, "public bucket must have is_public=true"
+        assert assets.get("private-test-bucket") is False, "private bucket must have is_public=false"
