@@ -6,7 +6,12 @@ Topology:
                                                 --STORES_SENSITIVE_DATA-->  [S3 bucket w/ credentials]
     [public S3 bucket]  (no edges — TC-02 toxic combination direct detection)
     [K8s pod w/ host_network]  (no edges — TC-04 detection)
-    [overpermissioned IAM user] --ASSUMES_ROLE--> [admin role] --STORES_SENSITIVE_DATA--> [RDS DB]
+    [overpermissioned IAM user] --STS_ASSUMEROLE_ALLOW--> [admin role] --STORES_SENSITIVE_DATA--> [RDS DB]
+
+Edge collection naming convention:
+    ASSUMES_ROLE          — resources→identities (EC2/Lambda → IAM Role)
+    STS_ASSUMEROLE_ALLOW  — identities→identities (derived from role trust policies)
+    ASSUMES               — identities→identities (active assumed-role sessions)
 """
 
 from __future__ import annotations
@@ -120,7 +125,7 @@ NETWORK_ENDPOINTS = [
 # ---- Edge collections ----
 
 ASSUMES_ROLE_EDGES = [
-    # EC2 can assume the admin role
+    # EC2 → IAM Role (resource→identity: ASSUMES_ROLE is correct here)
     {
         "_key": "ec2-public-001__iam-role-admin",
         "_from": "resources/ec2-public-001",
@@ -128,13 +133,17 @@ ASSUMES_ROLE_EDGES = [
         "tenant_id": TENANT_ID,
         "relation_type": "ASSUMES_ROLE",
     },
-    # DevUser can assume the admin role (privilege escalation)
+]
+
+# STS_ASSUMEROLE_ALLOW: identity→identity assume-role relationships (derived from trust policies)
+STS_ASSUMEROLE_ALLOW_EDGES = [
+    # DevUser can assume the admin role (privilege escalation — identity→identity)
     {
         "_key": "iam-user-overpriv__iam-role-admin",
         "_from": "identities/iam-user-overpriv",
         "_to": "identities/iam-role-admin",
         "tenant_id": TENANT_ID,
-        "relation_type": "ASSUMES_ROLE",
+        "relation_type": "STS_ASSUMEROLE_ALLOW",
     },
 ]
 
@@ -212,6 +221,7 @@ def seed_graph(db: object) -> None:
 
     for collection_name, edges in [
         ("ASSUMES_ROLE", ASSUMES_ROLE_EDGES),
+        ("STS_ASSUMEROLE_ALLOW", STS_ASSUMEROLE_ALLOW_EDGES),
         ("STORES_SENSITIVE_DATA", STORES_SENSITIVE_DATA_EDGES),
     ]:
         col = db.collection(collection_name)
@@ -242,6 +252,7 @@ def teardown_graph(db: object) -> None:
 
     for collection_name, edges in [
         ("ASSUMES_ROLE", ASSUMES_ROLE_EDGES),
+        ("STS_ASSUMEROLE_ALLOW", STS_ASSUMEROLE_ALLOW_EDGES),
         ("STORES_SENSITIVE_DATA", STORES_SENSITIVE_DATA_EDGES),
     ]:
         col = db.collection(collection_name)
