@@ -53,6 +53,7 @@ from app.workers.celery_app import celery_app
 from app.workers.tasks._job_tracking import (
     complete_discovery_job,
     start_discovery_job,
+    update_job_to_running,
 )
 from app.workers.tasks.discovery import _get_aws_session, _get_tenant_db, _upsert
 
@@ -336,7 +337,7 @@ def scan_ec2_instance(  # noqa: PLR0913
     """Agentless EC2 scan via ephemeral EBS snapshot."""
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
-    job_id = start_discovery_job(db, tenant_id, "aws", provider_key)
+    job_id = start_discovery_job(db, tenant_id, "aws", provider_key, job_type="ec2")
     logger.info(
         "side_scanning start [tenant=%s instance=%s volume=%s job=%s]",
         tenant_id,
@@ -621,7 +622,7 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
     """
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
-    scan_job_id = start_discovery_job(db, tenant_id, "aws", provider_id)
+    scan_job_id = start_discovery_job(db, tenant_id, "aws", provider_id, job_type="ec2")
     logger.info(
         "scan_ec2_instance_v2 start [tenant=%s instance=%s volume=%s job=%s]",
         tenant_id,
@@ -732,7 +733,7 @@ def scan_lambda_function(  # noqa: PLR0913
     """
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
-    scan_job_id = start_discovery_job(db, tenant_id, "aws", provider_id)
+    scan_job_id = start_discovery_job(db, tenant_id, "aws", provider_id, job_type="lambda")
     logger.info(
         "scan_lambda_function start [tenant=%s function=%s job=%s]",
         tenant_id,
@@ -996,7 +997,9 @@ def scan_k8s_container(  # noqa: PLR0913
     """
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
-    scan_job_id = start_discovery_job(db, tenant_id, "k8s", provider_id)
+    # job_id is pre-created by the K8s webhook with type="k8s_container"; just flip to running
+    scan_job_id = job_id
+    update_job_to_running(db, scan_job_id)
     logger.info(
         "scan_k8s_container start [tenant=%s pod=%s/%s container=%s pid=%d job=%s]",
         tenant_id,
@@ -1214,7 +1217,9 @@ def scan_container_image(  # noqa: PLR0913
     """
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
-    scan_job_id = start_discovery_job(db, tenant_id, "ecr", provider_id)
+    # job_id is pre-created by the ECR webhook with type="ecr"; just flip to running
+    scan_job_id = job_id
+    update_job_to_running(db, scan_job_id)
     logger.info(
         "scan_container_image start [tenant=%s image=%s digest=%s job=%s]",
         tenant_id,

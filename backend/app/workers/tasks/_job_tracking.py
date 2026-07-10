@@ -20,6 +20,7 @@ def start_discovery_job(
     provider: str,
     provider_key: str | None,
     regions: list[str] | None = None,
+    job_type: str | None = None,
 ) -> str:
     """Insert a scan_job doc with status=running. Returns job_id."""
     job_id = str(uuid.uuid4())
@@ -28,6 +29,7 @@ def start_discovery_job(
         "_key": job_id,
         "job_id": job_id,
         "task_name": f"discovery/{provider}",
+        "type": job_type or provider,
         "tenant_id": tenant_id,
         "provider_id": provider_key or "",
         "provider": provider,
@@ -64,6 +66,21 @@ def complete_discovery_job(db: Any, job_id: str, resources_discovered: int) -> N
             )
     except Exception:
         logger.debug("Failed to complete discovery job record job_id=%s", job_id)
+
+
+def update_job_to_running(db: Any, job_id: str) -> None:
+    """Transition a pre-created (webhook-queued) job doc to status=running."""
+    try:
+        if db.has_collection("scan_jobs"):
+            db.collection("scan_jobs").update(
+                {
+                    "_key": job_id,
+                    "status": "running",
+                    "started_at": datetime.now(UTC).isoformat(),
+                }
+            )
+    except Exception:
+        logger.debug("Failed to update job to running job_id=%s", job_id)
 
 
 def fail_discovery_job(db: Any, job_id: str, error_message: str) -> None:
