@@ -69,6 +69,7 @@ export interface InventoryFilters {
 export interface FindingsStats {
   by_severity: Record<string, number>
   by_status: Record<string, number>
+  by_provider: Record<string, number>
   total: number
 }
 
@@ -120,14 +121,14 @@ export interface PagedFindings {
 }
 
 export interface FindingsFilter {
-  provider?: string
-  severity?: SeverityLevel
-  status?: FindingStatus
-  framework?: string
+  provider?: string[]
+  severity?: SeverityLevel[]
+  status?: FindingStatus[]
+  framework?: string[]
   region?: string
   account_id?: string
   resource_type?: string
-  source?: FindingSource
+  source?: FindingSource[]
   q?: string
   limit: number
   cursor?: string

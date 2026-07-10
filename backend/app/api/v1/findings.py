@@ -49,20 +49,20 @@ class FindingStatusUpdate(BaseModel):
 async def list_findings_endpoint(
     x_tenant_id: str = Header(..., alias="X-Tenant-Id"),
     db: StandardDatabase = Depends(get_tenant_db),
-    provider: str | None = Query(default=None),
-    severity: str | None = Query(default=None),
-    status: str | None = Query(default=None),
-    framework: str | None = Query(default=None),
+    provider: list[str] | None = Query(default=None),
+    severity: list[str] | None = Query(default=None),
+    status: list[str] | None = Query(default=None),
+    framework: list[str] | None = Query(default=None),
     region: str | None = Query(default=None),
     account_id: str | None = Query(default=None),
     resource_type: str | None = Query(default=None),
-    source: str | None = Query(default=None),
+    source: list[str] | None = Query(default=None),
     q: str | None = Query(default=None, description="Full-text search in title, check_id, resource_arn"),
     mitre_ttp: str | None = Query(default=None, description="Filter by MITRE ATT&CK technique ID (e.g. T1078)"),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None),
 ) -> ApiResponse[PagedFindings]:
-    if provider and provider not in _VALID_PROVIDERS:
+    if provider and not set(provider) <= _VALID_PROVIDERS:
         raise HTTPException(status_code=422, detail=f"provider must be one of {sorted(_VALID_PROVIDERS)}")
 
     items, next_cursor = list_findings(
@@ -88,6 +88,7 @@ async def list_findings_endpoint(
 class FindingsStats(BaseModel):
     by_severity: dict[str, int]
     by_status: dict[str, int]
+    by_provider: dict[str, int]
     total: int
 
 
@@ -96,7 +97,7 @@ async def findings_stats_endpoint(
     x_tenant_id: str = Header(..., alias="X-Tenant-Id"),
     db: StandardDatabase = Depends(get_tenant_db),
 ) -> ApiResponse[FindingsStats]:
-    """Aggregate counts by severity and status — used by the dashboard."""
+    """Aggregate counts by severity, status, and provider — used by the dashboard."""
     aql = """
     FOR f IN findings
       FILTER f.tenant_id == @tid
@@ -119,7 +120,19 @@ async def findings_stats_endpoint(
             by_status[sta] += count
         total += count
 
-    return ApiResponse(data=FindingsStats(by_severity=by_severity, by_status=by_status, total=total))
+    provider_aql = """
+    FOR f IN findings
+      FILTER f.tenant_id == @tid
+      COLLECT provider = f.provider WITH COUNT INTO c
+      RETURN { provider, c }
+    """
+    by_provider: dict[str, int] = {}
+    for row in db.aql.execute(provider_aql, bind_vars={"tid": x_tenant_id}):
+        by_provider[row["provider"]] = row["c"]
+
+    return ApiResponse(
+        data=FindingsStats(by_severity=by_severity, by_status=by_status, by_provider=by_provider, total=total)
+    )
 
 
 _EXPORT_FIELDS = [
@@ -193,14 +206,14 @@ def export_findings_endpoint(
     x_tenant_id: str = Header(..., alias="X-Tenant-Id"),
     db: StandardDatabase = Depends(get_tenant_db),
     format: Literal["csv", "json"] = Query(default="csv"),
-    provider: str | None = Query(default=None),
-    severity: str | None = Query(default=None),
-    status: str | None = Query(default=None),
-    framework: str | None = Query(default=None),
+    provider: list[str] | None = Query(default=None),
+    severity: list[str] | None = Query(default=None),
+    status: list[str] | None = Query(default=None),
+    framework: list[str] | None = Query(default=None),
     region: str | None = Query(default=None),
     account_id: str | None = Query(default=None),
     resource_type: str | None = Query(default=None),
-    source: str | None = Query(default=None),
+    source: list[str] | None = Query(default=None),
     q: str | None = Query(default=None),
 ) -> StreamingResponse:
     """Stream findings as CSV or OCSF-aligned JSON with active filters applied."""
