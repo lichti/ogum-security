@@ -17,7 +17,7 @@ from typing import Any
 
 import boto3
 from arango import ArangoClient
-from botocore.exceptions import ClientError, NoCredentialsError
+from botocore.exceptions import ClientError, EndpointConnectionError, NoCredentialsError
 
 from app.core.config import settings
 from app.db.init import init_tenant_schema
@@ -62,6 +62,16 @@ def retry_with_backoff(
             for attempt in range(max_retries):
                 try:
                     return func(*args, **kwargs)
+                except EndpointConnectionError as exc:
+                    # Service endpoint unreachable (DNS failure, region not enabled, VPC endpoint
+                    # missing). Not retryable — log and return empty list so the caller skips
+                    # this resource type without aborting the entire discovery run.
+                    logger.warning(
+                        "Endpoint unreachable in %s — skipping (reason: %s)",
+                        func.__name__,
+                        exc,
+                    )
+                    return []
                 except ClientError as exc:
                     code = exc.response["Error"]["Code"]
                     if code not in _RETRYABLE_CODES or attempt == max_retries - 1:
