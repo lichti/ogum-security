@@ -136,16 +136,33 @@ export interface FindingsFilter {
 
 // ─── Compliance ────────────────────────────────────────────────────────────────
 
-export interface FrameworkScore {
-  id: string
+export interface ComplianceSection {
+  key: string
+  label: string
   pass: number
   fail: number
   total: number
   score: number
 }
 
+export interface ComplianceVersion {
+  id: string
+  version_label: string
+  pass: number
+  fail: number
+  total: number
+  score: number
+  sections: ComplianceSection[]
+}
+
+export interface ComplianceFamily {
+  family: string
+  label: string
+  versions: ComplianceVersion[]
+}
+
 export interface ComplianceSummary {
-  frameworks: FrameworkScore[]
+  families: ComplianceFamily[]
   threat_score: number
   top_failing: { check_id: string; title: string; severity: SeverityLevel; count: number }[]
 }

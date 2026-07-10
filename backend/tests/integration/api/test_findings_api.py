@@ -188,6 +188,30 @@ class TestListFindings:
         resp = api_client.get("/api/v1/findings?provider=aws&provider=invalid", headers=HEADERS)
         assert resp.status_code == 422
 
+    def test_filter_by_framework_prefix_matches_full_control_mapping(self, api_client, db_tenant_a):
+        """Compliance page links to /findings?framework=CIS-7.0 (a family/version id, no
+        control suffix) — it must match findings whose framework_mapping is the full
+        "CIS-7.0/1.1" string, not just an exact "CIS-7.0" match."""
+        _seed_finding(db_tenant_a, "cis-001", framework_mapping=["CIS-7.0/1.1"])
+        _seed_finding(db_tenant_a, "cis-002", framework_mapping=["CIS-1.4/1.1"])
+        _seed_finding(db_tenant_a, "other-001", framework_mapping=["SOC2"])
+
+        resp = api_client.get("/api/v1/findings?framework=CIS-7.0", headers=HEADERS)
+
+        items = resp.json()["data"]["items"]
+        assert len(items) == 1
+        assert items[0]["_key"] == "cis-001"
+
+    def test_filter_by_bare_framework_still_matches_exactly(self, api_client, db_tenant_a):
+        _seed_finding(db_tenant_a, "soc2-001", framework_mapping=["SOC2"])
+        _seed_finding(db_tenant_a, "cis-003", framework_mapping=["CIS-7.0/1.1"])
+
+        resp = api_client.get("/api/v1/findings?framework=SOC2", headers=HEADERS)
+
+        items = resp.json()["data"]["items"]
+        assert len(items) == 1
+        assert items[0]["_key"] == "soc2-001"
+
     def test_missing_header_returns_422(self, api_client):
         resp = api_client.get("/api/v1/findings")
         assert resp.status_code == 422

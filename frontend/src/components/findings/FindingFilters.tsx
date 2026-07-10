@@ -7,7 +7,11 @@ import type { FindingsFilter, FindingStatus, FindingSource, SeverityLevel } from
 const SEVERITIES: SeverityLevel[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFORMATIONAL']
 const STATUSES: FindingStatus[] = ['FAIL', 'PASS', 'MUTED', 'ACCEPTED']
 const PROVIDERS = ['aws', 'azure', 'gcp', 'k8s']
-const FRAMEWORKS = ['CIS-AWS-2.0', 'PCI_DSS', 'SOC2', 'ISO27001', 'NIST_800_53']
+// Raw Prowler framework slugs (must match the "framework_mapping" prefixes actually
+// stored on findings — see backend/app/services/compliance_frameworks.py). The
+// previous list ("CIS-AWS-2.0", "PCI_DSS", "NIST_800_53"...) never matched any real
+// data, so selecting a framework here always silently returned zero results.
+const FRAMEWORKS = ['CIS-7.0', 'PCI-4.0', 'SOC2', 'ISO27001-2022', 'NIST-800-53-Revision-5', 'HIPAA', 'GDPR']
 const SOURCES: FindingSource[] = ['cspm', 'iac']
 
 function toOptions(values: string[]): { value: string; label: string }[] {
