@@ -52,10 +52,10 @@ def list_resources(
     db: StandardDatabase,
     tenant_id: str,
     *,
-    provider: str | None = None,
-    resource_type: str | None = None,
-    account_id: str | None = None,
-    region: str | None = None,
+    provider: list[str] | None = None,
+    resource_type: list[str] | None = None,
+    account_id: list[str] | None = None,
+    region: list[str] | None = None,
     status: str | None = None,
     search: str | None = None,
     limit: int = 50,
@@ -75,19 +75,19 @@ def list_resources(
         filter_clauses.append("FILTER r.status != 'deleted'")
 
     if provider:
-        filter_clauses.append("FILTER r.provider == @provider")
+        filter_clauses.append("FILTER r.provider IN @provider")
         bind_vars["provider"] = provider
 
     if resource_type:
-        filter_clauses.append("FILTER r.resource_type == @resource_type")
+        filter_clauses.append("FILTER r.resource_type IN @resource_type")
         bind_vars["resource_type"] = resource_type
 
     if account_id:
-        filter_clauses.append("FILTER r.account_id == @account_id")
+        filter_clauses.append("FILTER r.account_id IN @account_id")
         bind_vars["account_id"] = account_id
 
     if region:
-        filter_clauses.append("FILTER r.region == @region")
+        filter_clauses.append("FILTER r.region IN @region")
         bind_vars["region"] = region
 
     if search:
@@ -229,6 +229,8 @@ def get_inventory_stats(
 ) -> InventoryStats:
     by_provider: dict[str, int] = {}
     by_resource_type: dict[str, int] = {}
+    by_region: dict[str, int] = {}
+    by_account_id: dict[str, int] = {}
     by_status: dict[str, int] = {}
     identity_count = 0
     data_asset_count = 0
@@ -259,6 +261,34 @@ def get_inventory_stats(
         )
         for row in type_cursor:
             by_resource_type[row["resource_type"]] = row["cnt"]
+
+        region_cursor = db.aql.execute(
+            """
+            FOR r IN resources
+              FILTER r.tenant_id == @tenant_id
+              FILTER r.status != 'deleted'
+              FILTER r.region != null
+              COLLECT region = r.region WITH COUNT INTO cnt
+              RETURN { region, cnt }
+            """,
+            bind_vars={"tenant_id": tenant_id},
+        )
+        for row in region_cursor:
+            by_region[row["region"]] = row["cnt"]
+
+        account_cursor = db.aql.execute(
+            """
+            FOR r IN resources
+              FILTER r.tenant_id == @tenant_id
+              FILTER r.status != 'deleted'
+              FILTER r.account_id != null
+              COLLECT account_id = r.account_id WITH COUNT INTO cnt
+              RETURN { account_id, cnt }
+            """,
+            bind_vars={"tenant_id": tenant_id},
+        )
+        for row in account_cursor:
+            by_account_id[row["account_id"]] = row["cnt"]
 
         status_cursor = db.aql.execute(
             """
@@ -303,6 +333,8 @@ def get_inventory_stats(
     return InventoryStats(
         by_provider=by_provider,
         by_resource_type=by_resource_type,
+        by_region=by_region,
+        by_account_id=by_account_id,
         by_status=by_status,
         identity_count=identity_count,
         data_asset_count=data_asset_count,

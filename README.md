@@ -258,7 +258,7 @@ We are building this in public. Here is where we are and where we are going:
 - [x] **Ogum.Inventory:** Relationship edge creation (BELONGS_TO, ATTACHED_TO, ASSUMES_ROLE, ROUTES_TRAFFIC, MEMBER_OF)
 - [x] **Ogum.Inventory:** Multi-cloud discovery — Azure (VMs, VNets, NSGs, AKS, Storage, Key Vault), GCP (Compute, GCS, GKE), Kubernetes (Pods, Deployments, Services, Nodes)
 - [x] **Ogum.Inventory:** Inventory REST API — filtering, pagination, full-text search, resource detail with graph edges
-- [x] **Ogum.Inventory:** Inventory UI — searchable asset table with provider tabs, detail panel, skeleton loading
+- [x] **Ogum.Inventory:** Inventory UI — searchable asset table with multi-select filters (provider, category, region, account), clickable summary cards, detail panel, skeleton loading
 - [x] **Ogum.Inventory:** Scheduled auto-discovery (Celery Beat every 6h, Redis distributed lock)
 - [x] **Ogum.Inventory:** Provider onboarding wizard — connect AWS/Azure/GCP/K8s from the UI
 - [x] **Ogum.Inventory:** Inventory export — CSV and OCSF-inspired JSON via streaming API

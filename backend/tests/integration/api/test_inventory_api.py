@@ -116,6 +116,32 @@ class TestInventoryListEndpoint:
         assert len(data) == 1
         assert data[0]["name"] == "db-server"
 
+    def test_filter_by_multiple_resource_types(self, api_client):
+        resp = api_client.get(
+            "/api/v1/inventory?resource_type=ec2_instance&resource_type=rds_instance",
+            headers=HEADERS,
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert len(data) == 3
+        assert {r["resource_type"] for r in data} == {"ec2_instance", "rds_instance"}
+
+    def test_filter_by_multiple_regions(self, api_client):
+        resp = api_client.get(
+            "/api/v1/inventory?region=eu-west-1&region=us-east-1",
+            headers=HEADERS,
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert len(data) == 4
+        assert {r["region"] for r in data} == {"eu-west-1", "us-east-1"}
+
+    def test_filter_by_multiple_providers_matches_single(self, api_client):
+        single = api_client.get("/api/v1/inventory?provider=aws", headers=HEADERS)
+        multi = api_client.get("/api/v1/inventory?provider=aws&provider=azure", headers=HEADERS)
+        assert single.status_code == multi.status_code == 200
+        assert single.json()["meta"]["total"] == multi.json()["meta"]["total"]
+
     def test_search_by_name_partial(self, api_client):
         resp = api_client.get("/api/v1/inventory?search=web", headers=HEADERS)
         assert resp.status_code == 200
@@ -182,6 +208,16 @@ class TestInventoryStatsEndpoint:
         assert stats["by_provider"]["aws"] >= 4
         assert stats["by_resource_type"].get("ec2_instance", 0) == 2
         assert "rds_instance" in stats["by_resource_type"]
+
+    def test_stats_returns_region_and_account_breakdown(self, api_client):
+        resp = api_client.get("/api/v1/inventory/stats", headers=HEADERS)
+        assert resp.status_code == 200
+        stats = resp.json()["data"]
+        assert stats["by_region"]["us-east-1"] == 3
+        assert stats["by_region"]["eu-west-1"] == 1
+        # deleted resource excluded from region/account breakdown
+        assert sum(stats["by_region"].values()) == 4
+        assert stats["by_account_id"]["111111111111"] == 4
 
     def test_stats_identity_and_data_asset_defaults(self, api_client):
         resp = api_client.get("/api/v1/inventory/stats", headers=HEADERS)

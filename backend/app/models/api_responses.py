@@ -62,6 +62,8 @@ class ResourceDetail(ResourceSummary):
 class InventoryStats(BaseModel):
     by_provider: dict[str, int]
     by_resource_type: dict[str, int]
+    by_region: dict[str, int]
+    by_account_id: dict[str, int]
     by_status: dict[str, int]
     identity_count: int
     data_asset_count: int
