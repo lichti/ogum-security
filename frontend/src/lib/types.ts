@@ -33,6 +33,8 @@ export interface ResourceDetail extends ResourceSummary {
 export interface InventoryStats {
   by_provider: Record<string, number>
   by_resource_type: Record<string, number>
+  by_region: Record<string, number>
+  by_account_id: Record<string, number>
   by_status: Record<string, number>
   identity_count: number
   data_asset_count: number
@@ -52,9 +54,10 @@ export interface ApiResponse<T> {
 }
 
 export interface InventoryFilters {
-  provider?: string
-  resource_type?: string
-  region?: string
+  providers: string[]
+  resourceTypes: string[]
+  regions: string[]
+  accountIds: string[]
   search?: string
   status?: 'active' | 'deleted'
   limit: number

@@ -1,29 +1,35 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { RefreshCw } from 'lucide-react'
-import { ProviderTabs } from '@/components/inventory/ProviderTabs'
+import { InventorySummary } from '@/components/inventory/InventorySummary'
 import { Filters } from '@/components/inventory/Filters'
 import { DataTable } from '@/components/inventory/DataTable'
 import { DetailPanel } from '@/components/inventory/DetailPanel'
 import { inventoryApi } from '@/lib/api'
+import { aggregateByCategory, CATEGORY_LABELS, CATEGORY_ORDER, resourceTypesForCategories } from '@/lib/inventoryCategories'
 import type { ResourceSummary, ResourceDetail, InventoryFilters } from '@/lib/types'
 
-const DEFAULT_FILTERS: InventoryFilters = {
-  limit: 50,
-  offset: 0,
+const EMPTY_CATEGORY_STATS = CATEGORY_ORDER.reduce(
+  (acc, cat) => ({ ...acc, [cat]: 0 }),
+  {} as Record<string, number>,
+)
+
+const LIMIT = 50
+
+function toggleValue(list: string[], value: string): string[] {
+  return list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
 }
 
 export default function InventoryPage() {
-  const [filters, setFilters] = useState<InventoryFilters>(DEFAULT_FILTERS)
-  const [activeProvider, setActiveProvider] = useState('all')
+  const [providers, setProviders] = useState<string[]>([])
+  const [categories, setCategories] = useState<string[]>([])
+  const [regions, setRegions] = useState<string[]>([])
+  const [accountIds, setAccountIds] = useState<string[]>([])
+  const [search, setSearch] = useState('')
+  const [offset, setOffset] = useState(0)
   const [selected, setSelected] = useState<ResourceDetail | null>(null)
-
-  const { data: listData, isLoading: listLoading } = useQuery({
-    queryKey: ['inventory', filters],
-    queryFn: () => inventoryApi.list(filters).then((r) => r.data),
-  })
 
   const { data: statsData } = useQuery({
     queryKey: ['inventory-stats'],
@@ -31,28 +37,82 @@ export default function InventoryPage() {
     staleTime: 30_000,
   })
 
-  const handleProviderChange = useCallback(
-    (provider: string) => {
-      setActiveProvider(provider)
-      setFilters((f) => ({
-        ...f,
-        provider: provider === 'all' ? undefined : provider,
-        offset: 0,
-      }))
-    },
-    [],
+  const stats = statsData?.data
+  const byCategory = useMemo(
+    () => (stats ? aggregateByCategory(stats.by_resource_type) : EMPTY_CATEGORY_STATS),
+    [stats],
+  )
+  const resourceTypes = useMemo(
+    () => (stats ? resourceTypesForCategories(categories, stats.by_resource_type) : []),
+    [categories, stats],
   )
 
-  const handleSearch = useCallback((search: string) => {
-    setFilters((f) => ({ ...f, search: search || undefined, offset: 0 }))
+  const filters: InventoryFilters = useMemo(
+    () => ({
+      providers,
+      resourceTypes,
+      regions,
+      accountIds,
+      search: search || undefined,
+      limit: LIMIT,
+      offset,
+    }),
+    [providers, resourceTypes, regions, accountIds, search, offset],
+  )
+
+  const { data: listData, isLoading: listLoading } = useQuery({
+    queryKey: ['inventory', filters],
+    queryFn: () => inventoryApi.list(filters).then((r) => r.data),
+  })
+
+  const providerOptions = useMemo(
+    () =>
+      Object.entries(stats?.by_provider ?? {})
+        .map(([value, count]) => ({ value, label: value.toUpperCase(), count }))
+        .sort((a, b) => b.count - a.count),
+    [stats],
+  )
+  const categoryOptions = useMemo(
+    () => CATEGORY_ORDER.map((cat) => ({ value: cat, label: CATEGORY_LABELS[cat], count: byCategory[cat] ?? 0 })),
+    [byCategory],
+  )
+  const regionOptions = useMemo(
+    () =>
+      Object.entries(stats?.by_region ?? {})
+        .map(([value, count]) => ({ value, label: value, count }))
+        .sort((a, b) => b.count - a.count),
+    [stats],
+  )
+  const accountOptions = useMemo(
+    () =>
+      Object.entries(stats?.by_account_id ?? {})
+        .map(([value, count]) => ({ value, label: value, count }))
+        .sort((a, b) => b.count - a.count),
+    [stats],
+  )
+
+  const handleProviderToggle = useCallback((provider: string) => {
+    setProviders((prev) => toggleValue(prev, provider))
+    setOffset(0)
   }, [])
 
-  const handleResourceType = useCallback((type: string) => {
-    setFilters((f) => ({ ...f, resource_type: type || undefined, offset: 0 }))
+  const handleCategoryToggle = useCallback((category: string) => {
+    setCategories((prev) => toggleValue(prev, category))
+    setOffset(0)
   }, [])
 
-  const handleRegion = useCallback((region: string) => {
-    setFilters((f) => ({ ...f, region: region || undefined, offset: 0 }))
+  const handleSearch = useCallback((value: string) => {
+    setSearch(value)
+    setOffset(0)
+  }, [])
+
+  const handleClearFilters = useCallback(() => {
+    setProviders([])
+    setCategories([])
+    setRegions([])
+    setAccountIds([])
+    setSearch('')
+    setOffset(0)
   }, [])
 
   const handleRowClick = useCallback(async (resource: ResourceSummary) => {
@@ -64,8 +124,6 @@ export default function InventoryPage() {
     }
   }, [])
 
-  const stats = statsData?.data
-  const counts = stats?.by_provider ?? {}
   const lastScanned = stats?.last_discovery_at
     ? formatDistanceToNow(new Date(stats.last_discovery_at), { addSuffix: true })
     : null
@@ -73,10 +131,11 @@ export default function InventoryPage() {
   const isPristineEmpty =
     !listLoading &&
     (listData?.meta.total ?? 0) === 0 &&
-    !filters.search &&
-    !filters.resource_type &&
-    !filters.region &&
-    !filters.provider
+    !search &&
+    providers.length === 0 &&
+    categories.length === 0 &&
+    regions.length === 0 &&
+    accountIds.length === 0
 
   return (
     <div className="min-h-screen bg-slate-950">
@@ -104,16 +163,43 @@ export default function InventoryPage() {
       </header>
 
       <main className="max-w-screen-2xl mx-auto px-6 py-6 space-y-4">
-        <ProviderTabs
-          active={activeProvider}
-          counts={counts}
-          onChange={handleProviderChange}
+        <InventorySummary
+          byProvider={stats?.by_provider ?? {}}
+          byCategory={byCategory}
+          selectedProviders={providers}
+          selectedCategories={categories}
+          onProviderClick={handleProviderToggle}
+          onCategoryClick={handleCategoryToggle}
         />
 
         <Filters
+          search={search}
           onSearch={handleSearch}
-          onResourceType={handleResourceType}
-          onRegion={handleRegion}
+          providerOptions={providerOptions}
+          selectedProviders={providers}
+          onProvidersChange={(v) => {
+            setProviders(v)
+            setOffset(0)
+          }}
+          categoryOptions={categoryOptions}
+          selectedCategories={categories}
+          onCategoriesChange={(v) => {
+            setCategories(v)
+            setOffset(0)
+          }}
+          regionOptions={regionOptions}
+          selectedRegions={regions}
+          onRegionsChange={(v) => {
+            setRegions(v)
+            setOffset(0)
+          }}
+          accountOptions={accountOptions}
+          selectedAccounts={accountIds}
+          onAccountsChange={(v) => {
+            setAccountIds(v)
+            setOffset(0)
+          }}
+          onClear={handleClearFilters}
         />
 
         {isPristineEmpty ? (
@@ -132,10 +218,10 @@ export default function InventoryPage() {
           <DataTable
             resources={listData?.data ?? []}
             total={listData?.meta.total ?? 0}
-            limit={filters.limit}
-            offset={filters.offset}
+            limit={LIMIT}
+            offset={offset}
             loading={listLoading}
-            onPageChange={(offset) => setFilters((f) => ({ ...f, offset }))}
+            onPageChange={setOffset}
             onRowClick={handleRowClick}
           />
         )}

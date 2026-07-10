@@ -52,9 +52,10 @@ export const inventoryApi = {
   list: (filters: InventoryFilters) =>
     apiClient.get<ApiResponse<ResourceSummary[]>>('/api/v1/inventory', {
       params: {
-        provider: filters.provider || undefined,
-        resource_type: filters.resource_type || undefined,
-        region: filters.region || undefined,
+        provider: filters.providers.length ? filters.providers : undefined,
+        resource_type: filters.resourceTypes.length ? filters.resourceTypes : undefined,
+        region: filters.regions.length ? filters.regions : undefined,
+        account_id: filters.accountIds.length ? filters.accountIds : undefined,
         search: filters.search || undefined,
         status: filters.status,
         limit: filters.limit,

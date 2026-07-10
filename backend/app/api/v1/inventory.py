@@ -40,10 +40,10 @@ def get_tenant_db(x_tenant_id: str = Header(..., alias="X-Tenant-ID")) -> Standa
 
 @router.get("", response_model=ApiResponse[list[ResourceSummary]])
 async def list_inventory(
-    provider: str | None = Query(None),
-    resource_type: str | None = Query(None),
-    account_id: str | None = Query(None),
-    region: str | None = Query(None),
+    provider: list[str] | None = Query(None),
+    resource_type: list[str] | None = Query(None),
+    account_id: list[str] | None = Query(None),
+    region: list[str] | None = Query(None),
     status: str | None = Query(None, pattern="^(active|deleted)$"),
     search: str | None = Query(None, max_length=200),
     limit: int = Query(50, ge=1, le=200),
@@ -94,7 +94,7 @@ async def export_inventory(
     items, total = list_resources(
         db,
         x_tenant_id,
-        provider=provider,
+        provider=[provider] if provider else None,
         status=status,
         limit=50_000,
         offset=0,
