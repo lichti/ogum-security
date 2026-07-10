@@ -34,11 +34,28 @@ import type {
   SideScanJob,
 } from './types'
 
+// FastAPI's Query(list[str]) expects repeated bare keys (?k=a&k=b), not axios's
+// default bracket notation (?k[]=a&k[]=b) — a custom serializer keeps array
+// filters (providers, regions, etc.) working across the whole client.
+export function serializeParams(params: Record<string, unknown>): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null) continue
+    if (Array.isArray(value)) {
+      for (const item of value) search.append(key, String(item))
+    } else {
+      search.append(key, String(value))
+    }
+  }
+  return search.toString()
+}
+
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000',
   headers: {
     'Content-Type': 'application/json',
   },
+  paramsSerializer: serializeParams,
 })
 
 // DEV MODE: tenant injected from env var — Sprint 7 replaces with JWT extraction
