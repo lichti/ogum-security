@@ -56,7 +56,15 @@ def list_findings(
         filters.append("f.status IN @status")
         bind["status"] = status
     if framework:
-        filters.append("LENGTH(INTERSECTION(f.framework_mapping, @framework)) > 0")
+        # Prefix-aware: matches both bare framework/family ids (Checkov/IaC mappings,
+        # or a family-level id like "CIS-7.0") and full "framework/control" values
+        # (Prowler mappings, e.g. "CIS-7.0/1.1") — required for Compliance page links.
+        filters.append(
+            "LENGTH(FOR fw IN f.framework_mapping "
+            "FOR sel IN @framework "
+            'FILTER fw == sel OR STARTS_WITH(fw, CONCAT(sel, "/")) '
+            "RETURN 1) > 0"
+        )
         bind["framework"] = framework
     if region:
         filters.append("f.region == @region")

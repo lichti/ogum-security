@@ -1,6 +1,7 @@
 'use client'
-import { useCallback, useState } from 'react'
+import { Suspense, useCallback, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'next/navigation'
 import { FindingsTable } from '@/components/findings/FindingsTable'
 import { FindingFilters } from '@/components/findings/FindingFilters'
 import { FindingsSummary } from '@/components/findings/FindingsSummary'
@@ -17,7 +18,25 @@ function toggleValue<T extends string>(list: T[] | undefined, value: T): T[] {
 }
 
 export default function FindingsPage() {
-  const [filters, setFilters] = useState<FindingsFilter>(DEFAULT_FILTERS)
+  return (
+    <Suspense fallback={null}>
+      <FindingsPageContent />
+    </Suspense>
+  )
+}
+
+function FindingsPageContent() {
+  // One-time initial filter from the URL (e.g. Compliance page links here with
+  // ?framework=CIS-7.0). Deliberately not a full two-way URL sync — just enough for
+  // deep links to pre-filter the page on first load. useSearchParams (not
+  // window.location.search) is required here: this page is reached via a Next.js
+  // client-side <Link> navigation from Compliance, and the router's parsed params are
+  // the only reliably up-to-date source at that point.
+  const searchParams = useSearchParams()
+  const [filters, setFilters] = useState<FindingsFilter>(() => {
+    const framework = searchParams.get('framework')
+    return framework ? { ...DEFAULT_FILTERS, framework: [framework] } : DEFAULT_FILTERS
+  })
   const [prevCursors, setPrevCursors] = useState<string[]>([])
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
 

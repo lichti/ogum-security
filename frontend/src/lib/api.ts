@@ -176,9 +176,9 @@ export const scansApi = {
 }
 
 export const complianceApi = {
-  summary: (tenantId?: string) =>
+  summary: (framework?: string) =>
     apiClient.get<ApiResponse<ComplianceSummary>>('/api/v1/compliance/summary', {
-      params: tenantId ? { tenant_id: tenantId } : undefined,
+      params: framework ? { framework } : undefined,
     }),
 }
 
