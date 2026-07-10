@@ -25,6 +25,7 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- **Signal Score roadmap (Ogum.Pulse, Epic 07 Sprint 7 — planned)**: documented the high-confidence detection design — an event is only prioritized as high-confidence when it both deviates from the per-principal IAM behavioral baseline (actions, IPs, regions, user-agent) and matches a known TTP, instead of treating either condition alone as sufficient. See `README.md` Features/Roadmap.
 - **Side-scanning EBS Direct API (Epic 03 Sprint 2)**: `scan_ec2_instance_v2` Celery task replaces the volume/mount pipeline with `trivy client vm ebs:{snapshot_id}` — no volume creation, no OS mount required. Snapshots are deleted in `finally` via `delete_snapshot_safe` (now non-raising). New `run_trivy_ebs()` in `trivy_analyzer.py` returns `(vulnerabilities, secrets)` using Trivy's `Severity` field as the primary severity source (CVSS only as fallback for `UNKNOWN`).
 - **Trivy sidecar server**: `trivy-server` service in `docker-compose.yml` (port `:4954`, persistent `trivy-cache` volume, `aquasec/trivy:latest`). Celery worker gains `TRIVY_SERVER_URL` env var and `depends_on: trivy-server`.
 - **Secret scanning migrated from TruffleHog3 to Trivy**: `secret_analyzer.py` removed; Trivy `--scanners vuln,secret` covers both CVEs and secrets in EBS Direct scans. `Match` field (secret value) is never stored — Trivy redacts it as `****`. Sprint 1 `scan_ec2_instance` no longer performs secret scanning.
