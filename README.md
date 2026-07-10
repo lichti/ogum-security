@@ -99,6 +99,8 @@ CloudTrail / K8s Audit Logs → Vector.dev → Redpanda → Apache Flink CEP →
 
 Complex event correlation in memory. Detects multi-step attack patterns that individual log entries would miss.
 
+High-confidence events require **both** a deviation from the per-principal behavioral baseline (typical actions, IPs, regions, user-agent) **and** a match against a known TTP — reducing noise instead of alerting on either condition alone.
+
 ### AI-Powered Remediation (Ogum.AI)
 A RAG engine that:
 1. Retrieves the relevant remediation guide and your infrastructure style from a vector database
@@ -297,6 +299,7 @@ We are building this in public. Here is where we are and where we are going:
 - [ ] Near Real-Time pipeline (Redpanda + Apache Flink CEP, < 2s latency)
 - [ ] K8s Audit Log and CloudTrail streaming ingestion
 - [ ] Falco runtime event integration
+- [ ] Signal Score — per-principal behavioral baseline combined with TTP matching for high-confidence prioritization
 - [ ] Cloud Detection and Response (Ogum.CDR) — Tier 1 auto-containment + Tier 2 Slack approval
 - [ ] OIDC/SAML 2.0 with RBAC (PlatformAdmin, SecOps, DevOps, Auditor)
 - [ ] AWS Security Hub bidirectional sync (ASFF format)
