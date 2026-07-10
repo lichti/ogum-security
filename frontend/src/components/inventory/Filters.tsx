@@ -1,6 +1,6 @@
 'use client'
 import { Search, X } from 'lucide-react'
-import { MultiSelectFilter, type MultiSelectOption } from '@/components/inventory/MultiSelectFilter'
+import { MultiSelectFilter, type MultiSelectOption } from '@/components/ui/MultiSelectFilter'
 
 interface FiltersProps {
   search: string

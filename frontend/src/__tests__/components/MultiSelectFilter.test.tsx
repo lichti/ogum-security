@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { MultiSelectFilter } from '@/components/inventory/MultiSelectFilter'
+import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 
 const options = [
   { value: 'aws', label: 'AWS', count: 10 },
