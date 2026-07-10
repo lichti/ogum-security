@@ -1029,27 +1029,39 @@ def _create_resource_edges(
 def _create_data_access_edges(
     db: Any,
     tenant_id: str,
-    admin_identity_keys: list[str],
+    admin_identity_keys: list[str],  # kept for API compatibility; actual keys come from DB
 ) -> int:
     """
     Create STORES_SENSITIVE_DATA edges from admin identities to all data assets.
 
-    Queries the full data_assets collection (including Prowler-discovered assets
-    such as DynamoDB, SecretsManager, etc.) instead of relying on the current
-    discovery run's key list.
+    Both identity and data_asset keys are resolved from the DB to handle the case
+    where Prowler CSPM created the document first (hash key) while arango_key()
+    returns a structured key — using arango_key() would create dangling edge _from refs.
     """
-    if not admin_identity_keys:
+    # Resolve actual identity _keys from DB (Prowler may have inserted with hash keys
+    # before discovery ran, so arango_key() would produce a different key)
+    identity_aql = """
+    FOR i IN identities
+        FILTER i.tenant_id == @tenant_id
+        FILTER i.has_admin_policy == true
+        FILTER i.status != "deleted"
+        RETURN i._key
+    """
+    cursor = db.aql.execute(identity_aql, bind_vars={"tenant_id": tenant_id})
+    actual_admin_keys = list(cursor)
+
+    if not actual_admin_keys:
         return 0
 
     # Include data_assets discovered by Prowler CSPM (DynamoDB, SecretsManager, etc.)
     # that are not returned by _list_s3_buckets alone.
-    aql = """
+    data_aql = """
     FOR d IN data_assets
         FILTER d.tenant_id == @tenant_id
         FILTER d.status != "deleted"
         RETURN d._key
     """
-    cursor = db.aql.execute(aql, bind_vars={"tenant_id": tenant_id})
+    cursor = db.aql.execute(data_aql, bind_vars={"tenant_id": tenant_id})
     data_asset_keys = list(cursor)
 
     if not data_asset_keys:
@@ -1057,7 +1069,7 @@ def _create_data_access_edges(
 
     extra = {"tenant_id": tenant_id}
     count = 0
-    for identity_key in admin_identity_keys:
+    for identity_key in actual_admin_keys:
         for asset_key in data_asset_keys:
             _upsert_edge(
                 db,
