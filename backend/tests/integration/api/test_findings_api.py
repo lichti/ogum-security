@@ -152,6 +152,42 @@ class TestListFindings:
         resp = api_client.get("/api/v1/findings?provider=invalid", headers=HEADERS)
         assert resp.status_code == 422
 
+    def test_filter_by_multiple_severities(self, api_client, db_tenant_a):
+        _seed_finding(db_tenant_a, "crit-002", severity="CRITICAL")
+        _seed_finding(db_tenant_a, "high-002", severity="HIGH")
+        _seed_finding(db_tenant_a, "low-002", severity="LOW")
+
+        resp = api_client.get("/api/v1/findings?severity=CRITICAL&severity=HIGH", headers=HEADERS)
+
+        items = resp.json()["data"]["items"]
+        assert len(items) == 2
+        assert {f["severity"] for f in items} == {"CRITICAL", "HIGH"}
+
+    def test_filter_by_multiple_providers(self, api_client, db_tenant_a):
+        _seed_finding(db_tenant_a, "aws-002", provider="aws")
+        _seed_finding(db_tenant_a, "azure-002", provider="azure")
+        _seed_finding(db_tenant_a, "gcp-002", provider="gcp")
+
+        resp = api_client.get("/api/v1/findings?provider=aws&provider=azure", headers=HEADERS)
+
+        items = resp.json()["data"]["items"]
+        assert len(items) == 2
+        assert {f["provider"] for f in items} == {"aws", "azure"}
+
+    def test_filter_by_multiple_frameworks_matches_any(self, api_client, db_tenant_a):
+        _seed_finding(db_tenant_a, "cis-002", framework_mapping=["CIS-AWS-2.0"])
+        _seed_finding(db_tenant_a, "pci-002", framework_mapping=["PCI_DSS"])
+        _seed_finding(db_tenant_a, "iso-002", framework_mapping=["ISO27001"])
+
+        resp = api_client.get("/api/v1/findings?framework=CIS-AWS-2.0&framework=PCI_DSS", headers=HEADERS)
+
+        items = resp.json()["data"]["items"]
+        assert len(items) == 2
+
+    def test_invalid_multiple_providers_returns_422(self, api_client):
+        resp = api_client.get("/api/v1/findings?provider=aws&provider=invalid", headers=HEADERS)
+        assert resp.status_code == 422
+
     def test_missing_header_returns_422(self, api_client):
         resp = api_client.get("/api/v1/findings")
         assert resp.status_code == 422
@@ -179,6 +215,37 @@ class TestListFindings:
         resp = api_client.get("/api/v1/findings?limit=50", headers=HEADERS)
         data = resp.json()["data"]
         assert data["next_cursor"] is None
+
+
+# ─── GET /api/v1/findings/stats ──────────────────────────────────────────────
+
+
+@pytest.mark.integration
+class TestFindingsStats:
+    def test_stats_returns_severity_status_and_provider_breakdown(self, api_client, db_tenant_a):
+        _seed_finding(db_tenant_a, "stat-001", severity="CRITICAL", status="FAIL", provider="aws")
+        _seed_finding(db_tenant_a, "stat-002", severity="CRITICAL", status="MUTED", provider="aws")
+        _seed_finding(db_tenant_a, "stat-003", severity="HIGH", status="FAIL", provider="azure")
+
+        resp = api_client.get("/api/v1/findings/stats", headers=HEADERS)
+
+        assert resp.status_code == 200
+        stats = resp.json()["data"]
+        assert stats["by_severity"]["CRITICAL"] == 2
+        assert stats["by_severity"]["HIGH"] == 1
+        assert stats["by_status"]["FAIL"] == 2
+        assert stats["by_status"]["MUTED"] == 1
+        assert stats["by_provider"]["aws"] == 2
+        assert stats["by_provider"]["azure"] == 1
+        assert stats["total"] == 3
+
+    def test_stats_empty_tenant_returns_zeroed_counts(self, api_client):
+        resp = api_client.get("/api/v1/findings/stats", headers=HEADERS)
+        assert resp.status_code == 200
+        stats = resp.json()["data"]
+        assert stats["total"] == 0
+        assert stats["by_provider"] == {}
+        assert all(v == 0 for v in stats["by_severity"].values())
 
 
 # ─── GET /api/v1/findings/{finding_key} ──────────────────────────────────────

@@ -29,14 +29,14 @@ def list_findings(
     db: StandardDatabase,
     tenant_id: str,
     *,
-    provider: str | None = None,
-    severity: str | None = None,
-    status: str | None = None,
-    framework: str | None = None,
+    provider: list[str] | None = None,
+    severity: list[str] | None = None,
+    status: list[str] | None = None,
+    framework: list[str] | None = None,
     region: str | None = None,
     account_id: str | None = None,
     resource_type: str | None = None,
-    source: str | None = None,
+    source: list[str] | None = None,
     q: str | None = None,
     mitre_ttp: str | None = None,
     limit: int = 50,
@@ -47,16 +47,16 @@ def list_findings(
     bind: dict[str, Any] = {"tenant_id": tenant_id, "fetch_limit": limit + 1}
 
     if provider:
-        filters.append("f.provider == @provider")
+        filters.append("f.provider IN @provider")
         bind["provider"] = provider
     if severity:
-        filters.append("f.severity == @severity")
+        filters.append("f.severity IN @severity")
         bind["severity"] = severity
     if status:
-        filters.append("f.status == @status")
+        filters.append("f.status IN @status")
         bind["status"] = status
     if framework:
-        filters.append("@framework IN f.framework_mapping")
+        filters.append("LENGTH(INTERSECTION(f.framework_mapping, @framework)) > 0")
         bind["framework"] = framework
     if region:
         filters.append("f.region == @region")
@@ -68,7 +68,7 @@ def list_findings(
         filters.append("f.resource_type == @resource_type")
         bind["resource_type"] = resource_type
     if source:
-        filters.append("f.source == @source")
+        filters.append("f.source IN @source")
         bind["source"] = source
     if q:
         filters.append(

@@ -8,16 +8,20 @@ interface ExportButtonProps {
   filters: FindingsFilter
 }
 
+function appendAll(params: URLSearchParams, key: string, values: string[] | undefined) {
+  for (const v of values ?? []) params.append(key, v)
+}
+
 function buildParams(filters: FindingsFilter, format: 'csv' | 'json'): URLSearchParams {
   const p = new URLSearchParams({ format })
-  if (filters.provider) p.set('provider', filters.provider)
-  if (filters.severity) p.set('severity', filters.severity)
-  if (filters.status) p.set('status', filters.status)
-  if (filters.framework) p.set('framework', filters.framework)
+  appendAll(p, 'provider', filters.provider)
+  appendAll(p, 'severity', filters.severity)
+  appendAll(p, 'status', filters.status)
+  appendAll(p, 'framework', filters.framework)
   if (filters.region) p.set('region', filters.region)
   if (filters.account_id) p.set('account_id', filters.account_id)
   if (filters.resource_type) p.set('resource_type', filters.resource_type)
-  if (filters.source) p.set('source', filters.source)
+  appendAll(p, 'source', filters.source)
   if (filters.q) p.set('q', filters.q)
   return p
 }
