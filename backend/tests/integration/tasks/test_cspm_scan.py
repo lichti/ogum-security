@@ -252,3 +252,159 @@ class TestCSPMScanTask:
         resources = list(db_tenant_a.aql.execute("FOR r IN resources RETURN r"))
         assert len(resources) >= 1
         assert resources[0]["resource_id"] == resource_uid
+
+    def test_graph_edges_built_from_scan_output(self, db_tenant_a, mocker):
+        """EC2 instance with a security group + instance profile produces
+        ATTACHED_TO and ASSUMES_ROLE edges after a single scan — no separate
+        discovery run needed."""
+        from types import SimpleNamespace
+
+        init_tenant_schema(db_tenant_a)
+        mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
+
+        role_arn = "arn:aws:iam::111111111111:role/AppRole"
+        role_uid = role_arn
+        role_meta = SimpleNamespace(
+            CheckID="iam_role_test",
+            CheckTitle="IAM Role",
+            Description="desc",
+            Severity="medium",
+            ResourceType="AwsIamRole",
+            Remediation=None,
+        )
+        role_output = SimpleNamespace(
+            status="PASS",
+            status_extended="ok",
+            resource_uid=role_uid,
+            resource_name="AppRole",
+            region=None,
+            account_uid=ACCOUNT_ID,
+            metadata=role_meta,
+            compliance={},
+            resource_metadata={"assume_role_policy": {}, "attached_policies": [], "inline_policies": []},
+        )
+
+        sg_arn = "arn:aws:ec2:us-east-1:111111111111:security-group/sg-abc"
+        sg_meta = SimpleNamespace(
+            CheckID="ec2_sg_test",
+            CheckTitle="SG",
+            Description="desc",
+            Severity="medium",
+            ResourceType="AwsEc2SecurityGroup",
+            Remediation=None,
+        )
+        sg_output = SimpleNamespace(
+            status="PASS",
+            status_extended="ok",
+            resource_uid=sg_arn,
+            resource_name="sg-abc",
+            region="us-east-1",
+            account_uid=ACCOUNT_ID,
+            metadata=sg_meta,
+            compliance={},
+            resource_metadata={},
+        )
+
+        ec2_arn = "arn:aws:ec2:us-east-1:111111111111:instance/i-abc123"
+        ec2_meta = SimpleNamespace(
+            CheckID="ec2_instance_test",
+            CheckTitle="EC2",
+            Description="desc",
+            Severity="high",
+            ResourceType="AwsEc2Instance",
+            Remediation=None,
+        )
+        ec2_output = SimpleNamespace(
+            status="FAIL",
+            status_extended="fail",
+            resource_uid=ec2_arn,
+            resource_name="my-ec2",
+            region="us-east-1",
+            account_uid=ACCOUNT_ID,
+            metadata=ec2_meta,
+            compliance={},
+            resource_metadata={
+                "security_groups": ["sg-abc"],
+                "subnet_id": "",
+                "instance_profile": {"Arn": "arn:aws:iam::111111111111:instance-profile/AppRole"},
+            },
+        )
+
+        mock_prowler = MagicMock()
+        mock_prowler.run_aws_scan.return_value = ScanResult(
+            findings=[
+                _make_mock_finding("iam_role_test", role_uid, FindingStatus.PASS_),
+                _make_mock_finding("ec2_sg_test", sg_arn, FindingStatus.PASS_),
+                _make_mock_finding("ec2_instance_test", ec2_arn),
+            ],
+            raw_outputs=[role_output, sg_output, ec2_output],
+        )
+        mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
+
+        result = run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
+
+        assert result["resource_edges"]["ATTACHED_TO"] == 1
+        assert result["resource_edges"]["ASSUMES_ROLE"] == 1
+
+        attached_to = list(db_tenant_a.aql.execute("FOR e IN ATTACHED_TO RETURN e"))
+        assert len(attached_to) == 1
+        assumes_role = list(db_tenant_a.aql.execute("FOR e IN ASSUMES_ROLE RETURN e"))
+        assert len(assumes_role) == 1
+
+    def test_stale_resource_soft_deleted_on_rescan(self, db_tenant_a, mocker):
+        """A resource present in scan 1 but absent from scan 2 is marked deleted,
+        not removed — matches the old discovery.py upsert-not-truncate contract."""
+        from types import SimpleNamespace
+
+        init_tenant_schema(db_tenant_a)
+        mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
+
+        def _ec2_output(uid: str, name: str):
+            meta = SimpleNamespace(
+                CheckID="ec2_instance_test",
+                CheckTitle="EC2",
+                Description="desc",
+                Severity="high",
+                ResourceType="AwsEc2Instance",
+                Remediation=None,
+            )
+            return SimpleNamespace(
+                status="PASS",
+                status_extended="ok",
+                resource_uid=uid,
+                resource_name=name,
+                region="us-east-1",
+                account_uid=ACCOUNT_ID,
+                metadata=meta,
+                compliance={},
+                resource_metadata={},
+            )
+
+        uid_a = "arn:aws:ec2:us-east-1:111111111111:instance/i-aaa"
+        uid_b = "arn:aws:ec2:us-east-1:111111111111:instance/i-bbb"
+
+        mock_prowler = MagicMock()
+        mock_prowler.run_aws_scan.return_value = ScanResult(
+            findings=[
+                _make_mock_finding("ec2_instance_test", uid_a, FindingStatus.PASS_),
+                _make_mock_finding("ec2_instance_test", uid_b, FindingStatus.PASS_),
+            ],
+            raw_outputs=[_ec2_output(uid_a, "i-aaa"), _ec2_output(uid_b, "i-bbb")],
+        )
+        mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
+        run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
+
+        active = list(db_tenant_a.aql.execute("FOR r IN resources FILTER r.status != 'deleted' RETURN r.resource_id"))
+        assert set(active) == {uid_a, uid_b}
+
+        # Second scan only sees i-aaa — i-bbb was removed from the cloud.
+        mock_prowler.run_aws_scan.return_value = ScanResult(
+            findings=[_make_mock_finding("ec2_instance_test", uid_a, FindingStatus.PASS_)],
+            raw_outputs=[_ec2_output(uid_a, "i-aaa")],
+        )
+        result = run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
+        assert result["inventory_deleted"] == 1
+
+        docs = {d["resource_id"]: d["status"] for d in db_tenant_a.aql.execute("FOR r IN resources RETURN r")}
+        assert docs[uid_a] == "active"
+        assert docs[uid_b] == "deleted"

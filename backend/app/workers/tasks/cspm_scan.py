@@ -17,6 +17,10 @@ from typing import Any
 
 from app.db.init import init_tenant_schema
 from app.models.finding import Finding, ScanJob, ScanJobStatus
+from app.services.graph.data_access_edges import build_data_access_edges
+from app.services.graph.exposure import compute_exposed_internet
+from app.services.graph.iam_edges import build_iam_edges
+from app.services.graph.resource_edges import build_resource_edges
 from app.services.prowler_inventory import extract_inventory_from_findings
 from app.services.prowler_service import ProwlerService, ScanResult
 from app.workers.celery_app import celery_app
@@ -61,6 +65,47 @@ def _upsert_inventory(db: Any, inventory: dict[str, list[dict[str, Any]]]) -> in
             _upsert(db, collection, doc, update_fields)
             count += 1
     return count
+
+
+def _soft_delete_stale(
+    db: Any,
+    tenant_id: str,
+    provider: str,
+    inventory: dict[str, list[dict[str, Any]]],
+) -> int:
+    """Mark resources/identities/data_assets absent from this scan as deleted.
+
+    Scoped to (tenant_id, provider) — a single Prowler run covers every
+    resource type for the provider in one pass, so no per-type/per-region
+    scoping is needed (unlike the old typed discovery.py soft-delete, which
+    had to avoid deleting resources outside the specific type/region scope of
+    a partial discovery run).
+    """
+    now = datetime.now(UTC).isoformat()
+    normalized_provider = "k8s" if provider == "kubernetes" else provider
+    total = 0
+    for collection, docs in inventory.items():
+        discovered_keys = [doc["_key"] for doc in docs]
+        cursor = db.aql.execute(
+            """
+            FOR doc IN @@collection
+              FILTER doc.tenant_id == @tenant_id
+              FILTER doc.provider == @provider
+              FILTER doc.status != "deleted"
+              FILTER doc._key NOT IN @discovered_keys
+              UPDATE doc WITH { status: "deleted", deleted_at: @now, updated_at: @now } IN @@collection
+              RETURN 1
+            """,
+            bind_vars={
+                "@collection": collection,
+                "tenant_id": tenant_id,
+                "provider": normalized_provider,
+                "discovered_keys": discovered_keys,
+                "now": now,
+            },
+        )
+        total += len(list(cursor))
+    return total
 
 
 def _dispatch_scan(
@@ -188,6 +233,15 @@ def run_cspm_scan(
             account_id=account_id,
         )
         inventory_count = _upsert_inventory(db, inventory)
+        deleted_count = _soft_delete_stale(db, tenant_id, provider, inventory)
+
+        # Graph enrichment — derives edges from the raw_metadata just persisted
+        # above, no additional cloud API calls (Lambda execution-role is the
+        # sole exception, already resolved during the scan itself).
+        iam_edge_counts = build_iam_edges(db, tenant_id)
+        resource_edge_counts = build_resource_edges(db, tenant_id)
+        data_access_edges = build_data_access_edges(db, tenant_id)
+        exposure_counts = compute_exposed_internet(db, tenant_id)
 
         fail_count = sum(1 for f in findings if f.status == "FAIL")
         _update_job(
@@ -202,15 +256,21 @@ def run_cspm_scan(
         )
 
         logger.info(
-            "CSPM scan complete [tenant=%s provider=%s]: findings=%d fail=%d inventory=%d",
+            "CSPM scan complete [tenant=%s provider=%s]: findings=%d fail=%d inventory=%d deleted=%d "
+            "iam_edges=%s resource_edges=%s data_access_edges=%d exposure=%s",
             tenant_id,
             provider,
             len(findings),
             fail_count,
             inventory_count,
+            deleted_count,
+            iam_edge_counts,
+            resource_edge_counts,
+            data_access_edges,
+            exposure_counts,
         )
 
-        # Enqueue post-scan graph enrichment (fire-and-forget)
+        # Enqueue post-scan risk scoring / attack path detection (fire-and-forget)
         try:
             from app.workers.tasks.attack_paths import (  # noqa: PLC0415
                 detect_attack_paths,
@@ -229,6 +289,11 @@ def run_cspm_scan(
             "findings_found": len(findings),
             "findings_fail": fail_count,
             "inventory_upserted": inventory_count,
+            "inventory_deleted": deleted_count,
+            "iam_edges": iam_edge_counts,
+            "resource_edges": resource_edge_counts,
+            "data_access_edges": data_access_edges,
+            "exposure_updated": exposure_counts,
         }
 
     except Exception as exc:

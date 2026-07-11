@@ -127,6 +127,36 @@ class TestCollectionFor:
     def test_azure_vm_goes_to_resources(self):
         assert _collection_for("microsoft.compute/virtualmachines") == "resources"
 
+    def test_iam_group_goes_to_identities(self):
+        assert _collection_for("AwsIamGroup") == "identities"
+
+    def test_iam_policy_goes_to_identities(self):
+        assert _collection_for("AwsIamPolicy") == "identities"
+
+    def test_iam_access_key_goes_to_identities(self):
+        assert _collection_for("AwsIamAccessKey") == "identities"
+
+    def test_roles_anywhere_trust_anchor_goes_to_identities(self):
+        assert _collection_for("AwsRolesAnywhereTrustAnchor") == "identities"
+
+    def test_ec2_security_group_goes_to_resources_not_identities(self):
+        # Regression: "Group" is a substring of "SecurityGroup" — a bare-word
+        # regex misroutes this into identities, breaking ATTACHED_TO edges.
+        assert _collection_for("AwsEc2SecurityGroup") == "resources"
+
+    def test_athena_work_group_goes_to_resources(self):
+        assert _collection_for("AwsAthenaWorkGroup") == "resources"
+
+    def test_auto_scaling_group_goes_to_resources(self):
+        assert _collection_for("AwsAutoScalingAutoScalingGroup") == "resources"
+
+    def test_cloudwatch_log_group_goes_to_resources(self):
+        assert _collection_for("AwsLogsLogGroup") == "resources"
+
+    def test_waf_rule_group_goes_to_resources(self):
+        assert _collection_for("AwsWafRuleGroup") == "resources"
+        assert _collection_for("AwsWafRegionalRuleGroup") == "resources"
+
 
 # ---------------------------------------------------------------------------
 # _extract_tags
@@ -536,6 +566,49 @@ class TestExtractIdentityFields:
 
     def test_no_policies_omits_the_key(self):
         assert _extract_identity_fields({}) == {}
+
+    def test_administrator_access_managed_policy_sets_has_admin_policy(self):
+        from prowler.providers.aws.services.iam.iam_service import Role
+
+        role = Role(
+            name="AdminRole",
+            arn="arn:aws:iam::123:role/AdminRole",
+            assume_role_policy={},
+            is_service_role=False,
+            attached_policies=[
+                {"PolicyName": "AdministratorAccess", "PolicyArn": "arn:aws:iam::aws:policy/AdministratorAccess"}
+            ],
+        )
+        fields = _extract_identity_fields(_to_jsonable(role.dict()))
+        assert fields["has_admin_policy"] is True
+
+    def test_power_user_access_managed_policy_sets_has_admin_policy(self):
+        from prowler.providers.aws.services.iam.iam_service import Role
+
+        role = Role(
+            name="PowerRole",
+            arn="arn:aws:iam::123:role/PowerRole",
+            assume_role_policy={},
+            is_service_role=False,
+            attached_policies=[
+                {"PolicyName": "PowerUserAccess", "PolicyArn": "arn:aws:iam::aws:policy/PowerUserAccess"}
+            ],
+        )
+        fields = _extract_identity_fields(_to_jsonable(role.dict()))
+        assert fields["has_admin_policy"] is True
+
+    def test_readonly_managed_policy_does_not_set_has_admin_policy(self):
+        from prowler.providers.aws.services.iam.iam_service import Role
+
+        role = Role(
+            name="ReadRole",
+            arn="arn:aws:iam::123:role/ReadRole",
+            assume_role_policy={},
+            is_service_role=False,
+            attached_policies=[{"PolicyName": "ReadOnlyAccess", "PolicyArn": "arn:aws:iam::aws:policy/ReadOnlyAccess"}],
+        )
+        fields = _extract_identity_fields(_to_jsonable(role.dict()))
+        assert fields["has_admin_policy"] is False
 
 
 # ---------------------------------------------------------------------------
