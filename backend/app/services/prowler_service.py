@@ -380,10 +380,16 @@ class ProwlerService:  # pragma: no cover
             status_str = str(getattr(status_obj, "value", status_obj) or "FAIL").upper()
             status = _STATUS_MAP.get(status_str, FindingStatus.FAIL)
 
+            # prowler.lib.check.models.Severity is the same (str, Enum) shape as
+            # Status above, with the same missing __str__ override — str(Severity.high)
+            # == "Severity.high", not "high". That never matches _SEVERITY_MAP, so
+            # every finding silently fell through to the SeverityLevel.MEDIUM default,
+            # regardless of the check's real severity (including "informational").
             check_meta = getattr(result, "metadata", None)
             severity_str = "medium"
             if check_meta:
-                severity_str = str(getattr(check_meta, "Severity", "medium")).lower()
+                severity_obj = getattr(check_meta, "Severity", None)
+                severity_str = str(getattr(severity_obj, "value", severity_obj) or "medium").lower()
             severity = _SEVERITY_MAP.get(severity_str, SeverityLevel.MEDIUM)
 
             check_id = str(getattr(check_meta, "CheckID", "unknown")) if check_meta else "unknown"

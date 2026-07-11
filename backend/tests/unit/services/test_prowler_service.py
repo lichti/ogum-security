@@ -1,14 +1,16 @@
 """Unit tests for ProwlerService._normalize — status/severity mapping from raw
 prowler-core OutputFinding objects into our Finding model.
 
-Uses the real prowler.lib.outputs.common.Status enum (not a mock/stub) because
-the regression this guards against is specific to how that enum stringifies —
-a fake status string would not have caught it.
+Uses the real prowler.lib.outputs.common.Status and prowler.lib.check.models.Severity
+enums (not mocks/stubs) because the regressions these guard against are specific
+to how those enums stringify — fake status/severity strings would not have
+caught either bug.
 """
 
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from prowler.lib.outputs.common import Status
@@ -17,7 +19,7 @@ from app.models.finding import FindingStatus, SeverityLevel
 from app.services.prowler_service import ProwlerService
 
 
-def _make_result(status: Status, severity: str = "high") -> SimpleNamespace:
+def _make_result(status: Status, severity: Any = "high") -> SimpleNamespace:
     return SimpleNamespace(
         status=status,
         status_extended="some status detail",
@@ -110,6 +112,91 @@ class TestNormalizeStatus:
         assert finding is not None
         assert finding.severity == SeverityLevel.CRITICAL
         assert finding.status == FindingStatus.PASS_
+
+
+@pytest.mark.unit
+class TestNormalizeSeverity:
+    """Regression coverage for the Severity(str, Enum) stringification bug.
+
+    prowler.lib.check.models.Severity is CheckMetadata.Severity's real field
+    type — every check carries an actual Severity enum member at runtime, not
+    a plain string. Like Status above, it subclasses (str, Enum) without
+    overriding __str__, so str(Severity.high) == "Severity.high", not "high".
+    That string never matched _SEVERITY_MAP's keys, so every finding silently
+    fell through to the SeverityLevel.MEDIUM default — including checks whose
+    real severity was "informational", which could then never appear as such.
+    """
+
+    def test_high_severity_enum_not_misclassified_as_medium(self):
+        from prowler.lib.check.models import Severity
+
+        service = ProwlerService()
+        finding = service._normalize(
+            result=_make_result(Status.PASS, severity=Severity.high),
+            cloud_provider="aws",
+            tenant_id="tenant-a",
+            account_id="111111111111",
+            scan_job_id="job-1",
+        )
+        assert finding is not None
+        assert finding.severity == SeverityLevel.HIGH
+
+    def test_critical_severity_enum_not_misclassified_as_medium(self):
+        from prowler.lib.check.models import Severity
+
+        service = ProwlerService()
+        finding = service._normalize(
+            result=_make_result(Status.PASS, severity=Severity.critical),
+            cloud_provider="aws",
+            tenant_id="tenant-a",
+            account_id="111111111111",
+            scan_job_id="job-1",
+        )
+        assert finding is not None
+        assert finding.severity == SeverityLevel.CRITICAL
+
+    def test_informational_severity_enum_is_reachable(self):
+        from prowler.lib.check.models import Severity
+
+        service = ProwlerService()
+        finding = service._normalize(
+            result=_make_result(Status.PASS, severity=Severity.informational),
+            cloud_provider="aws",
+            tenant_id="tenant-a",
+            account_id="111111111111",
+            scan_job_id="job-1",
+        )
+        assert finding is not None
+        assert finding.severity == SeverityLevel.INFORMATIONAL
+
+    def test_medium_severity_enum_is_genuinely_medium(self):
+        """Distinguishes real medium severity from the bug's default fallback."""
+        from prowler.lib.check.models import Severity
+
+        service = ProwlerService()
+        finding = service._normalize(
+            result=_make_result(Status.PASS, severity=Severity.medium),
+            cloud_provider="aws",
+            tenant_id="tenant-a",
+            account_id="111111111111",
+            scan_job_id="job-1",
+        )
+        assert finding is not None
+        assert finding.severity == SeverityLevel.MEDIUM
+
+    def test_missing_metadata_defaults_to_medium(self):
+        service = ProwlerService()
+        result = _make_result(Status.PASS)
+        result.metadata = None
+        finding = service._normalize(
+            result=result,
+            cloud_provider="aws",
+            tenant_id="tenant-a",
+            account_id="111111111111",
+            scan_job_id="job-1",
+        )
+        assert finding is not None
+        assert finding.severity == SeverityLevel.MEDIUM
 
 
 @pytest.mark.unit
