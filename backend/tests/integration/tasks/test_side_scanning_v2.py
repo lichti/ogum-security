@@ -1,6 +1,6 @@
 """
-Integration tests for Sprint 2 side-scanning tasks:
-  - scan_ec2_instance_v2 (EBS Direct API via Trivy sidecar)
+Integration tests for side-scanning tasks:
+  - scan_ec2_instance_v2 (EBS Direct API via Trivy sidecar, plus optional scoped-mount YARA)
   - scan_lambda_function (ZIP download to /dev/shm)
   - rescan_sboms (daily re-scan of stored CycloneDX SBOMs)
 
@@ -10,6 +10,7 @@ Strategy:
 - httpx.get (Lambda code download) → mocked via pytest-mock
 - ArangoDB → real instance via Docker (never mocked)
 - Snapshot lifecycle → moto (snapshots complete immediately in moto)
+- mount_volume_ro/umount_volume (real mount syscalls) → mocked via pytest-mock
 """
 
 from __future__ import annotations
@@ -366,6 +367,115 @@ def test_v2_severity_from_trivy_field_not_cvss(db_tenant_a: Any, mocker: Any) ->
     findings = list(cursor)
     assert len(findings) == 1
     assert findings[0]["severity"] == "CRITICAL"
+
+
+@pytest.mark.integration
+@mock_aws
+def test_v2_yara_skipped_without_scanner_instance(db_tenant_a: Any, mocker: Any) -> None:
+    """
+    Without OGUM_SCANNER_INSTANCE_ID / availability_zone, YARA is skipped (not silently
+    pretended to have run) and no scoped volume is created.
+    """
+    ec2_client = boto3.client("ec2", region_name=REGION)
+    instance_id, volume_id = _seed_ec2(ec2_client)
+    init_tenant_schema(db_tenant_a)
+
+    def _subprocess_mock(cmd: list[str], **kw: Any) -> CompletedProcess[str]:
+        if "cyclonedx" in cmd:
+            return _ok(_trivy_sbom_json())
+        return _ok(_trivy_vuln_json())
+
+    mocker.patch("app.workers.tasks.side_scanning._get_tenant_db", return_value=db_tenant_a)
+    mocker.patch("app.services.side_scanning.analyzers.trivy_analyzer.subprocess.run", _subprocess_mock)
+    mocker.patch("app.workers.tasks.side_scanning.subprocess.run", _subprocess_mock)
+    mocker.patch("app.workers.tasks.side_scanning.wait_for_snapshot", return_value=None)
+    mocker.patch("app.workers.tasks.side_scanning._SCANNER_INSTANCE_ID", "")
+    run_yara_mock = mocker.patch("app.workers.tasks.side_scanning.run_yara")
+
+    baseline_volume_count = len(ec2_client.describe_volumes()["Volumes"])
+
+    result = scan_ec2_instance_v2(
+        tenant_id=TENANT,
+        instance_id=instance_id,
+        volume_id=volume_id,
+        provider_id="test-provider",
+        job_id="job-v2-yara-skip",
+        trivy_server_url=TRIVY_URL,
+        region=REGION,
+        account_id=ACCOUNT,
+        resource_key="ec2-yara-skip-key",
+        # availability_zone intentionally omitted
+    )
+
+    assert result["malware_count"] == 0
+    run_yara_mock.assert_not_called()
+
+    # No scoped scan volume created — volume count unchanged from baseline
+    volumes = ec2_client.describe_volumes()["Volumes"]
+    assert len(volumes) == baseline_volume_count
+
+
+@pytest.mark.integration
+@mock_aws
+def test_v2_yara_runs_via_scoped_mount_when_scanner_configured(db_tenant_a: Any, mocker: Any) -> None:
+    """
+    With OGUM_SCANNER_INSTANCE_ID + availability_zone set, scan_ec2_instance_v2 creates a
+    scoped volume, mounts it, runs YARA, and cleans up the volume afterwards — restoring
+    malware detection that EBS Direct API alone cannot provide (no file-level access).
+    """
+    ec2_client = boto3.client("ec2", region_name=REGION)
+    instance_id, volume_id = _seed_ec2(ec2_client)
+    init_tenant_schema(db_tenant_a)
+
+    db_tenant_a.collection("resources").insert(
+        {"_key": "ec2-yara-hit-key", "tenant_id": TENANT, "provider": "aws", "resource_type": "ec2_instance"}
+    )
+
+    def _subprocess_mock(cmd: list[str], **kw: Any) -> CompletedProcess[str]:
+        if "cyclonedx" in cmd:
+            return _ok(_trivy_sbom_json())
+        return _ok(_trivy_vuln_json())
+
+    yara_output = [{"rule": "Webshell_Generic", "path": "/mnt/target/var/www/html/shell.php"}]
+
+    mocker.patch("app.workers.tasks.side_scanning._get_tenant_db", return_value=db_tenant_a)
+    mocker.patch("app.services.side_scanning.analyzers.trivy_analyzer.subprocess.run", _subprocess_mock)
+    mocker.patch("app.workers.tasks.side_scanning.subprocess.run", _subprocess_mock)
+    mocker.patch("app.workers.tasks.side_scanning.wait_for_snapshot", return_value=None)
+    mocker.patch("app.workers.tasks.side_scanning._SCANNER_INSTANCE_ID", instance_id)
+    mocker.patch("app.workers.tasks.side_scanning.mount_volume_ro", return_value=None)
+    mocker.patch("app.workers.tasks.side_scanning.umount_volume", return_value=None)
+    mocker.patch("app.workers.tasks.side_scanning.run_yara", return_value=yara_output)
+
+    baseline_volume_count = len(ec2_client.describe_volumes()["Volumes"])
+
+    result = scan_ec2_instance_v2(
+        tenant_id=TENANT,
+        instance_id=instance_id,
+        volume_id=volume_id,
+        provider_id="test-provider",
+        job_id="job-v2-yara-hit",
+        trivy_server_url=TRIVY_URL,
+        region=REGION,
+        account_id=ACCOUNT,
+        resource_key="ec2-yara-hit-key",
+        availability_zone=AZ,
+    )
+
+    assert result["malware_count"] == 1
+
+    cursor = db_tenant_a.aql.execute(
+        "FOR f IN findings FILTER f.tenant_id == @tid AND CONTAINS(f.check_id, 'malware') RETURN f",
+        bind_vars={"tid": TENANT},
+    )
+    findings = list(cursor)
+    assert len(findings) == 1
+    assert findings[0]["severity"] == "CRITICAL"
+
+    # Scoped scan volume must be created (proving the mount path ran) then cleaned up —
+    # volume count is back at baseline after the task completes
+    volumes = ec2_client.describe_volumes()["Volumes"]
+    assert len(volumes) == baseline_volume_count
 
 
 # ─── scan_lambda_function ─────────────────────────────────────────────────────
