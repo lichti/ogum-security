@@ -307,7 +307,13 @@ class ProwlerService:  # pragma: no cover
     ) -> Finding | None:
         """Convert a Prowler v5 OutputFinding to our Finding model."""
         try:
-            status_str = str(getattr(result, "status", "FAIL")).upper()
+            # prowler.lib.outputs.common.Status subclasses (str, Enum) but does not
+            # override __str__, so str(Status.PASS) == "Status.PASS", not "PASS" —
+            # that string never matches _STATUS_MAP and silently fell through to the
+            # FAIL default, misclassifying every PASS/MANUAL result as FAIL. .value
+            # (or the plain string Prowler sometimes returns) gives the real code.
+            status_obj = getattr(result, "status", None)
+            status_str = str(getattr(status_obj, "value", status_obj) or "FAIL").upper()
             status = _STATUS_MAP.get(status_str, FindingStatus.FAIL)
 
             check_meta = getattr(result, "metadata", None)
