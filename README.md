@@ -282,11 +282,14 @@ We are building this in public. Here is where we are and where we are going:
 - [x] **Ogum.Graph:** Attack Path canvas (React Flow) — custom node types, dagre layout, animated edges
 - [x] **Ogum.Graph:** CIEM static analysis — dangerous IAM permissions (18 actions), AssumeRole chaining
 - [x] **Ogum.Graph:** CIEM UI — identities list with risk score, permissions detail panel
-- [x] **Ogum.Dynamic:** Agentless EC2 side-scanning — ephemeral EBS snapshots + Trivy + YARA + secret detection (Sprint 1)
-- [ ] **Ogum.Dynamic:** EC2 side-scanning via EBS Direct API — eliminates volume/mount pipeline (Sprint 2)
-- [ ] **Ogum.Dynamic:** AWS Lambda artifact scanning
-- [ ] **Ogum.Dynamic:** Kubernetes runtime container scanning (DaemonSet)
-- [ ] **Ogum.Dynamic:** SBOM generation (CycloneDX) + daily re-scan without new snapshots
+- [x] **Ogum.Dynamic:** Agentless EC2 side-scanning — ephemeral EBS snapshots + Trivy + secret detection
+- [x] **Ogum.Dynamic:** EC2 side-scanning via EBS Direct API — no volume, no mount
+- [x] **Ogum.Dynamic:** AWS Lambda artifact scanning (ZIP-based; container-image Lambdas not yet covered)
+- [x] **Ogum.Dynamic:** Kubernetes runtime container scanning (privileged DaemonSet, `/proc/<PID>/root`)
+- [x] **Ogum.Dynamic:** Container registry scanning — ECR push webhook, SARIF output, CI/CD security badge API
+- [x] **Ogum.Dynamic:** SBOM generation (CycloneDX) + daily re-scan without new snapshots
+- [x] **Ogum.Dynamic:** Side-scanning job console (`/side-scanning`) — KPIs, job table, retry
+- [ ] **Ogum.Dynamic:** Per-tenant CVE suppression rules (`.trivyignore`)
 - [ ] **Ogum.AI:** RAG remediation engine (LangChain + Ollama)
 - [ ] **Ogum.AI:** GitOps PR auto-generation (GitHub/GitLab)
 - [ ] **Ogum.Connect:** Jira bidirectional integration
