@@ -265,4 +265,9 @@ export const sideScanApi = {
 
   imageSecurityStatus: (imageDigest: string) =>
     apiClient.get<ImageSecurityStatus>(`/api/v1/side-scans/images/${encodeURIComponent(imageDigest)}/security`),
+
+  triggerScan: (resourceKey: string) =>
+    apiClient.post<{ job_id: string; status: string; resource_key: string }>('/api/v1/side-scans/trigger', {
+      resource_key: resourceKey,
+    }),
 }

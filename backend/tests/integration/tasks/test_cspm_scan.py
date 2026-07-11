@@ -408,3 +408,139 @@ class TestCSPMScanTask:
         docs = {d["resource_id"]: d["status"] for d in db_tenant_a.aql.execute("FOR r IN resources RETURN r")}
         assert docs[uid_a] == "active"
         assert docs[uid_b] == "deleted"
+
+
+@pytest.mark.integration
+class TestAutoTriggerSideScans:
+    """
+    First-seen-only auto side-scan trigger, hooked into run_cspm_scan right after
+    inventory upsert. enqueue_side_scan itself (AWS session, describe_instances,
+    task .delay()) is covered by test_side_scans_trigger.py — here we only verify
+    the CSPM scan task calls it exactly once per new EC2/Lambda resource, and
+    skips resources that already have a prior scan_jobs entry (dedup uses the
+    real scan_jobs collection, not a mock — ArangoDB is never mocked).
+    """
+
+    @staticmethod
+    def _output(uid: str, name: str, resource_type: str):
+        from types import SimpleNamespace
+
+        meta = SimpleNamespace(
+            CheckID="test_check",
+            CheckTitle="Test",
+            Description="desc",
+            Severity="high",
+            ResourceType=resource_type,
+            Remediation=None,
+        )
+        return SimpleNamespace(
+            status="PASS",
+            status_extended="ok",
+            resource_uid=uid,
+            resource_name=name,
+            region="us-east-1",
+            account_uid=ACCOUNT_ID,
+            metadata=meta,
+            compliance={},
+            resource_metadata={},
+        )
+
+    def test_first_seen_ec2_and_lambda_trigger_side_scan(self, db_tenant_a, mocker):
+        init_tenant_schema(db_tenant_a)
+        mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
+
+        ec2_uid = "arn:aws:ec2:us-east-1:111111111111:instance/i-newec2"
+        lambda_uid = "arn:aws:lambda:us-east-1:111111111111:function:my-fn"
+
+        mock_prowler = MagicMock()
+        mock_prowler.run_aws_scan.return_value = ScanResult(
+            findings=[],
+            raw_outputs=[
+                self._output(ec2_uid, "i-newec2", "AwsEc2Instance"),
+                self._output(lambda_uid, "my-fn", "AwsLambdaFunction"),
+            ],
+        )
+        mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
+
+        enqueue_mock = mocker.patch("app.workers.tasks.cspm_scan.enqueue_side_scan", return_value="fake-job-id")
+
+        result = run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
+
+        assert enqueue_mock.call_count == 2
+        triggered_types = {call.args[2]["resource_type"] for call in enqueue_mock.call_args_list}
+        assert triggered_types == {"ec2_instance", "lambda_function"}
+        assert result is not None  # scan still completes normally
+
+    def test_resource_with_prior_scan_job_is_not_retriggered(self, db_tenant_a, mocker):
+        """A resource that already has any ec2/lambda scan_jobs entry (queued,
+        running, completed, or failed) is skipped — first-seen semantics, not a
+        time-window cooldown."""
+        from app.services.prowler_inventory import resource_arango_key
+
+        init_tenant_schema(db_tenant_a)
+        mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
+
+        ec2_uid = "arn:aws:ec2:us-east-1:111111111111:instance/i-existing"
+        resource_key = resource_arango_key(ec2_uid, TEST_TENANT)
+        db_tenant_a.collection("scan_jobs").insert(
+            {
+                "_key": "prior-ec2-job",
+                "tenant_id": TEST_TENANT,
+                "type": "ec2",
+                "status": "completed",
+                "resource_id": resource_key,
+            }
+        )
+
+        mock_prowler = MagicMock()
+        mock_prowler.run_aws_scan.return_value = ScanResult(
+            findings=[],
+            raw_outputs=[self._output(ec2_uid, "i-existing", "AwsEc2Instance")],
+        )
+        mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
+
+        enqueue_mock = mocker.patch("app.workers.tasks.cspm_scan.enqueue_side_scan")
+
+        run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
+
+        enqueue_mock.assert_not_called()
+
+    def test_non_aws_provider_never_auto_triggers(self, db_tenant_a, mocker):
+        """Side-scanning is AWS-only — Azure/GCP/K8s scans must never call enqueue_side_scan."""
+        init_tenant_schema(db_tenant_a)
+        mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
+
+        mock_prowler = MagicMock()
+        mock_prowler.run_azure_scan.return_value = ScanResult(findings=[], raw_outputs=[])
+        mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
+
+        enqueue_mock = mocker.patch("app.workers.tasks.cspm_scan.enqueue_side_scan")
+
+        azure_kwargs = {**_TASK_KWARGS, "provider": "azure"}
+        run_cspm_scan.apply(kwargs=azure_kwargs).get()
+
+        enqueue_mock.assert_not_called()
+
+    def test_enqueue_failure_for_one_resource_does_not_fail_scan(self, db_tenant_a, mocker):
+        """A single resource's enqueue error is logged and skipped — never fails the CSPM job."""
+        init_tenant_schema(db_tenant_a)
+        mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
+
+        ec2_uid = "arn:aws:ec2:us-east-1:111111111111:instance/i-broken"
+        mock_prowler = MagicMock()
+        mock_prowler.run_aws_scan.return_value = ScanResult(
+            findings=[],
+            raw_outputs=[self._output(ec2_uid, "i-broken", "AwsEc2Instance")],
+        )
+        mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
+        mocker.patch("app.workers.tasks.cspm_scan.enqueue_side_scan", side_effect=RuntimeError("boom"))
+
+        result = run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
+
+        jobs = list(
+            db_tenant_a.aql.execute(
+                "FOR j IN scan_jobs FILTER j.tenant_id == @t RETURN j", bind_vars={"t": TEST_TENANT}
+            )
+        )
+        assert any(j["status"] == "completed" for j in jobs)
+        assert result["findings_found"] == 0

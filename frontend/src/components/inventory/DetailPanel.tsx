@@ -1,13 +1,18 @@
 'use client'
-import { ExternalLink, X } from 'lucide-react'
+import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { CheckCircle2, ExternalLink, PlayCircle, X } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import type { BadgeVariant } from '@/components/ui/Badge'
+import { sideScanApi } from '@/lib/api'
 import type { ResourceDetail } from '@/lib/types'
 
 interface DetailPanelProps {
   resource: ResourceDetail | null
   onClose: () => void
 }
+
+const SCANNABLE_RESOURCE_TYPES = new Set(['ec2_instance', 'lambda_function'])
 
 function consoleUrl(resource: ResourceDetail): string | null {
   if (resource.provider === 'aws' && resource.arn) {
@@ -22,9 +27,19 @@ function consoleUrl(resource: ResourceDetail): string | null {
 }
 
 export function DetailPanel({ resource, onClose }: DetailPanelProps) {
+  const [scanError, setScanError] = useState<string | null>(null)
+
+  const scanMutation = useMutation({
+    mutationFn: () => sideScanApi.triggerScan(resource?.key ?? ''),
+    onSuccess: () => setScanError(null),
+    onError: () => setScanError('Failed to trigger scan.'),
+  })
+
   if (!resource) return null
 
   const url = consoleUrl(resource)
+  const canScan = SCANNABLE_RESOURCE_TYPES.has(resource.resource_type) && resource.status === 'active'
+  const scanSuccessJobId = scanMutation.isSuccess ? scanMutation.data.data.job_id : null
   const providerVariant: BadgeVariant = `provider-${resource.provider}` as BadgeVariant
   const statusVariant: BadgeVariant = resource.status === 'active' ? 'status-active' : 'status-deleted'
 
@@ -71,6 +86,31 @@ export function DetailPanel({ resource, onClose }: DetailPanelProps) {
       </div>
 
       <div className="p-4 space-y-6">
+        {canScan && (
+          <section>
+            <button
+              onClick={() => scanMutation.mutate()}
+              disabled={scanMutation.isPending}
+              className="flex items-center gap-2 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              <PlayCircle className="w-4 h-4" />
+              {scanMutation.isPending ? 'Queuing scan...' : 'Scan Now'}
+            </button>
+
+            {scanSuccessJobId && (
+              <div className="mt-2 p-2 bg-green-950 border border-green-800 rounded text-green-400 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                Side-scan queued — job {scanSuccessJobId}
+              </div>
+            )}
+            {scanError && (
+              <div className="mt-2 p-2 bg-red-950 border border-red-800 rounded text-red-400 text-xs">
+                {scanError}
+              </div>
+            )}
+          </section>
+        )}
+
         <section>
           <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
             Metadata

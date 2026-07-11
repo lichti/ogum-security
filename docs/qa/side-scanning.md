@@ -3,14 +3,13 @@
 Covers: `/side-scanning` UI, `/api/v1/side-scans/*`, and the deep file-system scan tasks
 (`scan_ec2_instance_v2`, `scan_lambda_function`, `scan_container_image`, `scan_k8s_container`).
 
-**Known gap as of this writing:** only the Kubernetes (`/webhooks/k8s-scan`) and container image
-(`/webhooks/ecr`) scan types have an HTTP trigger. `scan_ec2_instance_v2` and
-`scan_lambda_function` are fully implemented and unit/integration-tested (see
-`tests/unit/services/test_side_scanning.py`, `tests/integration/tasks/test_side_scanning_v2.py`),
-but nothing in the API dispatches them yet — there is no `POST` endpoint that calls
-`scan_ec2_instance_v2.delay(...)`. Scenarios 1–2 below cover the two scan types that are
-reachable end-to-end today; Scenario 3 documents how to exercise EC2/Lambda scanning in the
-absence of a trigger endpoint, and doubles as a reminder this gap exists until it's closed.
+EC2 and Lambda scans are reachable two ways: `POST /api/v1/side-scans/trigger` (manual —
+also the "Scan Now" button in the Inventory detail panel), and automatically the first time
+`run_cspm_scan` discovers a new EC2 instance or Lambda function (AWS only; deduplicated against
+`scan_jobs`, never re-triggered periodically — see `app/services/side_scanning/trigger.py`).
+Kubernetes and container-image scans still only fire from external webhooks (a real DaemonSet, a
+real ECR push) — there's no equivalent manual/automatic path for those, since they don't originate
+from Ogum's own inventory scan the way EC2/Lambda do.
 
 ## Pre-conditions
 
@@ -62,30 +61,35 @@ absence of a trigger endpoint, and doubles as a reminder this gap exists until i
 - No pod restart occurs — this scan reads `/proc/<PID>/root`, it doesn't touch the running
   container.
 
-## Scenario 3 — EC2 and Lambda scanning (no HTTP trigger yet)
+## Scenario 3 — EC2 and Lambda scanning (manual trigger + auto first-seen)
 
-**Steps (dev-only, until a trigger endpoint exists):**
-1. From a shell inside the `worker` container, dispatch directly:
-   ```python
-   from app.workers.tasks.side_scanning import scan_ec2_instance_v2
-   scan_ec2_instance_v2.delay(tenant_id="<tenant>", resource_id="<ec2-resource-key>", provider_id="<provider-key>")
-   ```
-   (or `scan_lambda_function.delay(...)` — check the task signature in `side_scanning.py` for
-   exact required kwargs, they've changed between sprints).
-2. Poll the resulting job the same way as Scenario 1 (a `scan_jobs` doc is created by the task
-   itself via `start_discovery_job`).
+**Steps — manual trigger:**
+1. In `/inventory`, select an active EC2 instance or Lambda function resource.
+2. Click **Scan Now** in the detail panel.
+3. Confirm the green "Side-scan queued — job {id}" banner, then poll
+   `GET /api/v1/side-scans/jobs/{job_id}` (or watch it appear in `/side-scanning`) until terminal.
+
+**Steps — automatic first-seen trigger:**
+1. Ensure the target EC2 instance/Lambda has never been side-scanned before (no `scan_jobs` doc
+   with `type: "ec2"`/`"lambda"` and matching `resource_id`).
+2. Trigger a CSPM/discovery scan for the AWS provider (`POST /api/v1/scans`).
+3. After the scan completes, check `scan_jobs` for a new `ec2`/`lambda` entry created without any
+   manual action — `run_cspm_scan`'s log line includes `side_scans_triggered=N`.
+4. Re-run the same discovery scan a second time — confirm **no** new `ec2`/`lambda` job is created
+   for that same resource (first-seen dedup, not a time-window cooldown).
 
 **Expected result:**
-- EC2: snapshot created → EBS Direct API scan via `trivy client vm ebs:{snapshot_id}` → snapshot
-  deleted in `finally` even if the scan fails (verify no orphaned EBS snapshot remains on the
-  account after a failed run — `cleanup_orphan_snapshots` Celery Beat task is the safety net if
-  one does leak).
+- EC2: snapshot created → EBS Direct API scan via `trivy client vm ebs:{snapshot_id}` (+ optional
+  YARA via a scoped volume mount when `OGUM_SCANNER_INSTANCE_ID` is configured) → snapshot (and
+  scoped volume, if any) deleted in `finally` even if the scan fails (verify no orphaned EBS
+  snapshot/volume remains on the account after a failed run — `cleanup_orphan_snapshots` Celery
+  Beat task is the safety net if one does leak).
 - Lambda: deployment package downloaded to `/dev/shm/ogum-{job_id}/` (RAM disk), scanned, then
   the RAM disk is wiped in `finally` regardless of outcome.
 - Both produce an SBOM (`sboms` collection + `HAS_SBOM` edge) alongside findings.
-
-**If you're reading this because the trigger endpoint now exists:** update this scenario to use
-it instead of direct dispatch, and update the "known gap" note at the top of this file.
+- Triggering a resource that's `status: deleted`, or not an `ec2_instance`/`lambda_function`,
+  returns `422`. Triggering a `resource_key` from another tenant, or one that doesn't exist,
+  returns `404`.
 
 ## Scenario 4 — Retry a failed scan
 
@@ -97,8 +101,11 @@ passing an invalid `image_digest`/`resource_id`).
 2. Confirm the response and poll the new job.
 
 **Expected result:**
-- Retry re-dispatches the correct task per `_RETRY_TASK_MAP` (`k8s_container`, `ecr`, `ec2`,
-  `lambda`, `sbom_rescan` all map to their respective task).
+- Retry re-dispatches the correct task by job `type`: `k8s_container`/`ecr` replay the original
+  job doc's fields; `ec2`/`lambda` re-fetch the resource and go through the same
+  `enqueue_side_scan()` path as a manual trigger (fresh `volume_id`/`availability_zone` lookup for
+  EC2 — the original job doc doesn't carry those). `ec2`/`lambda` retry used to be a silent no-op
+  (job record created, nothing re-enqueued) — confirm it actually re-dispatches now.
 - Retrying a job that isn't in `failed` status is rejected (`422`).
 
 ## Scenario 5 — `/side-scanning` UI

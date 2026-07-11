@@ -289,6 +289,7 @@ We are building this in public. Here is where we are and where we are going:
 - [x] **Ogum.Dynamic:** Container registry scanning — ECR push webhook, SARIF output, CI/CD security badge API
 - [x] **Ogum.Dynamic:** SBOM generation (CycloneDX) + daily re-scan without new snapshots
 - [x] **Ogum.Dynamic:** Side-scanning job console (`/side-scanning`) — KPIs, job table, retry
+- [x] **Ogum.Dynamic:** EC2/Lambda scan trigger — "Scan Now" in Inventory + automatic first-seen trigger after discovery
 - [ ] **Ogum.Dynamic:** Per-tenant CVE suppression rules (`.trivyignore`)
 - [ ] **Ogum.AI:** RAG remediation engine (LangChain + Ollama)
 - [ ] **Ogum.AI:** GitOps PR auto-generation (GitHub/GitLab)

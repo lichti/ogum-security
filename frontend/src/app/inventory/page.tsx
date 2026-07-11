@@ -227,7 +227,7 @@ export default function InventoryPage() {
         )}
       </main>
 
-      <DetailPanel resource={selected} onClose={() => setSelected(null)} />
+      <DetailPanel key={selected?.key} resource={selected} onClose={() => setSelected(null)} />
     </div>
   )
 }
