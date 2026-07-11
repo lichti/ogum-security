@@ -53,6 +53,16 @@ _IDENTITY_RE = re.compile(
     re.IGNORECASE,
 )
 
+# For AWS specifically, the bare-word _IDENTITY_RE above false-positives on
+# "Group"/"Role"/"Policy" as substrings of unrelated resource names — e.g.
+# AwsEc2SecurityGroup, AwsAthenaWorkGroup, AwsAutoScalingAutoScalingGroup,
+# AwsLogsLogGroup, AwsWafRuleGroup all contain "Group" but are not identities.
+# AWS ResourceType strings always carry an explicit service prefix, so for
+# "Aws*" types we route by service prefix instead of bare-word matching.
+# Non-AWS providers don't consistently prefix by service in the same way, so
+# they keep using the broader regex.
+_AWS_IDENTITY_SERVICE_RE = re.compile(r"^Aws(Iam|RolesAnywhere)", re.IGNORECASE)
+
 _DATA_ASSET_RE = re.compile(
     r"s3|bucket|storage|rds|db.?instance|database|sql|dynamo|cosmos|"
     r"blob|lake|warehouse|opensearch|elasticsearch|datastore|secrets.?manager|"
@@ -62,7 +72,10 @@ _DATA_ASSET_RE = re.compile(
 
 
 def _collection_for(raw_type: str) -> str:
-    if _IDENTITY_RE.search(raw_type):
+    if raw_type.startswith("Aws"):
+        if _AWS_IDENTITY_SERVICE_RE.search(raw_type):
+            return "identities"
+    elif _IDENTITY_RE.search(raw_type):
         return "identities"
     if _DATA_ASSET_RE.search(raw_type):
         return "data_assets"
@@ -195,10 +208,41 @@ def _policy_arns(policies: Any) -> list[str]:
     return arns
 
 
+def _member_arns(users: Any) -> list[str]:
+    """Flatten prowler Group.users ([{"arn": ...}, ...] once serialized via .dict())
+    into the flat list[str] graph/resource_edges.py expects for MEMBER_OF edges."""
+    arns: list[str] = []
+    if isinstance(users, list):
+        for u in users:
+            if isinstance(u, dict) and u.get("arn"):
+                arns.append(str(u["arn"]))
+    return arns
+
+
+_ADMIN_POLICY_NAME_SUFFIXES = ("/AdministratorAccess", "/PowerUserAccess")
+
+
+def _has_admin_policy(policy_arns: list[str]) -> bool:
+    """Managed-policy admin heuristic ported from discovery.py's
+    _classify_iam_role — matches by ARN suffix so it works for both AWS-managed
+    and customer-managed policies.
+
+    discovery.py additionally inspected inline policy *documents* for wildcard
+    actions (iam:GetRolePolicy per inline policy) to catch admin access granted
+    via inline policy rather than an attached managed policy. Prowler's Role
+    model only carries inline_policies as a list[str] of names, not the policy
+    document content, so that inline-policy wildcard detection has no
+    equivalent here — accepted gap, same class as the other Prowler-metadata
+    limitations in this module (see _extract_resource_relationships).
+    """
+    return any(arn.endswith(suffix) for arn in policy_arns for suffix in _ADMIN_POLICY_NAME_SUFFIXES)
+
+
 def _extract_identity_fields(metadata: dict[str, Any]) -> dict[str, Any]:
-    """trust_policy + policies for IAM roles/users/groups (prowler Role/User/Group
-    models — see iam_service.py). Absent on types that don't carry these (e.g. an
-    IAM access key resource routed here by _IDENTITY_RE) — fields simply omitted."""
+    """trust_policy + policies + has_admin_policy for IAM roles/users/groups
+    (prowler Role/User/Group models — see iam_service.py). Absent on types that
+    don't carry these (e.g. an IAM access key resource routed here by
+    _IDENTITY_RE) — fields simply omitted."""
     fields: dict[str, Any] = {}
 
     trust_policy = metadata.get("assume_role_policy")
@@ -210,6 +254,7 @@ def _extract_identity_fields(metadata: dict[str, Any]) -> dict[str, Any]:
     ]
     if policies:
         fields["policies"] = policies
+        fields["has_admin_policy"] = _has_admin_policy(policies)
 
     return fields
 
@@ -328,7 +373,11 @@ def extract_inventory_from_findings(
             # graph/iam_edges.py::build_iam_edges reads.
             doc["identity_type"] = _identity_type_for(raw_type)
             doc.update(_extract_identity_fields(metadata_dict))
-            doc["raw_metadata"] = metadata_dict
+            # member_arns lives under raw_metadata (not a top-level Identity model
+            # field) — graph/resource_edges.py reads it the same way discovery.py
+            # used to for MEMBER_OF edges.
+            member_arns = _member_arns(metadata_dict.get("users"))
+            doc["raw_metadata"] = {**metadata_dict, "member_arns": member_arns} if member_arns else metadata_dict
         elif collection == "data_assets":
             # DataAsset model field is asset_type, not resource_type.
             doc["asset_type"] = type_name
