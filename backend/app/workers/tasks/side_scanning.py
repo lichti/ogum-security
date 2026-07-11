@@ -1,10 +1,14 @@
 """
-Side-scanning Celery tasks (Epic 03 Sprints 1 & 2).
+Side-scanning Celery tasks (Epic 03).
 
-scan_ec2_instance (Sprint 1) — agentless EC2 scan via ephemeral EBS snapshot + volume mount.
-scan_ec2_instance_v2 (Sprint 2) — agentless EC2 scan via EBS Direct API (no volume, no mount).
-scan_lambda_function (Sprint 2) — agentless Lambda scan via ZIP download to /dev/shm.
-rescan_sboms (Sprint 2) — daily re-scan of stored CycloneDX SBOMs for new CVEs.
+scan_ec2_instance_v2 — agentless EC2 scan: vuln+secret via EBS Direct API (no volume,
+    no mount) run in parallel with an optional YARA malware scan over a scoped
+    volume mount (only when OGUM_SCANNER_INSTANCE_ID is configured — i.e. the
+    scanner worker itself runs on an EC2 instance that can attach the scan volume
+    to itself). Supersedes the original Sprint 1 scan_ec2_instance, which is
+    removed: EBS Direct API covers everything it did, plus SBOM generation.
+scan_lambda_function — agentless Lambda scan via ZIP download to /dev/shm.
+rescan_sboms — daily re-scan of stored CycloneDX SBOMs for new CVEs.
 cleanup_orphan_snapshots — Celery Beat hourly task.
 
 Security invariants:
@@ -12,6 +16,8 @@ Security invariants:
   - Secret values found on disk are NEVER logged or stored (Trivy redacts Match as ****).
   - Lambda code is downloaded to RAM disk (/dev/shm) and always deleted in finally.
   - EBS snapshots are always deleted in finally (delete_snapshot_safe does not raise).
+  - The scoped YARA volume is always unmounted, detached and deleted in finally,
+    same as the snapshot — a mount failure never leaks a volume.
 """
 
 from __future__ import annotations
@@ -23,7 +29,7 @@ import shutil
 import subprocess
 import uuid
 import zipfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any
 
@@ -59,13 +65,17 @@ from app.workers.tasks.cloud_utils import _get_aws_session, _get_tenant_db, _ups
 
 logger = logging.getLogger(__name__)
 
-# Mount path inside the scanner container; override via env for testing
+# Mount path inside the scanner container for the scoped YARA volume; override via env for testing
 _SCAN_MOUNT_PATH = os.environ.get("OGUM_SCAN_MOUNT_PATH", "/mnt/target")
 
-# Device name used when attaching the scan volume to the scanner EC2 instance (Sprint 1)
+# Device name used when attaching the scoped YARA scan volume to the scanner EC2 instance
 _SCAN_DEVICE = os.environ.get("OGUM_SCAN_DEVICE", "/dev/xvdf")
 
-# Scanner EC2 instance ID — required for volume attachment in Sprint 1 production mode
+# Scanner EC2 instance ID — when set, scan_ec2_instance_v2 additionally creates a volume
+# from the snapshot, attaches+mounts it to this instance, and runs YARA malware detection
+# over it (EBS Direct API has no file-level access, so YARA needs an actual mount). When
+# unset (e.g. workers not running on EC2), the YARA step is skipped and logged — not
+# silently pretended to have run.
 _SCANNER_INSTANCE_ID = os.environ.get("OGUM_SCANNER_INSTANCE_ID", "")
 
 # Trivy sidecar server URL for EBS Direct API (Sprint 2)
@@ -115,83 +125,6 @@ def _upsert_finding(db: Any, finding: Finding) -> None:
 
 
 # ─── Finding normalisation ────────────────────────────────────────────────────
-
-
-def _normalise_cve(
-    vuln: dict[str, Any],
-    *,
-    tenant_id: str,
-    resource_id: str,
-    resource_arn: str | None,
-    provider: str,
-    region: str,
-    account_id: str,
-    scan_job_id: str,
-) -> Finding:
-    cve_id = vuln.get("cve_id") or "NOID"
-    package = vuln.get("package", "unknown")
-    check_id = f"side_scanning/cve/{cve_id}"
-    severity = cvss_to_severity(vuln.get("cvss_score", 0.0))
-    title = vuln.get("title") or f"{cve_id} in {package}"
-    desc = vuln.get("description") or title
-    return Finding(
-        finding_id=str(uuid.uuid4()),
-        tenant_id=tenant_id,
-        check_id=check_id,
-        title=title[:200],
-        description=desc[:500],
-        resource_id=resource_id,
-        resource_arn=resource_arn,
-        resource_type="ec2_instance",
-        severity=severity,
-        status=FindingStatus.FAIL,
-        provider=provider,
-        region=region,
-        account_id=account_id,
-        source=FindingSource.SIDE_SCANNING,
-        scan_job_id=scan_job_id,
-        raw_output={
-            "package": package,
-            "installed_version": vuln.get("installed_version", ""),
-            "fixed_version": vuln.get("fixed_version", ""),
-            "cvss_score": vuln.get("cvss_score", 0.0),
-        },
-    )
-
-
-def _normalise_secret(
-    secret: dict[str, Any],
-    *,
-    tenant_id: str,
-    resource_id: str,
-    resource_arn: str | None,
-    provider: str,
-    region: str,
-    account_id: str,
-    scan_job_id: str,
-) -> Finding:
-    rule = secret.get("rule", "unknown")
-    path = secret.get("path", "")
-    check_id = f"side_scanning/secret/{rule}"
-    return Finding(
-        finding_id=str(uuid.uuid4()),
-        tenant_id=tenant_id,
-        check_id=check_id,
-        title=f"Exposed secret detected: {rule}",
-        description=f"Secret matching rule '{rule}' found at path '{path}' on the instance disk.",
-        resource_id=resource_id,
-        resource_arn=resource_arn,
-        resource_type="ec2_instance",
-        severity=SeverityLevel.CRITICAL,
-        status=FindingStatus.FAIL,
-        provider=provider,
-        region=region,
-        account_id=account_id,
-        source=FindingSource.SIDE_SCANNING,
-        scan_job_id=scan_job_id,
-        # path metadata only — never include the actual secret value
-        raw_output={"rule": rule, "path": path, "line": secret.get("line", 0)},
-    )
 
 
 def _normalise_cve_v2(
@@ -312,154 +245,6 @@ def _normalise_malware(
         scan_job_id=scan_job_id,
         raw_output={"rule": rule, "path": path},
     )
-
-
-# ─── Main task ────────────────────────────────────────────────────────────────
-
-
-@celery_app.task(bind=True, max_retries=1, default_retry_delay=300, time_limit=1800)
-def scan_ec2_instance(  # noqa: PLR0913
-    self: Any,
-    *,
-    tenant_id: str,
-    resource_key: str,
-    provider_key: str,
-    region: str,
-    account_id: str,
-    instance_id: str,
-    volume_id: str,
-    availability_zone: str,
-    resource_arn: str | None = None,
-    role_arn: str | None = None,
-    aws_access_key_id: str | None = None,
-    aws_secret_access_key: str | None = None,
-) -> dict[str, Any]:
-    """Agentless EC2 scan via ephemeral EBS snapshot."""
-    db = _get_tenant_db(tenant_id)
-    init_tenant_schema(db)
-    job_id = start_discovery_job(db, tenant_id, "aws", provider_key, job_type="ec2")
-    logger.info(
-        "side_scanning start [tenant=%s instance=%s volume=%s job=%s]",
-        tenant_id,
-        instance_id,
-        volume_id,
-        job_id,
-    )
-
-    session = _get_aws_session(
-        role_arn=role_arn,
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key,
-    )
-    ec2 = session.client("ec2", region_name=region)
-
-    snapshot_id: str | None = None
-    scan_volume_id: str | None = None
-    mounted = False
-
-    try:
-        # 1. Create and wait for snapshot
-        snapshot_id = create_scan_snapshot(ec2, volume_id, tenant_id)
-        wait_for_snapshot(ec2, snapshot_id)
-
-        # 2. Create volume from snapshot
-        scan_volume_id = create_volume_from_snapshot(ec2, snapshot_id, availability_zone)
-
-        # 3. Mount (skipped when scanner is not on EC2 — OGUM_SCANNER_INSTANCE_ID not set)
-        scan_path = _SCAN_MOUNT_PATH
-        if _SCANNER_INSTANCE_ID:
-            ec2.attach_volume(
-                VolumeId=scan_volume_id,
-                InstanceId=_SCANNER_INSTANCE_ID,
-                Device=_SCAN_DEVICE,
-            )
-            mount_volume_ro(_SCAN_DEVICE, scan_path)
-            mounted = True
-
-        # 4. Run analysers in parallel (secrets via Trivy --scanners secret in v2)
-        vulns: list[dict[str, Any]] = []
-        yara_matches: list[dict[str, str]] = []
-        secrets: list[dict[str, Any]] = []
-
-        def _run_trivy() -> list[dict[str, Any]]:
-            return run_trivy_fs(scan_path, timeout=_ANALYZER_TIMEOUT)
-
-        def _run_yara() -> list[dict[str, str]]:
-            return run_yara(scan_path, timeout=_ANALYZER_TIMEOUT)
-
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            futures = {
-                pool.submit(_run_trivy): "trivy",
-                pool.submit(_run_yara): "yara",
-            }
-            for future in as_completed(futures):
-                name = futures[future]
-                try:
-                    result = future.result()
-                    if name == "trivy":
-                        vulns = result
-                    else:
-                        yara_matches = result
-                except Exception:
-                    logger.exception("Analyser %s failed for instance=%s", name, instance_id)
-
-    finally:
-        # 5. Cleanup — always runs, even on exception
-        if mounted:
-            umount_volume(scan_path)
-        if scan_volume_id:
-            try:
-                if _SCANNER_INSTANCE_ID and mounted:
-                    ec2.detach_volume(VolumeId=scan_volume_id, Force=True)
-                delete_volume_safe(ec2, scan_volume_id)
-            except Exception:
-                logger.exception("Volume cleanup failed for %s — job=%s", scan_volume_id, job_id)
-        if snapshot_id:
-            try:
-                delete_snapshot_safe(ec2, snapshot_id)
-            except Exception:
-                logger.exception("Snapshot cleanup failed for %s — job=%s", snapshot_id, job_id)
-
-    # 6. Normalise and persist findings
-    common = dict(
-        tenant_id=tenant_id,
-        resource_id=resource_key,
-        resource_arn=resource_arn,
-        provider="aws",
-        region=region,
-        account_id=account_id,
-        scan_job_id=job_id,
-    )
-    findings: list[Finding] = []
-    for v in vulns:
-        findings.append(_normalise_cve(v, **common))
-    for s in secrets:
-        findings.append(_normalise_secret(s, **common))
-    for m in yara_matches:
-        findings.append(_normalise_malware(m, **common))
-
-    for f in findings:
-        try:
-            _upsert_finding(db, f)
-        except Exception:
-            logger.exception("Failed to persist finding %s", f.check_id)
-
-    complete_discovery_job(db, job_id, len(findings))
-    logger.info(
-        "side_scanning complete [tenant=%s instance=%s findings=%d job=%s]",
-        tenant_id,
-        instance_id,
-        len(findings),
-        job_id,
-    )
-    return {
-        "job_id": job_id,
-        "instance_id": instance_id,
-        "findings_count": len(findings),
-        "cve_count": len(vulns),
-        "secret_count": len(secrets),
-        "malware_count": len(yara_matches),
-    }
 
 
 # ─── Orphan cleanup task ──────────────────────────────────────────────────────
@@ -595,6 +380,40 @@ def _persist_sbom(
 # ─── Sprint 2 tasks ───────────────────────────────────────────────────────────
 
 
+def _run_yara_via_scoped_mount(
+    ec2: Any,
+    snapshot_id: str,
+    availability_zone: str,
+    instance_id: str,
+    scan_job_id: str,
+    state: dict[str, Any],
+) -> list[dict[str, str]]:
+    """
+    Create a volume from the snapshot, attach+mount it read-only to the scanner's own
+    EC2 instance, and run YARA. Records scan_volume_id/mounted into `state` so the
+    caller's finally block can clean up regardless of success or failure here.
+
+    Only called when OGUM_SCANNER_INSTANCE_ID is configured — EBS Direct API gives no
+    file-level access, so this is the only way to run YARA against the snapshot.
+    """
+    scan_volume_id = create_volume_from_snapshot(ec2, snapshot_id, availability_zone)
+    state["scan_volume_id"] = scan_volume_id
+    ec2.attach_volume(
+        VolumeId=scan_volume_id,
+        InstanceId=_SCANNER_INSTANCE_ID,
+        Device=_SCAN_DEVICE,
+    )
+    mount_volume_ro(_SCAN_DEVICE, _SCAN_MOUNT_PATH)
+    state["mounted"] = True
+    logger.info(
+        "scan_ec2_instance_v2 running YARA via scoped mount [instance=%s volume=%s job=%s]",
+        instance_id,
+        scan_volume_id,
+        scan_job_id,
+    )
+    return run_yara(_SCAN_MOUNT_PATH, timeout=_ANALYZER_TIMEOUT)
+
+
 @celery_app.task(bind=True, max_retries=1, default_retry_delay=300, time_limit=1800)
 def scan_ec2_instance_v2(  # noqa: PLR0913
     self: Any,
@@ -608,17 +427,21 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
     region: str = "us-east-1",
     account_id: str = "",
     resource_key: str = "",
+    availability_zone: str = "",
     resource_arn: str | None = None,
     role_arn: str | None = None,
     aws_access_key_id: str | None = None,
     aws_secret_access_key: str | None = None,
 ) -> dict[str, Any]:
     """
-    EBS Direct API scan pipeline (Sprint 2):
+    EBS Direct API scan pipeline:
       1. CreateSnapshot
-      2. trivy client vm ebs:{snapshot_id} (no volume, no mount)
+      2. trivy client vm ebs:{snapshot_id} for vuln+secret (no volume, no mount) — run in
+         parallel with an optional scoped-mount YARA malware scan (only when
+         OGUM_SCANNER_INSTANCE_ID + availability_zone are available; skipped and logged
+         otherwise, never silently omitted)
       3. Generate SBOM CycloneDX
-      4. DeleteSnapshot (always in finally)
+      4. DeleteSnapshot + delete/detach/unmount the scoped YARA volume, if any (always in finally)
     """
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
@@ -641,24 +464,73 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
     snapshot_id: str | None = None
     vulns: list[dict[str, Any]] = []
     secrets: list[dict[str, Any]] = []
+    yara_matches: list[dict[str, str]] = []
     sbom_json: dict[str, Any] = {}
+    yara_state: dict[str, Any] = {"scan_volume_id": None, "mounted": False}
+    yara_enabled = bool(_SCANNER_INSTANCE_ID and availability_zone)
 
     try:
         # 1. Create and wait for snapshot
         snapshot_id = create_scan_snapshot(ec2, volume_id, tenant_id)
         wait_for_snapshot(ec2, snapshot_id)
 
-        # 2. EBS Direct API scan — no volume creation, no mount
-        vulns, secrets = run_trivy_ebs(snapshot_id, trivy_server_url=trivy_server_url)
+        # 2. EBS Direct API scan (vuln+secret) in parallel with scoped-mount YARA, if enabled
+        def _run_trivy_ebs() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+            return run_trivy_ebs(snapshot_id, trivy_server_url=trivy_server_url)  # type: ignore[arg-type]
+
+        def _run_yara() -> list[dict[str, str]]:
+            if not yara_enabled:
+                return []
+            return _run_yara_via_scoped_mount(
+                ec2,
+                snapshot_id,
+                availability_zone,
+                instance_id,
+                scan_job_id,
+                yara_state,  # type: ignore[arg-type]
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            trivy_future = pool.submit(_run_trivy_ebs)
+            yara_future = pool.submit(_run_yara)
+
+            # YARA is best-effort — a scoped-mount failure must not fail the whole scan.
+            try:
+                yara_matches = yara_future.result()
+            except Exception:
+                logger.exception("YARA analyser failed for instance=%s", instance_id)
+
+            # Trivy is the primary analysis engine — let failures propagate so the task
+            # is retried/marked failed rather than silently reporting zero findings.
+            vulns, secrets = trivy_future.result()
+
+        if not yara_enabled:
+            logger.info(
+                "scan_ec2_instance_v2 skipped YARA malware scan — OGUM_SCANNER_INSTANCE_ID or "
+                "availability_zone not available [instance=%s job=%s]",
+                instance_id,
+                scan_job_id,
+            )
 
         # 3. SBOM generation
         sbom_json = _generate_sbom(snapshot_id, trivy_server_url, scan_job_id)
 
     finally:
-        # 4. Always delete snapshot (delete_snapshot_safe does not raise)
+        # 4. Cleanup — always runs, even on exception
+        scan_volume_id = yara_state["scan_volume_id"]
+        mounted = yara_state["mounted"]
+        if mounted:
+            umount_volume(_SCAN_MOUNT_PATH)
+        if scan_volume_id:
+            try:
+                if mounted:
+                    ec2.detach_volume(VolumeId=scan_volume_id, InstanceId=_SCANNER_INSTANCE_ID, Force=True)
+                delete_volume_safe(ec2, scan_volume_id)
+            except Exception:
+                logger.exception("Volume cleanup failed for %s — job=%s", scan_volume_id, scan_job_id)
         if snapshot_id:
             delete_snapshot_safe(ec2, snapshot_id)
-        complete_discovery_job(db, scan_job_id, len(vulns) + len(secrets))
+        complete_discovery_job(db, scan_job_id, len(vulns) + len(secrets) + len(yara_matches))
 
     # 5. Normalise and persist findings
     rkey = resource_key or instance_id
@@ -676,6 +548,8 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
         findings.append(_normalise_cve_v2(v, **common, detection_method="ebs_direct"))
     for s in secrets:
         findings.append(_normalise_trivy_secret(s, **common, detection_method="trivy_secret"))
+    for m in yara_matches:
+        findings.append(_normalise_malware(m, **common))
 
     for f in findings:
         try:
@@ -702,6 +576,7 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
         "findings_count": len(findings),
         "cve_count": len(vulns),
         "secret_count": len(secrets),
+        "malware_count": len(yara_matches),
         "sbom_components": len(sbom_json.get("components", [])),
     }
 

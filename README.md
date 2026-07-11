@@ -282,7 +282,7 @@ We are building this in public. Here is where we are and where we are going:
 - [x] **Ogum.Graph:** Attack Path canvas (React Flow) — custom node types, dagre layout, animated edges
 - [x] **Ogum.Graph:** CIEM static analysis — dangerous IAM permissions (18 actions), AssumeRole chaining
 - [x] **Ogum.Graph:** CIEM UI — identities list with risk score, permissions detail panel
-- [x] **Ogum.Dynamic:** Agentless EC2 side-scanning — ephemeral EBS snapshots + Trivy + secret detection
+- [x] **Ogum.Dynamic:** Agentless EC2 side-scanning — ephemeral EBS snapshots + Trivy vuln/secret detection, with optional YARA malware scanning when the scanner runs on EC2
 - [x] **Ogum.Dynamic:** EC2 side-scanning via EBS Direct API — no volume, no mount
 - [x] **Ogum.Dynamic:** AWS Lambda artifact scanning (ZIP-based; container-image Lambdas not yet covered)
 - [x] **Ogum.Dynamic:** Kubernetes runtime container scanning (privileged DaemonSet, `/proc/<PID>/root`)
