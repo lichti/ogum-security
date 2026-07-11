@@ -13,11 +13,14 @@ against compliance frameworks. Scans run as Celery tasks in the background.
 curl -X POST http://localhost:8000/api/v1/scans \
   -H "Content-Type: application/json" \
   -H "X-Tenant-Id: <your-tenant-id>" \
-  -d '{
-    "provider_id": "<provider-id>",
-    "frameworks": ["CIS-AWS-2.0", "PCI_DSS_v4", "SOC2"]
-  }'
+  -d '{"provider_id": "<provider-id>"}'
 ```
+
+Omitting `frameworks` (recommended) runs Prowler's **full check catalog** for the provider — this
+is the default and the source of truth for inventory too (see
+[`connecting-accounts.md`](./connecting-accounts.md)). Every check still tags its result with
+every compliance framework it belongs to, so the full catalog is always a superset of any
+curated framework list, never a narrower scan.
 
 Response:
 ```json
@@ -33,7 +36,17 @@ curl http://localhost:8000/api/v1/scans/<job_id> \
 
 Status values: `queued` → `running` → `completed` | `failed`
 
-### Supported Frameworks
+A full-catalog scan takes several minutes, not seconds — a job still `running` after a minute or
+two is normal, not stuck.
+
+### Scoping to Specific Frameworks
+
+Pass `frameworks` explicitly only to scope a one-off scan to a specific compliance requirement —
+this produces a **narrower** result than the default full catalog, not a different one:
+
+```json
+{"provider_id": "<id>", "frameworks": ["CIS-AWS-2.0", "PCI_DSS_v4"]}
+```
 
 | Framework | ID |
 |---|---|
@@ -44,11 +57,9 @@ Status values: `queued` → `running` → `completed` | `failed`
 | ISO 27001 | `ISO27001` |
 | LGPD | `LGPD` |
 
-Pass an empty list `[]` to run all available checks:
-
-```json
-{"provider_id": "<id>", "frameworks": []}
-```
+See `/compliance` in the UI for the full list of frameworks the current scan data covers — a
+full-catalog scan against a real account typically surfaces 30+ frameworks, not just the ones
+listed above.
 
 ### Scan Schedule
 
