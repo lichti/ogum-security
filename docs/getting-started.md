@@ -206,9 +206,8 @@ docker compose exec ollama ollama pull llama3:8b-instruct
 ```
 
 **Discovery takes too long:**
-Large AWS accounts (5,000+ resources) can take 15–30 minutes on first discovery.
-Rate limiting from AWS IAM is common — Ogum retries automatically with backoff.
+Discovery for AWS is a full Prowler CSPM scan (the entire check catalog), which doubles as the inventory pass — large accounts (5,000+ resources) can take several minutes on first connect.
 Monitor progress:
 ```bash
-docker compose logs -f worker | grep "discover_aws"
+docker compose logs -f worker | grep "run_cspm_scan"
 ```

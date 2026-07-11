@@ -18,7 +18,7 @@ from app.api.v1.inventory import get_tenant_db
 from app.core.config import settings
 from app.db.init import init_tenant_schema
 from app.models.api_responses import ApiResponse
-from app.workers.tasks.discovery import _upsert
+from app.workers.tasks.cloud_utils import _upsert
 
 router = APIRouter(prefix="/api/v1/dev", tags=["dev"])
 

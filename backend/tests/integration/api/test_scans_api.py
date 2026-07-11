@@ -152,6 +152,23 @@ class TestTriggerScan:
         assert call_kwargs["frameworks"] == ["CIS-AWS-2.0"]
         assert call_kwargs["account_id"] == "111111111111"
 
+    def test_omitted_frameworks_dispatches_full_catalog(self, api_client, db_tenant_a, mocker):
+        """No frameworks in the request body -> frameworks=None (Prowler's full
+        check catalog), not a curated default subset."""
+        _seed_provider(db_tenant_a)
+        mock_task = mocker.MagicMock()
+        mock_task.id = "job-full"
+        mock_delay = mocker.patch("app.api.v1.scans.run_cspm_scan.delay", return_value=mock_task)
+
+        api_client.post(
+            "/api/v1/scans",
+            json={"provider_id": "aws-111111111111"},
+            headers=HEADERS,
+        )
+
+        mock_delay.assert_called_once()
+        assert mock_delay.call_args.kwargs["frameworks"] is None
+
 
 # ─── GET /api/v1/scans/{job_id} ───────────────────────────────────────────────
 

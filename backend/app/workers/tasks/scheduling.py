@@ -1,7 +1,9 @@
 """
 Celery Beat scheduling and distributed discovery locks.
 
-trigger_all_discoveries routes discovery jobs to provider-specific tasks.
+trigger_all_discoveries routes discovery jobs to provider-specific tasks —
+Azure/GCP/K8s only; AWS inventory is built entirely by CSPM scans (see
+run_cspm_scan), so there is no separate AWS discovery task to route to.
 trigger_all_cspm_scans iterates all tenants and provider configs and dispatches
 run_cspm_scan for each enabled provider. Both use Redis distributed locks to
 prevent concurrent runs.
@@ -21,11 +23,9 @@ logger = logging.getLogger(__name__)
 
 _LOCK_TTL_SECONDS = 3600 * 7  # 7 hours — upper bound for a full discovery or scan run
 
-_DEFAULT_FRAMEWORKS: dict[str, list[str]] = {
-    "aws": ["CIS-AWS-2.0"],
-    "azure": ["CIS-Azure-2.0"],
-    "gcp": ["CIS-GCP-2.0"],
-}
+# Providers run_cspm_scan/_dispatch_scan know how to route — trigger_all_cspm_scans
+# skips anything else (e.g. a provider config in a still-unsupported state).
+_CSPM_SUPPORTED_PROVIDERS = frozenset({"aws", "azure", "gcp", "k8s", "kubernetes"})
 
 
 def acquire_lock(redis: Redis, tenant_id: str, provider: str) -> bool:
@@ -47,16 +47,16 @@ def trigger_all_discoveries(tenant_id: str, provider: str, **kwargs: Any) -> dic
     The Beat schedule calls this with (tenant_id, provider, **credentials).
     Each dispatched discovery task manages its own Redis lock so concurrent
     runs are skipped rather than stacked.
+
+    AWS is not routed here — trigger_all_cspm_scans dispatches run_cspm_scan
+    for AWS providers directly, since a CSPM scan is itself the full AWS
+    discovery pass.
     """
     from app.workers.tasks.azure_discovery import discover_azure
-    from app.workers.tasks.discovery import discover_aws
     from app.workers.tasks.gcp_discovery import discover_gcp
     from app.workers.tasks.k8s_discovery import discover_k8s
 
-    if provider == Provider.AWS:
-        regions: list[str] = kwargs.pop("regions", ["us-east-1"])
-        discover_aws.apply_async(args=[tenant_id, regions], kwargs=kwargs)
-    elif provider == Provider.AZURE:
+    if provider == Provider.AZURE:
         discover_azure.apply_async(kwargs={"tenant_id": tenant_id, **kwargs})
     elif provider == Provider.GCP:
         discover_gcp.apply_async(kwargs={"tenant_id": tenant_id, **kwargs})
@@ -115,21 +115,21 @@ def trigger_all_cspm_scans() -> dict[str, Any]:
             if not cfg.enabled:
                 skipped += 1
                 continue
-            if cfg.provider not in _DEFAULT_FRAMEWORKS:
+            if cfg.provider not in _CSPM_SUPPORTED_PROVIDERS:
                 skipped += 1
                 continue
 
             try:
                 credentials = get_provider_credentials(tenant_db, cfg.key)
                 account_id = cfg.account_id or cfg.subscription_id or cfg.project_id or ""
-                frameworks = _DEFAULT_FRAMEWORKS[cfg.provider]
 
                 run_cspm_scan.apply_async(
                     kwargs={
                         "tenant_id": tenant_id,
                         "provider_id": cfg.key,
                         "provider": cfg.provider,
-                        "frameworks": frameworks,
+                        # None -> Prowler's full check catalog, not a curated subset.
+                        "frameworks": None,
                         "credentials": credentials,
                         "account_id": account_id,
                         "regions": cfg.regions or None,
@@ -137,11 +137,10 @@ def trigger_all_cspm_scans() -> dict[str, Any]:
                 )
                 dispatched += 1
                 logger.info(
-                    "Dispatched CSPM scan [tenant=%s provider=%s account=%s frameworks=%s]",
+                    "Dispatched CSPM scan [tenant=%s provider=%s account=%s frameworks=full-catalog]",
                     tenant_id,
                     cfg.provider,
                     account_id,
-                    frameworks,
                 )
             except Exception:
                 logger.exception(

@@ -17,8 +17,8 @@ from app.db.init import init_tenant_schema
 from app.models.finding import ScanJob, ScanJobStatus
 from app.services.checkov_service import CheckovService
 from app.workers.celery_app import celery_app
+from app.workers.tasks.cloud_utils import _get_tenant_db
 from app.workers.tasks.cspm_scan import _update_job, _upsert_finding
-from app.workers.tasks.discovery import _get_tenant_db
 
 logger = logging.getLogger(__name__)
 

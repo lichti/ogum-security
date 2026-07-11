@@ -25,7 +25,7 @@ from app.db.init import init_tenant_schema
 from app.models.inventory import AzureResource, Provider
 from app.workers.celery_app import celery_app
 from app.workers.tasks._job_tracking import complete_discovery_job, fail_discovery_job, start_discovery_job
-from app.workers.tasks.discovery import (
+from app.workers.tasks.cloud_utils import (
     _get_tenant_db,
     _mark_stale_deleted,
     _set_provider_status,

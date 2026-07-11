@@ -27,7 +27,7 @@ def api_client(db_tenant_a):
 
 
 def _register_aws(api_client, mocker, account_id="111111111111", job_id="job-001"):
-    mocker.patch("app.api.v1.providers.discover_aws.delay", return_value=mocker.MagicMock(id=job_id))
+    mocker.patch("app.api.v1.providers.run_cspm_scan.delay", return_value=mocker.MagicMock(id=job_id))
     resp = api_client.post(
         "/api/v1/providers",
         json={
@@ -53,7 +53,7 @@ class TestProvidersRegisterEndpoint:
     def test_register_aws_provider_happy_path(self, api_client, mocker):
         mock_task = mocker.MagicMock()
         mock_task.id = "job-001"
-        mocker.patch("app.api.v1.providers.discover_aws.delay", return_value=mock_task)
+        mocker.patch("app.api.v1.providers.run_cspm_scan.delay", return_value=mock_task)
 
         resp = api_client.post(
             "/api/v1/providers",
@@ -87,7 +87,7 @@ class TestProvidersRegisterEndpoint:
         assert resp.status_code == 422
 
     def test_register_sets_status_pending(self, api_client, mocker):
-        mocker.patch("app.api.v1.providers.discover_aws.delay", return_value=mocker.MagicMock(id="j1"))
+        mocker.patch("app.api.v1.providers.run_cspm_scan.delay", return_value=mocker.MagicMock(id="j1"))
         api_client.post(
             "/api/v1/providers",
             json={"provider": "aws", "display_name": "Test", "account_id": "111", "validate_connection": False},
@@ -135,7 +135,7 @@ class TestProvidersRegisterEndpoint:
 
     def test_register_is_idempotent_no_duplicate(self, api_client, mocker):
         """Registering the same provider twice overwrites — does not create a duplicate."""
-        mocker.patch("app.api.v1.providers.discover_aws.delay", return_value=mocker.MagicMock(id="j1"))
+        mocker.patch("app.api.v1.providers.run_cspm_scan.delay", return_value=mocker.MagicMock(id="j1"))
         payload = {
             "provider": "aws",
             "display_name": "My Account",
@@ -145,7 +145,7 @@ class TestProvidersRegisterEndpoint:
         }
         api_client.post("/api/v1/providers", json=payload, headers=HEADERS)
 
-        mocker.patch("app.api.v1.providers.discover_aws.delay", return_value=mocker.MagicMock(id="j2"))
+        mocker.patch("app.api.v1.providers.run_cspm_scan.delay", return_value=mocker.MagicMock(id="j2"))
         api_client.post("/api/v1/providers", json=payload, headers=HEADERS)
 
         list_resp = api_client.get("/api/v1/providers", headers=HEADERS)
@@ -165,7 +165,7 @@ class TestProvidersListEndpoint:
         assert resp.json()["data"] == []
 
     def test_list_returns_registered_providers(self, api_client, mocker):
-        mocker.patch("app.api.v1.providers.discover_aws.delay", return_value=mocker.MagicMock(id="j1"))
+        mocker.patch("app.api.v1.providers.run_cspm_scan.delay", return_value=mocker.MagicMock(id="j1"))
         api_client.post(
             "/api/v1/providers",
             json={
@@ -286,7 +286,7 @@ class TestProvidersUpdateEndpoint:
 class TestProvidersTriggerDiscoveryEndpoint:
     def test_trigger_discovery_queues_job(self, api_client, mocker):
         provider_id = _register_aws(api_client, mocker)
-        mocker.patch("app.api.v1.providers.discover_aws.delay", return_value=mocker.MagicMock(id="re-job-001"))
+        mocker.patch("app.api.v1.providers.run_cspm_scan.delay", return_value=mocker.MagicMock(id="re-job-001"))
 
         resp = api_client.post(f"/api/v1/providers/{provider_id}/discover", headers=HEADERS)
         assert resp.status_code == 200
@@ -296,7 +296,7 @@ class TestProvidersTriggerDiscoveryEndpoint:
 
     def test_trigger_discovery_updates_last_discovery(self, api_client, mocker):
         provider_id = _register_aws(api_client, mocker)
-        mocker.patch("app.api.v1.providers.discover_aws.delay", return_value=mocker.MagicMock(id="re-job-002"))
+        mocker.patch("app.api.v1.providers.run_cspm_scan.delay", return_value=mocker.MagicMock(id="re-job-002"))
 
         api_client.post(f"/api/v1/providers/{provider_id}/discover", headers=HEADERS)
         resp = api_client.get(f"/api/v1/providers/{provider_id}", headers=HEADERS)
