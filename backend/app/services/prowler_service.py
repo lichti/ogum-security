@@ -91,17 +91,24 @@ class ProwlerService:  # pragma: no cover
         aws_access_key_id: str | None = None,
         aws_secret_access_key: str | None = None,
         regions: list[str] | None = None,
-        frameworks: list[str],
+        frameworks: list[str] | None = None,
         scan_job_id: str,
     ) -> ScanResult:
-        """Execute Prowler v5 checks against an AWS account."""
+        """Execute Prowler v5 checks against an AWS account.
+
+        frameworks=None (the default) runs prowler's full check catalog for the
+        provider — every check still tags its result with every compliance
+        framework it belongs to, so this is a superset of any explicit framework
+        list, not a narrower scan. Pass explicit frameworks only to scope a
+        one-off scan to a specific compliance requirement.
+        """
         try:
             from prowler.providers.aws.aws_provider import AwsProvider  # noqa: PLC0415
         except ImportError as exc:
             raise RuntimeError("prowler-core is not installed") from exc
 
-        compliance_slugs = self._resolve_frameworks(frameworks, provider="aws")
-        if not compliance_slugs:
+        compliance_slugs = self._resolve_frameworks(frameworks, provider="aws") if frameworks else None
+        if frameworks and not compliance_slugs:
             return ScanResult(findings=[], raw_outputs=[])
 
         kwargs: dict[str, Any] = {
@@ -120,7 +127,7 @@ class ProwlerService:  # pragma: no cover
             kwargs["aws_secret_access_key"] = aws_secret_access_key
 
         provider = AwsProvider(**kwargs)
-        return self._run_scan(
+        scan_result = self._run_scan(
             provider=provider,
             compliance_slugs=compliance_slugs,
             cloud_provider="aws",
@@ -128,6 +135,8 @@ class ProwlerService:  # pragma: no cover
             account_id=account_id,
             scan_job_id=scan_job_id,
         )
+        self._enrich_lambda_execution_roles(provider, scan_result.raw_outputs)
+        return scan_result
 
     def run_azure_scan(
         self,
@@ -138,17 +147,18 @@ class ProwlerService:  # pragma: no cover
         azure_tenant_id: str | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
-        frameworks: list[str],
+        frameworks: list[str] | None = None,
         scan_job_id: str,
     ) -> ScanResult:
-        """Execute Prowler v5 checks against an Azure subscription."""
+        """Execute Prowler v5 checks against an Azure subscription. See run_aws_scan
+        for the frameworks=None (full catalog) semantics."""
         try:
             from prowler.providers.azure.azure_provider import AzureProvider  # noqa: PLC0415
         except ImportError as exc:
             raise RuntimeError("prowler-core is not installed") from exc
 
-        compliance_slugs = self._resolve_frameworks(frameworks, provider="azure")
-        if not compliance_slugs:
+        compliance_slugs = self._resolve_frameworks(frameworks, provider="azure") if frameworks else None
+        if frameworks and not compliance_slugs:
             return ScanResult(findings=[], raw_outputs=[])
 
         kwargs: dict[str, Any] = {}
@@ -180,17 +190,18 @@ class ProwlerService:  # pragma: no cover
         account_id: str,
         project_ids: list[str] | None = None,
         service_account_key: dict[str, Any] | None = None,
-        frameworks: list[str],
+        frameworks: list[str] | None = None,
         scan_job_id: str,
     ) -> ScanResult:
-        """Execute Prowler v5 checks against a GCP project."""
+        """Execute Prowler v5 checks against a GCP project. See run_aws_scan for
+        the frameworks=None (full catalog) semantics."""
         try:
             from prowler.providers.gcp.gcp_provider import GcpProvider  # noqa: PLC0415
         except ImportError as exc:
             raise RuntimeError("prowler-core is not installed") from exc
 
-        compliance_slugs = self._resolve_frameworks(frameworks, provider="gcp")
-        if not compliance_slugs:
+        compliance_slugs = self._resolve_frameworks(frameworks, provider="gcp") if frameworks else None
+        if frameworks and not compliance_slugs:
             return ScanResult(findings=[], raw_outputs=[])
 
         kwargs: dict[str, Any] = {}
@@ -217,17 +228,18 @@ class ProwlerService:  # pragma: no cover
         cluster_name: str | None = None,
         kubeconfig_content: dict[str, Any] | None = None,
         context: str | None = None,
-        frameworks: list[str],
+        frameworks: list[str] | None = None,
         scan_job_id: str,
     ) -> ScanResult:
-        """Execute Prowler v5 checks against a Kubernetes cluster."""
+        """Execute Prowler v5 checks against a Kubernetes cluster. See run_aws_scan
+        for the frameworks=None (full catalog) semantics."""
         try:
             from prowler.providers.kubernetes.kubernetes_provider import KubernetesProvider  # noqa: PLC0415
         except ImportError as exc:
             raise RuntimeError("prowler-core is not installed") from exc
 
-        compliance_slugs = self._resolve_frameworks(frameworks, provider="k8s")
-        if not compliance_slugs:
+        compliance_slugs = self._resolve_frameworks(frameworks, provider="k8s") if frameworks else None
+        if frameworks and not compliance_slugs:
             return ScanResult(findings=[], raw_outputs=[])
 
         kwargs: dict[str, Any] = {}
@@ -270,7 +282,7 @@ class ProwlerService:  # pragma: no cover
         self,
         *,
         provider: Any,
-        compliance_slugs: list[str],
+        compliance_slugs: list[str] | None,
         cloud_provider: str,
         tenant_id: str,
         account_id: str,
@@ -278,7 +290,11 @@ class ProwlerService:  # pragma: no cover
     ) -> ScanResult:
         from prowler.lib.scan.scan import Scan  # noqa: PLC0415
 
-        scan = Scan(provider, compliances=compliance_slugs)
+        # compliance_slugs=None runs prowler's full default check catalog for the
+        # provider (see checks_loader.load_checks_to_execute: no checks/services/
+        # compliances/categories filter -> "get all checks"). Passing an empty
+        # list instead would ask Scan() to match zero compliance frameworks.
+        scan = Scan(provider, compliances=compliance_slugs) if compliance_slugs else Scan(provider)
         findings: list[Finding] = []
         raw_outputs: list[Any] = []
 
@@ -296,6 +312,54 @@ class ProwlerService:  # pragma: no cover
                     findings.append(finding)
 
         return ScanResult(findings=findings, raw_outputs=raw_outputs)
+
+    def _enrich_lambda_execution_roles(self, provider: Any, raw_outputs: list[Any]) -> None:
+        """Fill in the Lambda execution role ARN on scanned Function results.
+
+        prowler.providers.aws.services.awslambda.awslambda_service.Function has no
+        execution-role field at all (verified against the model source) — every
+        other relationship we need (EC2 security groups/subnet/instance profile,
+        IAM trust policy/attached policies) is already present in resource_metadata,
+        but this one genuinely isn't. lambda:ListFunctions already returns Role per
+        function, so one paginated call per region (reusing the session/credentials
+        prowler already resolved) closes the gap without a broader rediscovery pass.
+        Mutates resource_metadata in place on the matching raw results.
+        """
+        lambda_results = [
+            r
+            for r in raw_outputs
+            if str(getattr(getattr(r, "metadata", None), "ResourceType", "")) == "AwsLambdaFunction"
+        ]
+        if not lambda_results:
+            return
+
+        try:
+            clients = provider.generate_regional_clients("lambda")
+        except Exception:
+            logger.warning("Could not create Lambda clients for execution-role enrichment", exc_info=True)
+            return
+
+        role_by_arn: dict[str, str] = {}
+        for client in clients.values():
+            try:
+                for page in client.get_paginator("list_functions").paginate():
+                    for fn in page.get("Functions", []):
+                        arn = fn.get("FunctionArn")
+                        role = fn.get("Role")
+                        if arn and role:
+                            role_by_arn[arn] = role
+            except Exception:
+                logger.warning("lambda:ListFunctions failed during execution-role enrichment", exc_info=True)
+
+        if not role_by_arn:
+            return
+
+        for result in lambda_results:
+            uid = str(getattr(result, "resource_uid", "") or "")
+            role = role_by_arn.get(uid)
+            metadata = getattr(result, "resource_metadata", None)
+            if role and isinstance(metadata, dict):
+                metadata["execution_role_arn"] = role
 
     def _normalize(
         self,

@@ -9,7 +9,10 @@ import pytest
 
 from app.services.prowler_inventory import (
     _collection_for,
+    _extract_identity_fields,
+    _extract_resource_relationships,
     _extract_tags,
+    _identity_type_for,
     _is_public,
     _normalize_type_name,
     _to_jsonable,
@@ -460,3 +463,232 @@ class TestToJsonable:
         # Must not raise — this is what python-arango does before sending to ArangoDB
         serialized = json.dumps(doc)
         assert "my-trail" in serialized
+
+
+# ---------------------------------------------------------------------------
+# _identity_type_for — regression coverage for the identity_type schema bug:
+# CSPM-enriched identities used to be written with `resource_type` instead of
+# `identity_type`, which app/models/inventory.py::Identity requires — 83% of
+# identities in the dev dataset were missing it before this fix.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestIdentityTypeFor:
+    def test_role_classified_as_iam_role(self):
+        assert _identity_type_for("AwsIamRole") == "iam_role"
+
+    def test_user_classified_as_iam_user(self):
+        assert _identity_type_for("AwsIamUser") == "iam_user"
+
+    def test_group_classified_as_iam_group(self):
+        assert _identity_type_for("AwsIamGroup") == "iam_group"
+
+    def test_gcp_service_account_classified_correctly(self):
+        assert _identity_type_for("iam.googleapis.com/ServiceAccount") == "service_account"
+
+    def test_unrecognized_identity_like_type_falls_back_to_role(self):
+        # e.g. an IAM policy or access key — still routed to `identities` by
+        # _collection_for's broader regex, but not literally a role/user/group.
+        assert _identity_type_for("AwsIamPolicy") == "iam_role"
+
+
+# ---------------------------------------------------------------------------
+# _extract_identity_fields — trust_policy/policies from real prowler-core
+# IAM models, so build_iam_edges (which reads these two fields with zero AWS
+# API calls) works off Prowler-sourced identities without any changes to it.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestExtractIdentityFields:
+    def test_trust_policy_extracted_from_assume_role_policy(self):
+        from prowler.providers.aws.services.iam.iam_service import Role
+
+        trust_doc = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {"Effect": "Allow", "Principal": {"AWS": "arn:aws:iam::123:role/Other"}, "Action": "sts:AssumeRole"}
+            ],
+        }
+        role = Role(
+            name="MyRole",
+            arn="arn:aws:iam::123:role/MyRole",
+            assume_role_policy=trust_doc,
+            is_service_role=False,
+        )
+        fields = _extract_identity_fields(_to_jsonable(role.dict()))
+        assert fields["trust_policy"] == trust_doc
+
+    def test_attached_and_inline_policies_flattened_to_arn_list(self):
+        from prowler.providers.aws.services.iam.iam_service import Role
+
+        role = Role(
+            name="MyRole",
+            arn="arn:aws:iam::123:role/MyRole",
+            assume_role_policy={},
+            is_service_role=False,
+            attached_policies=[{"PolicyName": "ReadOnly", "PolicyArn": "arn:aws:iam::aws:policy/ReadOnlyAccess"}],
+            inline_policies=["InlineAdmin"],
+        )
+        fields = _extract_identity_fields(_to_jsonable(role.dict()))
+        assert fields["policies"] == ["arn:aws:iam::aws:policy/ReadOnlyAccess", "InlineAdmin"]
+
+    def test_no_policies_omits_the_key(self):
+        assert _extract_identity_fields({}) == {}
+
+
+# ---------------------------------------------------------------------------
+# _extract_resource_relationships — EC2/Lambda relationship fields for
+# graph/resource_edges.py, read from real prowler-core resource models.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestExtractResourceRelationships:
+    def test_ec2_instance_security_groups_subnet_and_profile(self):
+        from datetime import UTC, datetime
+
+        from prowler.providers.aws.services.ec2.ec2_service import Instance
+
+        instance = Instance(
+            id="i-abc",
+            arn="arn:aws:ec2:us-east-1:123:instance/i-abc",
+            state="running",
+            region="us-east-1",
+            type="t3.micro",
+            image_id="ami-123",
+            launch_time=datetime.now(UTC),
+            private_dns="ip-10-0-0-1",
+            monitoring_state="disabled",
+            security_groups=["sg-1", "sg-2"],
+            subnet_id="subnet-abc",
+            instance_profile={"Arn": "arn:aws:iam::123:instance-profile/MyProfile"},
+        )
+        fields = _extract_resource_relationships("ec2_instance", _to_jsonable(instance.dict()))
+        assert fields["security_groups"] == ["sg-1", "sg-2"]
+        assert fields["subnet_id"] == "subnet-abc"
+        assert fields["iam_instance_profile"] == "arn:aws:iam::123:instance-profile/MyProfile"
+
+    def test_ec2_instance_without_profile_omits_the_key(self):
+        from datetime import UTC, datetime
+
+        from prowler.providers.aws.services.ec2.ec2_service import Instance
+
+        instance = Instance(
+            id="i-abc",
+            arn="arn:aws:ec2:us-east-1:123:instance/i-abc",
+            state="running",
+            region="us-east-1",
+            type="t3.micro",
+            image_id="ami-123",
+            launch_time=datetime.now(UTC),
+            private_dns="ip-10-0-0-1",
+            monitoring_state="disabled",
+            security_groups=[],
+            subnet_id="subnet-abc",
+        )
+        fields = _extract_resource_relationships("ec2_instance", _to_jsonable(instance.dict()))
+        assert "iam_instance_profile" not in fields
+
+    def test_lambda_function_execution_role_from_enrichment(self):
+        from prowler.providers.aws.services.awslambda.awslambda_service import Function
+
+        fn = Function(
+            name="my-fn",
+            arn="arn:aws:lambda:us-east-1:123:function:my-fn",
+            security_groups=["sg-1"],
+            region="us-east-1",
+            vpc_id="vpc-abc",
+        )
+        metadata = _to_jsonable(fn.dict())
+        # Simulates ProwlerService._enrich_lambda_execution_roles having already
+        # mutated resource_metadata before extraction runs.
+        metadata["execution_role_arn"] = "arn:aws:iam::123:role/lambda-exec"
+        fields = _extract_resource_relationships("lambda_function", metadata)
+        assert fields["execution_role_arn"] == "arn:aws:iam::123:role/lambda-exec"
+        assert fields["vpc_id"] == "vpc-abc"
+        assert fields["security_groups"] == ["sg-1"]
+
+    def test_lambda_function_without_role_enrichment_omits_the_key(self):
+        from prowler.providers.aws.services.awslambda.awslambda_service import Function
+
+        fn = Function(
+            name="my-fn", arn="arn:aws:lambda:us-east-1:123:function:my-fn", security_groups=[], region="us-east-1"
+        )
+        fields = _extract_resource_relationships("lambda_function", _to_jsonable(fn.dict()))
+        assert "execution_role_arn" not in fields
+
+    def test_unrecognized_type_returns_empty(self):
+        assert _extract_resource_relationships("s3_bucket", {"anything": "here"}) == {}
+
+
+# ---------------------------------------------------------------------------
+# _is_public — prowler's VpcSubnet.public flag (route-table-derived, more
+# accurate than the map_public_ip_on_launch flag native discovery used).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestIsPublicFromProwlerSubnet:
+    def test_subnet_public_flag_detected(self):
+        assert _is_public({"public": True}) is True
+
+    def test_subnet_private_flag_not_public(self):
+        assert _is_public({"public": False}) is False
+
+
+# ---------------------------------------------------------------------------
+# extract_inventory_from_findings — schema fix end-to-end (identity_type on
+# identities, asset_type on data_assets, relationship fields in raw_metadata).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestExtractInventorySchemaFix:
+    def test_identity_document_has_identity_type_not_resource_type(self):
+        f = _make_finding(
+            resource_uid="arn:aws:iam::123:role/MyRole",
+            resource_name="MyRole",
+            resource_type="AwsIamRole",
+        )
+        inv = extract_inventory_from_findings([f], "t1", "aws", "123")
+        doc = inv["identities"][0]
+        assert doc["identity_type"] == "iam_role"
+        assert "resource_type" not in doc
+
+    def test_data_asset_document_has_asset_type_not_resource_type(self):
+        f = _make_finding(
+            resource_uid="arn:aws:s3:::my-bucket",
+            resource_name="my-bucket",
+            resource_type="AwsS3Bucket",
+        )
+        inv = extract_inventory_from_findings([f], "t1", "aws", "123")
+        doc = inv["data_assets"][0]
+        assert doc["asset_type"] == "s3_bucket"
+        assert "resource_type" not in doc
+
+    def test_resource_document_still_has_resource_type(self):
+        inv = extract_inventory_from_findings([_make_finding()], "t1", "aws", "123")
+        assert inv["resources"][0]["resource_type"] == "ec2_instance"
+
+    def test_ec2_relationship_fields_land_in_raw_metadata(self):
+        f = _make_finding(
+            metadata={"security_groups": ["sg-1"], "subnet_id": "subnet-xyz"},
+        )
+        inv = extract_inventory_from_findings([f], "t1", "aws", "123")
+        raw = inv["resources"][0]["raw_metadata"]
+        assert raw["security_groups"] == ["sg-1"]
+        assert raw["subnet_id"] == "subnet-xyz"
+
+    def test_iam_role_trust_policy_is_top_level_not_nested_in_raw_metadata(self):
+        trust_doc = {"Version": "2012-10-17", "Statement": []}
+        f = _make_finding(
+            resource_uid="arn:aws:iam::123:role/MyRole",
+            resource_name="MyRole",
+            resource_type="AwsIamRole",
+            metadata={"assume_role_policy": trust_doc},
+        )
+        inv = extract_inventory_from_findings([f], "t1", "aws", "123")
+        doc = inv["identities"][0]
+        assert doc["trust_policy"] == trust_doc

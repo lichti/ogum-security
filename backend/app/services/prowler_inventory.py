@@ -140,7 +140,120 @@ def _is_public(metadata: dict[str, Any]) -> bool:
         or metadata.get("public_access")
         or metadata.get("is_public")
         or metadata.get("enable_internet_access")
+        # prowler's VpcSubnet.public — already derived from route-table analysis
+        # (0.0.0.0/0 route to an IGW), a more accurate signal than the
+        # map_public_ip_on_launch flag native discovery used to rely on.
+        or metadata.get("public")
     )
+
+
+# ---------------------------------------------------------------------------
+# identities: identity_type classification + relationship field extraction
+#
+# These fields mirror what app/models/inventory.py::Identity expects
+# (identity_type, trust_policy, policies) so app/services/graph/iam_edges.py
+# — which already reads those three fields straight off ArangoDB documents,
+# with zero AWS API calls — works unmodified regardless of whether the
+# identity was persisted by native discovery or by this extraction path.
+# ---------------------------------------------------------------------------
+
+_SERVICE_ACCOUNT_RE = re.compile(r"service.?account", re.IGNORECASE)
+_GROUP_RE = re.compile(r"group", re.IGNORECASE)
+_USER_RE = re.compile(r"user", re.IGNORECASE)
+
+
+def _identity_type_for(raw_type: str) -> str:
+    """Best-effort IdentityType classification from the raw prowler ResourceType.
+
+    Order matters: service-account and group markers are checked before the
+    more generic "role" fallback, which also catches types routed to
+    `identities` by _IDENTITY_RE that aren't literally roles/users/groups
+    (e.g. policies, access keys) — IAM_ROLE is the closest fit for those.
+    """
+    if _SERVICE_ACCOUNT_RE.search(raw_type):
+        return "service_account"
+    if _GROUP_RE.search(raw_type):
+        return "iam_group"
+    if _USER_RE.search(raw_type):
+        return "iam_user"
+    return "iam_role"
+
+
+def _policy_arns(policies: Any) -> list[str]:
+    """Flatten prowler's attached_policies ([{"PolicyArn": ...}, ...]) plus
+    inline_policies (list[str] of names) into the flat list[str] Identity.policies
+    and build_iam_edges expect."""
+    arns: list[str] = []
+    if isinstance(policies, list):
+        for p in policies:
+            if isinstance(p, dict):
+                arn = p.get("PolicyArn") or p.get("Arn") or p.get("policy_arn")
+                if arn:
+                    arns.append(str(arn))
+            elif isinstance(p, str):
+                arns.append(p)
+    return arns
+
+
+def _extract_identity_fields(metadata: dict[str, Any]) -> dict[str, Any]:
+    """trust_policy + policies for IAM roles/users/groups (prowler Role/User/Group
+    models — see iam_service.py). Absent on types that don't carry these (e.g. an
+    IAM access key resource routed here by _IDENTITY_RE) — fields simply omitted."""
+    fields: dict[str, Any] = {}
+
+    trust_policy = metadata.get("assume_role_policy")
+    if isinstance(trust_policy, dict):
+        fields["trust_policy"] = trust_policy
+
+    policies = _policy_arns(metadata.get("attached_policies")) + [
+        p for p in metadata.get("inline_policies") or [] if isinstance(p, str)
+    ]
+    if policies:
+        fields["policies"] = policies
+
+    return fields
+
+
+# ---------------------------------------------------------------------------
+# resources: relationship field extraction for graph edge building
+#
+# app/services/graph/resource_edges.py reads these from resource.raw_metadata
+# using the same field names discovery.py used to write — so switching the
+# data source doesn't require changing the edge-building logic itself.
+# ---------------------------------------------------------------------------
+
+
+def _extract_resource_relationships(type_name: str, metadata: dict[str, Any]) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+
+    if type_name == "ec2_instance":
+        if metadata.get("security_groups"):
+            fields["security_groups"] = metadata["security_groups"]
+        if metadata.get("subnet_id"):
+            fields["subnet_id"] = metadata["subnet_id"]
+        profile = metadata.get("instance_profile")
+        if isinstance(profile, dict) and profile.get("Arn"):
+            fields["iam_instance_profile"] = profile["Arn"]
+
+    # Note: prowler has no InternetGateway resource model at all (verified against
+    # prowler-core's vpc_service.py) — ROUTES_TRAFFIC (IGW -> VPC) edges can't be
+    # derived from scan data the way native discovery's _list_internet_gateways
+    # used to. Internet exposure is still captured via VpcSubnet.public (see
+    # _is_public above), which is arguably a more accurate signal anyway.
+
+    elif type_name == "lambda_function":
+        # execution_role_arn isn't present on prowler's Function model at all —
+        # ProwlerService._enrich_lambda_execution_roles fills it into
+        # resource_metadata via a small targeted lambda:list_functions call
+        # before extraction runs, so it's read here like any other field.
+        if metadata.get("execution_role_arn"):
+            fields["execution_role_arn"] = metadata["execution_role_arn"]
+        if metadata.get("vpc_id"):
+            fields["vpc_id"] = metadata["vpc_id"]
+        if metadata.get("security_groups"):
+            fields["security_groups"] = metadata["security_groups"]
+
+    return fields
 
 
 # ---------------------------------------------------------------------------
@@ -193,26 +306,38 @@ def extract_inventory_from_findings(
 
         arn = resource_uid if resource_uid.startswith("arn:") else None
 
-        seen[uid] = (
-            collection,
-            {
-                "_key": resource_arango_key(uid, tenant_id),
-                "tenant_id": tenant_id,
-                "provider": "k8s" if provider == "kubernetes" else provider,
-                "resource_type": type_name,
-                "resource_id": uid,
-                "name": resource_name or resource_uid,
-                "arn": arn,
-                "region": region,
-                "account_id": effective_account,
-                "status": "active",
-                "is_public": _is_public(metadata_dict),
-                "tags": _extract_tags(metadata_dict),
-                "raw_metadata": metadata_dict,
-                "last_scanned_at": now,
-                "updated_at": now,
-            },
-        )
+        doc: dict[str, Any] = {
+            "_key": resource_arango_key(uid, tenant_id),
+            "tenant_id": tenant_id,
+            "provider": "k8s" if provider == "kubernetes" else provider,
+            "resource_id": uid,
+            "name": resource_name or resource_uid,
+            "arn": arn,
+            "region": region,
+            "account_id": effective_account,
+            "status": "active",
+            "is_public": _is_public(metadata_dict),
+            "tags": _extract_tags(metadata_dict),
+            "last_scanned_at": now,
+            "updated_at": now,
+        }
+
+        if collection == "identities":
+            # Identity model fields: identity_type, trust_policy, policies (all
+            # top-level, not nested under raw_metadata) — matches what
+            # graph/iam_edges.py::build_iam_edges reads.
+            doc["identity_type"] = _identity_type_for(raw_type)
+            doc.update(_extract_identity_fields(metadata_dict))
+            doc["raw_metadata"] = metadata_dict
+        elif collection == "data_assets":
+            # DataAsset model field is asset_type, not resource_type.
+            doc["asset_type"] = type_name
+            doc["raw_metadata"] = metadata_dict
+        else:
+            doc["resource_type"] = type_name
+            doc["raw_metadata"] = {**metadata_dict, **_extract_resource_relationships(type_name, metadata_dict)}
+
+        seen[uid] = (collection, doc)
 
     output: dict[str, list[dict[str, Any]]] = {
         "resources": [],
