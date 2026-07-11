@@ -570,7 +570,9 @@ aws iam attach-role-policy \\
             <div className="text-center py-8">
               <Loader2 className="w-8 h-8 text-orange-400 animate-spin mx-auto mb-4" />
               <p className="text-slate-300">Connecting and starting discovery...</p>
-              <p className="text-slate-500 text-sm mt-1">This may take a moment.</p>
+              <p className="text-slate-500 text-sm mt-1">
+                Running a full security scan of the account — this can take a few minutes.
+              </p>
             </div>
           )}
 

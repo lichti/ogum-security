@@ -167,7 +167,7 @@ def retry_job(job_id: str, tenant_id: str, actor_email: str) -> str | None:
         tenant_id=tenant_id,
         provider_id=job.provider_id or "",
         provider=job.provider or "",
-        frameworks=[],
+        frameworks=None,
         credentials={},
         account_id="",
     )
@@ -214,10 +214,15 @@ def trigger_job(
             account_id="",
         )
     else:
-        from app.workers.tasks.discovery import discover_aws_basic
-
-        task = discover_aws_basic.delay(
+        # TaskType.DISCOVERY: AWS inventory is now built entirely by CSPM
+        # scans — there is no separate discovery task to dispatch.
+        task = run_cspm_scan.delay(
             tenant_id=tenant_id,
+            provider_id=provider_id,
+            provider=provider or "aws",
+            frameworks=None,
+            credentials={},
+            account_id="",
             regions=["us-east-1"],
         )
 

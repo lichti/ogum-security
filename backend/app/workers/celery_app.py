@@ -8,7 +8,6 @@ celery_app = Celery(
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
     include=[
-        "app.workers.tasks.discovery",
         "app.workers.tasks.scheduling",
         "app.workers.tasks.azure_discovery",
         "app.workers.tasks.gcp_discovery",
@@ -36,19 +35,14 @@ celery_app.conf.update(
 # Default beat schedule for local development.
 # Sprint 7 will replace this with a database-driven schedule per tenant.
 celery_app.conf.beat_schedule = {
-    "dev-trigger-aws-every-6h": {
-        "task": "app.workers.tasks.scheduling.trigger_all_discoveries",
-        "schedule": 6 * 3600,
-        "args": ["dev", "aws"],
-        "kwargs": {"regions": ["us-east-1"]},
-    },
-    # CSPM scans run 1 hour after discovery to let resources populate first.
+    # A CSPM scan is the sole inventory-building pass for AWS — it persists
+    # findings, resources/identities/data_assets, and graph edges in one run,
+    # so no separate discovery step (and no offset to wait for one) is needed.
     # trigger_all_cspm_scans reads all tenants and provider configs from ArangoDB
     # and dispatches run_cspm_scan for each enabled provider automatically.
     "cspm-scan-all-tenants-every-6h": {
         "task": "app.workers.tasks.scheduling.trigger_all_cspm_scans",
         "schedule": 6 * 3600,
-        "options": {"countdown": 3600},  # start 1h after the Beat tick
     },
     # Sprint 2 (Epic 03): daily SBOM rescan for new CVEs (dev tenant only;
     # Sprint 7 will replace with per-tenant scheduling from ArangoDB)

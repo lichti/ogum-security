@@ -15,7 +15,7 @@ from app.db.init import init_tenant_schema
 from app.services.attack_path_service import run_attack_path_detection
 from app.services.risk_score import calculate_resource_risk_score
 from app.workers.celery_app import celery_app
-from app.workers.tasks.discovery import _get_tenant_db
+from app.workers.tasks.cloud_utils import _get_tenant_db
 
 logger = logging.getLogger(__name__)
 

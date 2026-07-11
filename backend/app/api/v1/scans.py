@@ -15,14 +15,6 @@ from app.workers.tasks.cspm_scan import run_cspm_scan
 
 router = APIRouter(prefix="/api/v1/scans", tags=["scans"])
 
-_DEFAULT_FRAMEWORKS: dict[str, list[str]] = {
-    "aws": ["CIS-AWS-2.0", "PCI_DSS_v4", "SOC2"],
-    "azure": ["CIS-AZURE-2.0"],
-    "gcp": ["CIS-GCP-2.0"],
-    "k8s": ["CIS-K8S-1.12"],
-    "kubernetes": ["CIS-K8S-1.12"],
-}
-
 
 class ScanRequest(BaseModel):
     provider_id: str
@@ -51,8 +43,9 @@ async def trigger_scan(
 
     account_id = provider.account_id or provider.subscription_id or provider.project_id or ""
 
-    # Use caller-supplied frameworks, or fall back to provider-specific defaults
-    frameworks = body.frameworks or _DEFAULT_FRAMEWORKS.get(provider.provider, ["CIS-AWS-2.0"])
+    # No caller-supplied frameworks -> None, which runs Prowler's full check
+    # catalog instead of a curated subset (see run_cspm_scan's docstring).
+    frameworks = body.frameworks or None
 
     # Build complete credentials including non-secret role fields stored on the provider
     full_credentials = {

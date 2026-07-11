@@ -25,7 +25,8 @@ from app.services.provider_service import (
     update_provider_last_discovery,
 )
 from app.workers.tasks.azure_discovery import discover_azure
-from app.workers.tasks.discovery import _get_aws_session, discover_aws
+from app.workers.tasks.cloud_utils import _get_aws_session
+from app.workers.tasks.cspm_scan import run_cspm_scan
 from app.workers.tasks.gcp_discovery import discover_gcp
 from app.workers.tasks.k8s_discovery import discover_k8s
 
@@ -78,15 +79,22 @@ def _dispatch_discovery(
     job_id: str | None = None
     try:
         if provider == "aws":
-            job_id = discover_aws.delay(
-                tenant_id,
-                request.regions,
-                request.account_id,
-                role_arn=role_arn,
-                external_id=external_id,
-                provider_key=config_key,
-                aws_access_key_id=request.aws_access_key_id,
-                aws_secret_access_key=request.aws_secret_access_key,
+            # frameworks=None runs Prowler's full check catalog — inventory is
+            # now built entirely from CSPM scan output (see cspm_scan.py),
+            # there is no separate native discovery task for AWS anymore.
+            job_id = run_cspm_scan.delay(
+                tenant_id=tenant_id,
+                provider_id=config_key,
+                provider="aws",
+                frameworks=None,
+                credentials={
+                    "role_arn": role_arn,
+                    "external_id": external_id,
+                    "aws_access_key_id": request.aws_access_key_id,
+                    "aws_secret_access_key": request.aws_secret_access_key,
+                },
+                account_id=request.account_id or "",
+                regions=request.regions,
             ).id
         elif provider == "azure":
             job_id = discover_azure.delay(

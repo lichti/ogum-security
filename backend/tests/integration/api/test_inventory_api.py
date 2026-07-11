@@ -3,7 +3,7 @@
 Rules:
 - ArangoDB: real instance via Docker (never mocked)
 - Cloud APIs: not involved here — inventory API reads from ArangoDB only
-- Celery discover endpoint: discover_aws.delay is mocked (we're testing the HTTP layer, not the task)
+- Celery discover endpoint: run_cspm_scan.delay is mocked (we're testing the HTTP layer, not the task)
 """
 
 import pytest
@@ -232,7 +232,7 @@ class TestInventoryDiscoverEndpoint:
     def test_trigger_aws_discovery_returns_202(self, api_client, mocker):
         mock_task = mocker.MagicMock()
         mock_task.id = "test-job-id-123"
-        mocker.patch("app.api.v1.inventory.discover_aws.delay", return_value=mock_task)
+        mocker.patch("app.api.v1.inventory.run_cspm_scan.delay", return_value=mock_task)
 
         resp = api_client.post(
             "/api/v1/inventory/discover?provider=aws&regions=us-east-1",

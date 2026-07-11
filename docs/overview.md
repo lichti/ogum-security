@@ -203,15 +203,15 @@ The foundation of the entire platform. Discovers and normalizes all infrastructu
 
 **Supported providers:** AWS, Azure, GCP, Kubernetes
 
-**AWS resources discovered:** EC2, IAM (Roles, Users, Policies), S3, RDS, Lambda, EKS, VPC, Security Groups, CloudFront, Route53, KMS, Secrets Manager, ECS, ECR
+**AWS resources discovered:** every resource type covered by a Prowler v5 check — EC2, IAM (Roles, Users, Groups, Policies), S3, RDS, Lambda, EKS, VPC, Security Groups, CloudFront, Route53, KMS, Secrets Manager, ECS, ECR, and more.
 
 **How it works:**
 1. Provider connected via IAM Role + AssumeRole (no static credentials)
-2. Celery task `discover_aws(tenant_id, provider_id)` runs discovery per region
+2. A CSPM scan (Prowler v5's full check catalog) is the sole discovery pass for AWS — `run_cspm_scan(tenant_id, provider_id)` persists findings, then extracts resources/identities/data_assets straight from the scan output (`resource_metadata`)
 3. Each resource → vertex in ArangoDB with normalized Pydantic schema
-4. Edges created automatically: `BELONGS_TO`, `ATTACHED_TO`, `ASSUMES_ROLE`, `EXPOSES`, `ROUTES_TRAFFIC`
-5. Incremental re-discovery: upsert (not truncate), removed resources marked `status: deleted`
-6. Celery Beat: automatic re-discovery schedule (default: 6h per cloud, 1h per K8s)
+4. Edges derived from the same scan data, no extra AWS API calls: `BELONGS_TO`, `ATTACHED_TO`, `ASSUMES_ROLE`, `MEMBER_OF`, `STS_ASSUMEROLE_ALLOW`, `STORES_SENSITIVE_DATA`, `EXPOSED_TO`
+5. Incremental re-discovery: upsert (not truncate), resources absent from a scan marked `status: deleted`
+6. Celery Beat: automatic re-scan schedule (default: 6h)
 
 **API:**
 - `GET /api/v1/inventory` — paginated list with filters (provider, type, account, region, risk_score)

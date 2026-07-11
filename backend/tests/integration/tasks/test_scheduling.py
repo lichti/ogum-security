@@ -51,18 +51,28 @@ class TestDistributedLock:
 
 @pytest.mark.integration
 class TestTriggerAllDiscoveries:
-    """trigger_all_discoveries — dispatches the right task per provider."""
+    """trigger_all_discoveries — dispatches the right task per provider.
 
-    def test_dispatches_aws_discovery(self, mocker) -> None:
-        # trigger_all_discoveries imports tasks lazily — patch apply_async directly.
-        mock_apply_async = mocker.patch("app.workers.tasks.discovery.discover_aws.apply_async")
+    AWS is not routed here anymore: run_cspm_scan is itself the full AWS
+    discovery pass, dispatched by trigger_all_cspm_scans instead.
+    """
 
+    def test_aws_is_not_dispatched_here(self) -> None:
         result = trigger_all_discoveries.apply(
             kwargs={"tenant_id": "t1", "provider": "aws", "regions": ["eu-west-1"]}
         ).get()
 
+        assert result["dispatched"] is False
+        assert "unknown_provider" in result["reason"]
+
+    def test_dispatches_azure_discovery(self, mocker) -> None:
+        # trigger_all_discoveries imports tasks lazily — patch apply_async directly.
+        mock_apply_async = mocker.patch("app.workers.tasks.azure_discovery.discover_azure.apply_async")
+
+        result = trigger_all_discoveries.apply(kwargs={"tenant_id": "t1", "provider": "azure"}).get()
+
         assert result["dispatched"] is True
-        assert result["provider"] == "aws"
+        assert result["provider"] == "azure"
         mock_apply_async.assert_called_once()
 
     def test_returns_error_for_unknown_provider(self) -> None:
@@ -90,7 +100,8 @@ class TestTriggerAllCspmScans:
         return mock_client
 
     def test_dispatches_cspm_for_enabled_aws_provider(self, mocker) -> None:
-        """One enabled AWS provider → one run_cspm_scan dispatched with CIS-AWS-2.0."""
+        """One enabled AWS provider → one run_cspm_scan dispatched with the full
+        check catalog (frameworks=None), not a curated subset."""
         from app.models.provider import ProviderConfig
 
         provider = ProviderConfig(
@@ -118,7 +129,7 @@ class TestTriggerAllCspmScans:
         mock_apply.assert_called_once()
         kwargs = mock_apply.call_args.kwargs["kwargs"]
         assert kwargs["provider"] == "aws"
-        assert kwargs["frameworks"] == ["CIS-AWS-2.0"]
+        assert kwargs["frameworks"] is None
         assert kwargs["tenant_id"] == "test-tenant"
 
     def test_skips_disabled_provider(self, mocker) -> None:
@@ -145,8 +156,8 @@ class TestTriggerAllCspmScans:
         assert result["skipped"] == 1
         mock_apply.assert_not_called()
 
-    def test_skips_k8s_provider(self, mocker) -> None:
-        """k8s has no supported CSPM framework → skipped."""
+    def test_dispatches_k8s_provider(self, mocker) -> None:
+        """k8s is CSPM-supported (Prowler scans Kubernetes) → dispatched, not skipped."""
         from app.models.provider import ProviderConfig
 
         provider = ProviderConfig(
@@ -165,9 +176,9 @@ class TestTriggerAllCspmScans:
 
         result = trigger_all_cspm_scans.apply().get()
 
-        assert result["dispatched"] == 0
-        assert result["skipped"] == 1
-        mock_apply.assert_not_called()
+        assert result["dispatched"] == 1
+        assert result["skipped"] == 0
+        mock_apply.assert_called_once()
 
     def test_ignores_non_tenant_databases(self, mocker) -> None:
         """System databases (_system, ogum_admin) are not treated as tenants."""

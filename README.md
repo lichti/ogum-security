@@ -254,12 +254,12 @@ We are building this in public. Here is where we are and where we are going:
 - [x] Project structure and architecture
 - [x] Docker Compose dev stack (ArangoDB, Redpanda, Qdrant, Ollama)
 - [x] **Ogum.Inventory:** ArangoDB graph schema (resources, identities, network endpoints, data assets)
-- [x] **Ogum.Inventory:** AWS asset discovery (EC2, IAM, S3, RDS, Lambda, EKS, VPC, Security Groups, KMS, CloudTrail)
-- [x] **Ogum.Inventory:** Relationship edge creation (BELONGS_TO, ATTACHED_TO, ASSUMES_ROLE, ROUTES_TRAFFIC, MEMBER_OF)
+- [x] **Ogum.Inventory:** AWS asset discovery — built entirely from Prowler v5's full check catalog (single scan is the inventory pass, no separate native discovery)
+- [x] **Ogum.Inventory:** Relationship edge creation (BELONGS_TO, ATTACHED_TO, ASSUMES_ROLE, MEMBER_OF, STS_ASSUMEROLE_ALLOW, STORES_SENSITIVE_DATA) derived from scan output, no extra cloud API calls
 - [x] **Ogum.Inventory:** Multi-cloud discovery — Azure (VMs, VNets, NSGs, AKS, Storage, Key Vault), GCP (Compute, GCS, GKE), Kubernetes (Pods, Deployments, Services, Nodes)
 - [x] **Ogum.Inventory:** Inventory REST API — filtering, pagination, full-text search, resource detail with graph edges
 - [x] **Ogum.Inventory:** Inventory UI — searchable asset table with multi-select filters (provider, category, region, account), clickable summary cards, detail panel, skeleton loading
-- [x] **Ogum.Inventory:** Scheduled auto-discovery (Celery Beat every 6h, Redis distributed lock)
+- [x] **Ogum.Inventory:** Scheduled auto-scan (Celery Beat every 6h, Redis distributed lock)
 - [x] **Ogum.Inventory:** Provider onboarding wizard — connect AWS/Azure/GCP/K8s from the UI
 - [x] **Ogum.Inventory:** Inventory export — CSV and OCSF-inspired JSON via streaming API
 - [x] **Ogum.Inventory:** Tenant isolation — separate ArangoDB database per tenant, 5 security tests blocking in CI

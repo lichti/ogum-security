@@ -21,7 +21,7 @@ from app.models.api_responses import (
     ResourceSummary,
 )
 from app.services.inventory_service import get_inventory_stats, get_resource, list_resources
-from app.workers.tasks.discovery import discover_aws
+from app.workers.tasks.cspm_scan import run_cspm_scan
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["inventory"])
 
@@ -209,7 +209,18 @@ async def trigger_discovery(
     x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
 ) -> ApiResponse[DiscoverJobResponse]:
     if provider == "aws":
-        task = discover_aws.delay(x_tenant_id, regions, account_id)
+        # frameworks=None -> Prowler's full check catalog. No stored credentials
+        # here — falls back to ambient worker credentials, same as the old
+        # discover_aws's ambient-credential path.
+        task = run_cspm_scan.delay(
+            tenant_id=x_tenant_id,
+            provider_id=f"aws-{account_id or 'ambient'}",
+            provider="aws",
+            frameworks=None,
+            credentials={},
+            account_id=account_id or "",
+            regions=regions,
+        )
         return ApiResponse(
             data=DiscoverJobResponse(
                 job_id=task.id,

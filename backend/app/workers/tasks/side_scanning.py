@@ -55,7 +55,7 @@ from app.workers.tasks._job_tracking import (
     start_discovery_job,
     update_job_to_running,
 )
-from app.workers.tasks.discovery import _get_aws_session, _get_tenant_db, _upsert
+from app.workers.tasks.cloud_utils import _get_aws_session, _get_tenant_db, _upsert
 
 logger = logging.getLogger(__name__)
 

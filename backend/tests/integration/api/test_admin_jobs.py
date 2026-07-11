@@ -257,11 +257,15 @@ class TestTriggerAdminJob:
         assert resp.status_code == 422
 
     def test_trigger_discovery_dispatches_task(self, api_client, mocker):
-        """POST /admin/jobs/trigger with task_type=discovery returns 202."""
+        """POST /admin/jobs/trigger with task_type=discovery returns 202.
+
+        AWS inventory is now built entirely by CSPM scans — the DISCOVERY
+        task_type dispatches run_cspm_scan, not a separate discovery task.
+        """
         mock_task = mocker.MagicMock()
         mock_task.id = "triggered-discovery-001"
         mocker.patch("app.services.admin_service.get_admin_db")
-        mocker.patch("app.workers.tasks.discovery.discover_aws_basic.delay", return_value=mock_task)
+        mocker.patch("app.services.admin_service.run_cspm_scan.delay", return_value=mock_task)
 
         resp = api_client.post(
             "/api/v1/admin/jobs/trigger",

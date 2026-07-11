@@ -24,7 +24,7 @@ from app.services.graph.resource_edges import build_resource_edges
 from app.services.prowler_inventory import extract_inventory_from_findings
 from app.services.prowler_service import ProwlerService, ScanResult
 from app.workers.celery_app import celery_app
-from app.workers.tasks.discovery import _get_tenant_db, _upsert
+from app.workers.tasks.cloud_utils import _get_tenant_db, _upsert
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ def _dispatch_scan(
     provider: str,
     tenant_id: str,
     account_id: str,
-    frameworks: list[str],
+    frameworks: list[str] | None,
     credentials: dict[str, Any],
     regions: list[str] | None,
     scan_job_id: str,
@@ -174,7 +174,7 @@ def run_cspm_scan(
     tenant_id: str,
     provider_id: str,
     provider: str,
-    frameworks: list[str],
+    frameworks: list[str] | None,
     credentials: dict[str, Any],
     account_id: str,
     regions: list[str] | None = None,
@@ -182,11 +182,18 @@ def run_cspm_scan(
     """
     Run a CSPM scan via Prowler v5, persist findings, and refresh inventory.
 
+    This is also the only inventory-building path — a scan is a full
+    discovery pass: resources/identities/data_assets and their graph edges
+    are (re)built from this scan's output every time it runs.
+
     Args:
         tenant_id: Ogum tenant identifier.
         provider_id: ArangoDB key of the provider config.
         provider: Cloud provider ("aws", "azure", "gcp", "k8s").
-        frameworks: List of compliance framework IDs to scan.
+        frameworks: Compliance framework IDs to scan, or None/empty to run
+            Prowler's full check catalog (recommended — every check still
+            tags its result with every framework it belongs to, so this is a
+            superset of any explicit list, not a narrower scan).
         credentials: Ephemeral credentials dict (never stored beyond this call).
         account_id: Cloud account/subscription/project ID.
         regions: Optional list of regions to scan (None = all).
@@ -200,7 +207,7 @@ def run_cspm_scan(
         tenant_id=tenant_id,
         provider_id=provider_id,
         provider=provider,
-        frameworks=frameworks,
+        frameworks=frameworks or [],
         regions=regions or [],
         status=ScanJobStatus.RUNNING,
         started_at=datetime.now(UTC),
