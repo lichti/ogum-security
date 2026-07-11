@@ -144,6 +144,18 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # ── Swagger UI — API Reference (no other service required) ──────────────
+  swagger-ui:
+    image: swaggerapi/swagger-ui:latest
+    container_name: ogum-swagger-ui
+    ports:
+      - "8085:8080"
+    environment:
+      - SWAGGER_JSON=/openapi.json
+    volumes:
+      - ./docs/api/openapi.json:/openapi.json:ro
+    restart: unless-stopped
+
   # ── Celery Worker — Scan Jobs ─────────────────────────────────────────────
   worker:
     build:
