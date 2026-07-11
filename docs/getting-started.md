@@ -179,13 +179,39 @@ See [docs/architecture.md](architecture.md) for the full architecture overview.
 
 ---
 
+## API Reference
+
+The full REST API reference is browsable via Swagger UI without needing the rest of the stack
+running (no ArangoDB/Redis required — just the container itself):
+
+```bash
+docker compose up -d swagger-ui
+```
+
+Then open `http://localhost:8085`. It serves `docs/api/openapi.json`, which is committed to the
+repository and kept in sync with the code by CI — if you change an endpoint, regenerate it and
+commit the change:
+
+```bash
+# From the repo root, with the backend's dependencies installed
+python backend/scripts/export_openapi.py > docs/api/openapi.json
+
+# Or from inside the running backend container (writes to stdout, redirect on the host)
+docker compose exec -T backend python scripts/export_openapi.py > docs/api/openapi.json
+```
+
+The backend itself also exposes interactive docs at `http://localhost:8000/docs` (Swagger) and
+`http://localhost:8000/redoc` (Redoc) when running — those require the full stack up, unlike the
+standalone `swagger-ui` service above.
+
+---
+
 ## Next Steps
 
 - [Connecting Azure and GCP](providers.md) *(coming soon)*
 - [Setting up Slack alerts](integrations.md) *(coming soon)*
 - [Understanding Attack Paths](attack-paths.md) *(coming soon)*
 - [AI-powered remediation](remediation.md) *(coming soon)*
-- [API Reference](api/) *(coming soon)*
 
 ---
 
