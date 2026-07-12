@@ -90,6 +90,12 @@ from Ogum's own inventory scan the way EC2/Lambda do.
 - Triggering a resource that's `status: deleted`, or not an `ec2_instance`/`lambda_function`,
   returns `422`. Triggering a `resource_key` from another tenant, or one that doesn't exist,
   returns `404`.
+- **The `scan_jobs` doc with the `job_id` returned in the trigger response is the one that
+  transitions `queued → running → completed/failed`** — not a second, disconnected doc. This
+  regressed once (the task ignored the caller's `job_id`, minting its own via
+  `start_discovery_job()`), invisible until this scenario had a real caller to catch it — confirm
+  by polling `GET /api/v1/side-scans/jobs/{job_id}` with the exact ID from the trigger response
+  and checking `started_at`/`completed_at` actually populate on it, not on some other doc.
 
 ## Scenario 4 — Retry a failed scan
 
@@ -117,6 +123,11 @@ passing an invalid `image_digest`/`resource_id`).
 4. Click **Re-scan** on a failed job.
 
 **Expected result:**
+- **With real job data present, the table and KPI cards are non-empty** — this page's fetch
+  regressed once (reading `data.items` instead of `data.data.items` off the Axios response) and
+  silently showed the empty state no matter how many jobs actually existed, undetected because
+  the only prior test coverage used an empty mock too. If you see "No scan jobs found" while
+  `scan_jobs` genuinely has entries for this tenant, that's this bug back.
 - KPI counts match `GET /api/v1/side-scans/jobs` grouped by `job_type`.
 - Status/type filters narrow the table correctly.
 - Re-scan button triggers the retry mutation and the job's status badge updates (pulse animation

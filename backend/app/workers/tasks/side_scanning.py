@@ -58,7 +58,6 @@ from app.services.side_scanning.snapshot_manager import (
 from app.workers.celery_app import celery_app
 from app.workers.tasks._job_tracking import (
     complete_discovery_job,
-    start_discovery_job,
     update_job_to_running,
 )
 from app.workers.tasks.cloud_utils import _get_aws_session, _get_tenant_db, _upsert
@@ -445,7 +444,12 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
     """
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
-    scan_job_id = start_discovery_job(db, tenant_id, "aws", provider_id, job_type="ec2")
+    # job_id is pre-created (status=queued) by the caller — enqueue_side_scan for the
+    # manual trigger/retry/auto-first-seen paths — same convention as scan_k8s_container
+    # and scan_container_image. Reusing it (instead of start_discovery_job's own id) is
+    # what makes that job doc actually reach a terminal status.
+    scan_job_id = job_id
+    update_job_to_running(db, scan_job_id)
     logger.info(
         "scan_ec2_instance_v2 start [tenant=%s instance=%s volume=%s job=%s]",
         tenant_id,
@@ -608,7 +612,10 @@ def scan_lambda_function(  # noqa: PLR0913
     """
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
-    scan_job_id = start_discovery_job(db, tenant_id, "aws", provider_id, job_type="lambda")
+    # job_id is pre-created (status=queued) by the caller — same convention as
+    # scan_ec2_instance_v2 (see its comment for why this replaced start_discovery_job).
+    scan_job_id = job_id
+    update_job_to_running(db, scan_job_id)
     logger.info(
         "scan_lambda_function start [tenant=%s function=%s job=%s]",
         tenant_id,

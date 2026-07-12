@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { sideScanApi } from '@/lib/api'
-import type { SideScanJob, SideScanJobStatus, SideScanJobType, PagedSideScanJobs } from '@/lib/types'
+import type { SideScanJob, SideScanJobStatus, SideScanJobType } from '@/lib/types'
 import { RefreshCw, Server, Box, Container, Image, RotateCcw } from 'lucide-react'
 
 const STATUS_VARIANT: Record<SideScanJobStatus, string> = {
@@ -82,8 +82,8 @@ export default function SideScanning() {
     },
   })
 
-  const jobs: SideScanJob[] = (data as PagedSideScanJobs | undefined)?.items ?? []
-  const total: number = (data as PagedSideScanJobs | undefined)?.total ?? 0
+  const jobs: SideScanJob[] = data?.data.items ?? []
+  const total: number = data?.data.total ?? 0
 
   // KPI counts derived from current page
   const kpi = jobs.reduce(
