@@ -23,6 +23,11 @@ from app.services.graph.iam_edges import build_iam_edges
 from app.services.graph.resource_edges import build_resource_edges
 from app.services.prowler_inventory import extract_inventory_from_findings
 from app.services.prowler_service import ProwlerService, ScanResult
+from app.services.side_scanning.trigger import (
+    SCANNABLE_RESOURCE_TYPES,
+    enqueue_side_scan,
+    has_prior_side_scan,
+)
 from app.workers.celery_app import celery_app
 from app.workers.tasks.cloud_utils import _get_tenant_db, _upsert
 
@@ -106,6 +111,40 @@ def _soft_delete_stale(
         )
         total += len(list(cursor))
     return total
+
+
+def _auto_trigger_side_scans(
+    db: Any,
+    tenant_id: str,
+    provider_id: str,
+    credentials: dict[str, Any],
+    inventory: dict[str, list[dict[str, Any]]],
+) -> int:
+    """
+    Enqueue a side-scan for each EC2/Lambda resource in this scan's inventory that
+    has never had one before (first-seen only — no periodic auto re-scan, to keep
+    EBS snapshot cost and Celery/trivy-server load bounded). Re-scanning later is
+    either manual ("Scan Now" in Inventory) or via the daily rescan_sboms task,
+    which re-checks stored SBOMs against new CVEs at zero AWS cost.
+
+    Best-effort: a failure enqueuing one resource is logged and skipped, never
+    fails the CSPM scan job itself.
+    """
+    triggered = 0
+    for resource in inventory.get("resources", []):
+        if resource.get("resource_type") not in SCANNABLE_RESOURCE_TYPES:
+            continue
+        resource_key = resource.get("_key")
+        if not resource_key or has_prior_side_scan(db, tenant_id, resource_key):
+            continue
+        try:
+            job_id = enqueue_side_scan(db, tenant_id, resource, provider_id, credentials)
+        except Exception:
+            logger.exception("Failed to auto-trigger side-scan [tenant=%s resource=%s]", tenant_id, resource_key)
+            continue
+        if job_id:
+            triggered += 1
+    return triggered
 
 
 def _dispatch_scan(
@@ -242,6 +281,13 @@ def run_cspm_scan(
         inventory_count = _upsert_inventory(db, inventory)
         deleted_count = _soft_delete_stale(db, tenant_id, provider, inventory)
 
+        # Side-scanning is AWS-only (scan_ec2_instance_v2/scan_lambda_function) and
+        # needs a live boto3 session, which credentials/provider_id here already
+        # carry — no extra credential resolution.
+        side_scans_triggered = (
+            _auto_trigger_side_scans(db, tenant_id, provider_id, credentials, inventory) if provider == "aws" else 0
+        )
+
         # Graph enrichment — derives edges from the raw_metadata just persisted
         # above, no additional cloud API calls (Lambda execution-role is the
         # sole exception, already resolved during the scan itself).
@@ -264,7 +310,7 @@ def run_cspm_scan(
 
         logger.info(
             "CSPM scan complete [tenant=%s provider=%s]: findings=%d fail=%d inventory=%d deleted=%d "
-            "iam_edges=%s resource_edges=%s data_access_edges=%d exposure=%s",
+            "iam_edges=%s resource_edges=%s data_access_edges=%d exposure=%s side_scans_triggered=%d",
             tenant_id,
             provider,
             len(findings),
@@ -275,6 +321,7 @@ def run_cspm_scan(
             resource_edge_counts,
             data_access_edges,
             exposure_counts,
+            side_scans_triggered,
         )
 
         # Enqueue post-scan risk scoring / attack path detection (fire-and-forget)

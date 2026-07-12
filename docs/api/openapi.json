@@ -2809,6 +2809,19 @@
         "title": "TriggerRequest",
         "type": "object"
       },
+      "TriggerScanRequest": {
+        "properties": {
+          "resource_key": {
+            "title": "Resource Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource_key"
+        ],
+        "title": "TriggerScanRequest",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -6402,6 +6415,61 @@
           }
         },
         "summary": "Retry Scan Job",
+        "tags": [
+          "side-scans"
+        ]
+      }
+    },
+    "/api/v1/side-scans/trigger": {
+      "post": {
+        "description": "Manually trigger a side-scan for an EC2 instance or Lambda function resource.",
+        "operationId": "trigger_resource_scan_api_v1_side_scans_trigger_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Trigger Resource Scan Api V1 Side Scans Trigger Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trigger Resource Scan",
         "tags": [
           "side-scans"
         ]

@@ -1,4 +1,4 @@
-"""Side-scanning API — K8s DaemonSet webhook, ECR webhook, jobs management."""
+"""Side-scanning API — K8s DaemonSet webhook, ECR webhook, jobs management, manual trigger."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from app.api.v1.inventory import get_tenant_db
+from app.services.provider_service import _make_key, get_provider, get_provider_credentials
+from app.services.side_scanning.trigger import SCANNABLE_RESOURCE_TYPES, enqueue_side_scan
 from app.workers.tasks.side_scanning import scan_container_image, scan_k8s_container
 
 router = APIRouter(prefix="/api/v1/side-scans", tags=["side-scans"])
@@ -152,15 +154,54 @@ async def receive_ecr_push_event(
     return {"job_id": job_id, "status": "queued"}
 
 
-# ─── Jobs API ─────────────────────────────────────────────────────────────────
+# ─── Manual scan trigger (Inventory "Scan Now") ──────────────────────────────
 
-_RETRY_TASK_MAP: dict[str, str] = {
-    "k8s_container": "app.workers.tasks.side_scanning.scan_k8s_container",
-    "ecr": "app.workers.tasks.side_scanning.scan_container_image",
-    "ec2": "app.workers.tasks.side_scanning.scan_ec2_instance_v2",
-    "lambda": "app.workers.tasks.side_scanning.scan_lambda_function",
-    "sbom_rescan": "app.workers.tasks.side_scanning.rescan_sboms",
-}
+
+class TriggerScanRequest(BaseModel):
+    resource_key: str
+
+
+@router.post("/trigger", status_code=202)
+async def trigger_resource_scan(
+    body: TriggerScanRequest,
+    db: StandardDatabase = Depends(get_tenant_db),
+    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+) -> dict[str, Any]:
+    """Manually trigger a side-scan for an EC2 instance or Lambda function resource."""
+    try:
+        raw = db.collection("resources").get(body.resource_key)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to retrieve resource")
+
+    resource_doc: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    if not resource_doc or resource_doc.get("tenant_id") != x_tenant_id:
+        raise HTTPException(status_code=404, detail="Resource not found")
+
+    if resource_doc.get("resource_type") not in SCANNABLE_RESOURCE_TYPES:
+        raise HTTPException(status_code=422, detail="Resource type is not scannable via side-scanning")
+    if resource_doc.get("status") == "deleted":
+        raise HTTPException(status_code=422, detail="Resource is deleted")
+
+    provider_id = _make_key(resource_doc.get("provider", ""), resource_doc.get("account_id", ""))
+    provider = get_provider(db, provider_id)
+    if provider is None:
+        raise HTTPException(status_code=400, detail="Provider not found for this resource")
+
+    credentials = get_provider_credentials(db, provider_id)
+    full_credentials = {
+        **credentials,
+        "role_arn": provider.role_arn,
+        "external_id": getattr(provider, "external_id", None),
+    }
+
+    job_id = enqueue_side_scan(db, x_tenant_id, resource_doc, provider_id, full_credentials)
+    if job_id is None:
+        raise HTTPException(status_code=422, detail="Resource could not be resolved to a scannable target")
+
+    return {"job_id": job_id, "status": "queued", "resource_key": body.resource_key}
+
+
+# ─── Jobs API ─────────────────────────────────────────────────────────────────
 
 
 @router.get("/jobs")
@@ -254,6 +295,36 @@ async def retry_scan_job(
         )
 
     job_type = doc.get("type", "")
+
+    # ec2/lambda retries need fresh resource metadata (region, arn, and — for EC2 —
+    # a live volume_id/availability_zone lookup), so they go through the same
+    # enqueue_side_scan() path as a manual trigger rather than replaying the
+    # original job doc's fields, which don't carry that data at all.
+    if job_type in ("ec2", "lambda"):
+        try:
+            raw_resource = db.collection("resources").get(doc.get("resource_id", ""))
+        except Exception:
+            raw_resource = None
+        resource_doc: dict[str, Any] = raw_resource if isinstance(raw_resource, dict) else {}
+        if not resource_doc or resource_doc.get("tenant_id") != x_tenant_id:
+            raise HTTPException(status_code=404, detail="Resource for this job no longer exists")
+
+        provider_id = doc.get("provider_id", "")
+        provider = get_provider(db, provider_id)
+        if provider is None:
+            raise HTTPException(status_code=400, detail="Provider not found for this resource")
+        credentials = get_provider_credentials(db, provider_id)
+        full_credentials = {
+            **credentials,
+            "role_arn": provider.role_arn,
+            "external_id": getattr(provider, "external_id", None),
+        }
+
+        new_job_id = enqueue_side_scan(db, x_tenant_id, resource_doc, provider_id, full_credentials)
+        if new_job_id is None:
+            raise HTTPException(status_code=422, detail="Resource could not be resolved to a scannable target")
+        return {"job_id": new_job_id, "status": "queued", "original_job_id": job_id}
+
     new_job_id = f"retry-{job_id}-{int(time.time())}"
 
     # Create new queued job record
