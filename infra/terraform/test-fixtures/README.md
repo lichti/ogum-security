@@ -2,6 +2,8 @@
 
 AWS resources intentionally configured with known misconfigurations to validate Ogum.Static (CSPM) and Ogum.Inventory discovery.
 
+For end-to-end validation against real exploitable applications (app-layer bug → cloud privilege escalation) rather than synthetic misconfigurations, see [`../awsgoat/`](../awsgoat/README.md).
+
 ## What gets deployed
 
 | Resource | Scenario | Expected CSPM findings |
