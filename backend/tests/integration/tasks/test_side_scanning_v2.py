@@ -167,6 +167,57 @@ def test_v2_snapshot_created_and_deleted(db_tenant_a: Any, mocker: Any) -> None:
 
 @pytest.mark.integration
 @mock_aws
+def test_v2_reuses_caller_provided_job_id(db_tenant_a: Any, mocker: Any) -> None:
+    """
+    scan_ec2_instance_v2 must update the scan_jobs doc the caller pre-created
+    (job_id="pre-created-job") instead of minting its own — regression test for a
+    bug where the task called start_discovery_job() internally, silently orphaning
+    the caller's job doc at status="queued" forever while a second, disconnected
+    doc got the real status. Only surfaced once enqueue_side_scan() (Inventory
+    "Scan Now") gave this task a real caller that pre-creates the job doc.
+    """
+    ec2_client = boto3.client("ec2", region_name=REGION)
+    instance_id, volume_id = _seed_ec2(ec2_client)
+    init_tenant_schema(db_tenant_a)
+
+    db_tenant_a.collection("scan_jobs").insert(
+        {"_key": "pre-created-job", "tenant_id": TENANT, "type": "ec2", "status": "queued"}
+    )
+
+    def _subprocess_mock(cmd: list[str], **kw: Any) -> CompletedProcess[str]:
+        if "cyclonedx" in cmd:
+            return _ok(_trivy_sbom_json())
+        return _ok(_trivy_vuln_json())
+
+    mocker.patch("app.workers.tasks.side_scanning._get_tenant_db", return_value=db_tenant_a)
+    mocker.patch("app.services.side_scanning.analyzers.trivy_analyzer.subprocess.run", _subprocess_mock)
+    mocker.patch("app.workers.tasks.side_scanning.subprocess.run", _subprocess_mock)
+    mocker.patch("app.workers.tasks.side_scanning.wait_for_snapshot", return_value=None)
+
+    result = scan_ec2_instance_v2(
+        tenant_id=TENANT,
+        instance_id=instance_id,
+        volume_id=volume_id,
+        provider_id="test-provider",
+        job_id="pre-created-job",
+        trivy_server_url=TRIVY_URL,
+        region=REGION,
+        account_id=ACCOUNT,
+        resource_key="test-ec2-key-reuse",
+    )
+
+    assert result["job_id"] == "pre-created-job"
+
+    all_jobs = list(
+        db_tenant_a.aql.execute("FOR j IN scan_jobs FILTER j.tenant_id == @t RETURN j", bind_vars={"t": TENANT})
+    )
+    assert len(all_jobs) == 1, "task must not create a second, disconnected job doc"
+    assert all_jobs[0]["_key"] == "pre-created-job"
+    assert all_jobs[0]["status"] == "completed"
+
+
+@pytest.mark.integration
+@mock_aws
 def test_v2_findings_persisted_in_arango(db_tenant_a: Any, mocker: Any) -> None:
     """CVE + secret findings are persisted in ArangoDB with correct tenant_id."""
     ec2_client = boto3.client("ec2", region_name=REGION)
@@ -557,6 +608,71 @@ def test_lambda_downloads_zip_and_scans(db_tenant_a: Any, mocker: Any) -> None:
     findings = list(cursor)
     assert len(findings) == 1
     assert findings[0]["raw_output"]["detection_method"] == "lambda_zip"
+
+
+@pytest.mark.integration
+@mock_aws
+def test_lambda_reuses_caller_provided_job_id(db_tenant_a: Any, mocker: Any) -> None:
+    """Same regression as test_v2_reuses_caller_provided_job_id, for scan_lambda_function."""
+    init_tenant_schema(db_tenant_a)
+
+    iam_client = boto3.client("iam", region_name=REGION)
+    role = iam_client.create_role(
+        RoleName="test-lambda-role-2",
+        AssumeRolePolicyDocument=json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}
+                ],
+            }
+        ),
+    )
+    role_arn = role["Role"]["Arn"]
+
+    lambda_client = boto3.client("lambda", region_name=REGION)
+    lambda_client.create_function(
+        FunctionName="test-function-2",
+        Runtime="python3.12",
+        Role=role_arn,
+        Handler="index.handler",
+        Code={"ZipFile": _make_zip()},
+    )
+
+    zip_bytes = _make_zip()
+    mock_response = MagicMock()
+    mock_response.content = zip_bytes
+    mock_response.raise_for_status = MagicMock()
+    mocker.patch("app.workers.tasks.side_scanning.httpx.get", return_value=mock_response)
+    mocker.patch(
+        "app.services.side_scanning.analyzers.trivy_analyzer.subprocess.run",
+        return_value=_ok(_trivy_vuln_json()),
+    )
+    mocker.patch("app.workers.tasks.side_scanning._get_tenant_db", return_value=db_tenant_a)
+
+    db_tenant_a.collection("scan_jobs").insert(
+        {"_key": "pre-created-lambda-job", "tenant_id": TENANT, "type": "lambda", "status": "queued"}
+    )
+
+    function_arn = f"arn:aws:lambda:{REGION}:{ACCOUNT}:function:test-function-2"
+    result = scan_lambda_function(
+        tenant_id=TENANT,
+        function_name="test-function-2",
+        function_arn=function_arn,
+        provider_id="test-provider",
+        job_id="pre-created-lambda-job",
+        trivy_server_url=TRIVY_URL,
+        region=REGION,
+        account_id=ACCOUNT,
+    )
+
+    assert result["job_id"] == "pre-created-lambda-job"
+
+    all_jobs = list(
+        db_tenant_a.aql.execute("FOR j IN scan_jobs FILTER j.tenant_id == @t RETURN j", bind_vars={"t": TENANT})
+    )
+    assert len(all_jobs) == 1, "task must not create a second, disconnected job doc"
+    assert all_jobs[0]["status"] == "completed"
 
 
 @pytest.mark.integration
