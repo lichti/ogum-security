@@ -40,6 +40,10 @@ output "test_resources" {
       app_repository       = aws_ecr_repository.app.repository_url
       compliant_repository = aws_ecr_repository.compliant_app.repository_url
     }
+    vulnerable_apps = {
+      metasploitable = try(aws_instance.metasploitable[0].id, null)
+      dvwa           = try(aws_instance.dvwa[0].id, null)
+    }
     ogum_scanner = {
       role_arn         = aws_iam_role.ogum_scanner.arn
       external_id      = "ogum-dev-${var.suffix}"

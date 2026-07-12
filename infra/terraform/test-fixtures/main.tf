@@ -29,6 +29,8 @@ terraform {
 # Secrets Manager:  $0.40/month per secret (1 secret)
 # SSM Parameter:    free (Standard tier)
 # Total:            ~$21/month with EC2  |  ~$6/month without (create_ec2_instances=false)
+# Vulnerable apps:   off by default. Metasploitable (t3.small) ~$0.02/h, DVWA (t3.micro) ~$0.01/h — opt-in via
+#                    create_metasploitable_ec2 / create_dvwa_ec2.
 # ─────────────────────────────────────────────────────────────────────────────
 
 provider "aws" {

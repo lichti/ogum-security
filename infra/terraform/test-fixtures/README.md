@@ -18,6 +18,19 @@ AWS resources intentionally configured with known misconfigurations to validate 
 | `aws_cloudtrail.test_trail` | Single-region trail | Not multi-region |
 | `aws_subnet.public` | `map_public_ip_on_launch = true` | Public IPs assigned by default |
 
+## Known-vulnerable applications (optional, off by default)
+
+Real, known-vulnerable targets for validating Ogum.Dynamic (side-scanning: Trivy/YARA/Gitleaks) against actual CVEs and secrets — as opposed to the synthetic misconfigurations above. Both are disabled by default and, when enabled, deploy into the **private subnet with no public ingress**.
+
+| Resource | Scenario | Enable with |
+|---|---|---|
+| `aws_instance.metasploitable` | Metasploitable (real, intentionally vulnerable services) | `create_metasploitable_ec2 = true` |
+| `aws_instance.dvwa` | DVWA (Damn Vulnerable Web App) via Docker | `create_dvwa_ec2 = true` |
+
+**Metasploitable setup:** Rapid7 does not publish a redistributable AWS AMI — its license restricts Metasploitable to isolated local VM use. Build your own AMI first (e.g. with the official [Metasploitable3 Packer templates](https://github.com/rapid7/metasploitable3)), tag it, and either set `metasploitable_ami_id` directly or leave it empty and adjust `metasploitable_ami_name` to match your tag. Skip this if you only need DVWA.
+
+**Access:** both instances live in the private subnet with a security group that has **no ingress rules by default**. Reach them via AWS Systems Manager Session Manager (an IAM role + instance profile with `AmazonSSMManagedInstanceCore` is attached automatically), or add your own IP to `vulnerable_apps_allowed_cidrs` — never `0.0.0.0/0`, enforced by a Terraform validation rule.
+
 ## Prerequisites
 
 - AWS CLI configured with credentials that have permissions to create the resources above
@@ -58,3 +71,5 @@ All resources are minimal (`t3.micro`, no NAT Gateway, no RDS). Estimated cost: 
 ## Security note
 
 These resources are intentionally misconfigured. **Never deploy in a production account.** Use a dedicated test/sandbox AWS account.
+
+The optional Metasploitable/DVWA instances are **actually exploitable**, not just CSPM-flagged — keep `vulnerable_apps_allowed_cidrs` empty (SSM-only access) unless you explicitly need direct network access, and never set it to `0.0.0.0/0`.
