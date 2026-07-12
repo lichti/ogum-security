@@ -84,6 +84,7 @@ def enqueue_side_scan(
     account_id = resource_doc.get("account_id") or ""
     arn = resource_doc.get("arn")
     role_arn = credentials.get("role_arn")
+    external_id = credentials.get("external_id")
     aws_access_key_id = credentials.get("aws_access_key_id")
     aws_secret_access_key = credentials.get("aws_secret_access_key")
 
@@ -96,7 +97,7 @@ def enqueue_side_scan(
 
         session = _get_aws_session(
             role_arn=role_arn,
-            external_id=credentials.get("external_id"),
+            external_id=external_id,
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key,
         )
@@ -129,6 +130,7 @@ def enqueue_side_scan(
             availability_zone=instance_meta["availability_zone"],
             resource_arn=arn,
             role_arn=role_arn,
+            external_id=external_id,
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key,
         )
@@ -160,6 +162,7 @@ def enqueue_side_scan(
             region=region,
             account_id=account_id,
             role_arn=role_arn,
+            external_id=external_id,
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key,
         )

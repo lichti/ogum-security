@@ -7,6 +7,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
+# Trivy CLI — talks to the trivy-server sidecar (docker-compose.yml) via `--server`
+# on the vm/rootfs/image/sbom subcommand (not `trivy client`, which is image-only in
+# current releases). The version tracks aquasec/trivy:latest used for the sidecar
+# itself, matching its existing convention rather than pinning here.
+RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+    | sh -s -- -b /usr/local/bin
+
 # Install Poetry
 RUN pip install --no-cache-dir poetry==1.8.3
 

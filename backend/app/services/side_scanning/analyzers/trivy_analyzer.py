@@ -50,15 +50,21 @@ def run_trivy_ebs(
     trivyignore_path: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """
-    Scan an EBS snapshot via EBS Direct API using trivy client + sidecar server.
+    Scan an EBS snapshot via EBS Direct API using trivy vm + sidecar server.
+
+    `vm` is a top-level scanning subcommand, not nested under `client` — unlike
+    older Trivy releases, current versions (0.72+) put `--server` directly on
+    `vm`/`rootfs`/`image` themselves; there is no `trivy client vm ...` form
+    (that FATALs with "unknown flag: --server" on `client`, since `client` is
+    image-only there and takes IMAGE_NAME, not a vm: target).
+
     Returns (vulnerabilities, secrets). Trivy Severity field takes precedence over CVSS score.
     """
     cmd = [
         "trivy",
-        "client",
+        "vm",
         "--server",
         trivy_server_url,
-        "vm",
         f"ebs:{snapshot_id}",
         "--scanners",
         "vuln,secret",
@@ -74,7 +80,7 @@ def run_trivy_ebs(
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
     if result.returncode not in (0, 1):
-        raise RuntimeError(f"trivy client exited {result.returncode}: {result.stderr[:500]}")
+        raise RuntimeError(f"trivy vm exited {result.returncode}: {result.stderr[:500]}")
     if not result.stdout.strip():
         return [], []
 
@@ -121,16 +127,16 @@ def run_trivy_rootfs(
     skip_dirs: str = "/proc,/sys,/dev,/run",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """
-    Scan a container rootfs via trivy client rootfs.
+    Scan a container rootfs via trivy rootfs (--server talks to the sidecar directly —
+    `rootfs` is a top-level subcommand, not nested under `client`; see run_trivy_ebs).
     Used by scan_k8s_container for /proc/<PID>/root scanning.
     Returns (vulnerabilities, secrets).
     """
     cmd = [
         "trivy",
-        "client",
+        "rootfs",
         "--server",
         trivy_server_url,
-        "rootfs",
         rootfs_path,
         "--scanners",
         "vuln,secret",
@@ -197,16 +203,17 @@ def run_trivy_image(
     scanners: str = "vuln,secret,misconfig",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """
-    Scan a container image via trivy client image (no docker pull required for registry).
+    Scan a container image via trivy image (no docker pull required for registry;
+    --server talks to the sidecar directly — `image` is a top-level subcommand, not
+    nested under `client`; see run_trivy_ebs).
     Returns (vulnerabilities, secrets, misconfigs).
     Trivy Severity field is primary; CVSS only as fallback for UNKNOWN.
     """
     cmd = [
         "trivy",
-        "client",
+        "image",
         "--server",
         trivy_server_url,
-        "image",
         f"{image_uri}@{image_digest}",
         "--scanners",
         scanners,

@@ -256,12 +256,14 @@ def cleanup_orphan_snapshots(
     tenant_id: str,
     region: str = "us-east-1",
     role_arn: str | None = None,
+    external_id: str | None = None,
     aws_access_key_id: str | None = None,
     aws_secret_access_key: str | None = None,
 ) -> dict[str, Any]:
     """Hourly Celery Beat task: delete expired ogum:scan snapshots."""
     session = _get_aws_session(
         role_arn=role_arn,
+        external_id=external_id,
         aws_access_key_id=aws_access_key_id,
         aws_secret_access_key=aws_secret_access_key,
     )
@@ -309,14 +311,13 @@ def cleanup_orphan_snapshots(
 
 
 def _generate_sbom(snapshot_id: str, trivy_server_url: str, job_id: str) -> dict[str, Any]:
-    """Generate CycloneDX SBOM via trivy client. Returns empty dict on failure."""
+    """Generate CycloneDX SBOM via trivy vm. Returns empty dict on failure."""
     result = subprocess.run(
         [
             "trivy",
-            "client",
+            "vm",
             "--server",
             trivy_server_url,
-            "vm",
             f"ebs:{snapshot_id}",
             "--format",
             "cyclonedx",
@@ -429,6 +430,7 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
     availability_zone: str = "",
     resource_arn: str | None = None,
     role_arn: str | None = None,
+    external_id: str | None = None,
     aws_access_key_id: str | None = None,
     aws_secret_access_key: str | None = None,
 ) -> dict[str, Any]:
@@ -460,6 +462,7 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
 
     session = _get_aws_session(
         role_arn=role_arn,
+        external_id=external_id,
         aws_access_key_id=aws_access_key_id,
         aws_secret_access_key=aws_secret_access_key,
     )
@@ -597,6 +600,7 @@ def scan_lambda_function(  # noqa: PLR0913
     region: str = "us-east-1",
     account_id: str = "",
     role_arn: str | None = None,
+    external_id: str | None = None,
     aws_access_key_id: str | None = None,
     aws_secret_access_key: str | None = None,
 ) -> dict[str, Any]:
@@ -625,6 +629,7 @@ def scan_lambda_function(  # noqa: PLR0913
 
     session = _get_aws_session(
         role_arn=role_arn,
+        external_id=external_id,
         aws_access_key_id=aws_access_key_id,
         aws_secret_access_key=aws_secret_access_key,
     )
@@ -749,10 +754,9 @@ def rescan_sboms(
             result = subprocess.run(
                 [
                     "trivy",
-                    "client",
+                    "sbom",
                     "--server",
                     trivy_server_url,
-                    "sbom",
                     tmp_path,
                     "--scanners",
                     "vuln",
@@ -827,14 +831,13 @@ def rescan_sboms(
 
 
 def _generate_sbom_rootfs(rootfs_path: str, trivy_server_url: str, job_id: str) -> dict[str, Any]:
-    """Generate CycloneDX SBOM for a container rootfs via trivy client. Returns empty dict on failure."""
+    """Generate CycloneDX SBOM for a container rootfs via trivy rootfs. Returns empty dict on failure."""
     result = subprocess.run(
         [
             "trivy",
-            "client",
+            "rootfs",
             "--server",
             trivy_server_url,
-            "rootfs",
             rootfs_path,
             "--format",
             "cyclonedx",
@@ -984,10 +987,9 @@ def _generate_sarif(image_uri: str, image_digest: str, trivy_server_url: str) ->
     result = subprocess.run(
         [
             "trivy",
-            "client",
+            "image",
             "--server",
             trivy_server_url,
-            "image",
             f"{image_uri}@{image_digest}",
             "--format",
             "sarif",

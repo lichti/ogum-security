@@ -30,12 +30,24 @@ def _get_aws_session(
     """Return a boto3 Session.
 
     Priority:
-    1. STS AssumeRole when role_arn is provided (preferred — cross-account)
-    2. Static keys when aws_access_key_id + aws_secret_access_key are provided (dev only)
-    3. Ambient credentials from the worker environment (instance profile / env vars)
+    1. STS AssumeRole when role_arn is provided (preferred — cross-account). The
+       AssumeRole call itself is signed with aws_access_key_id/aws_secret_access_key
+       when both are given — a base identity assuming into a target role, the same
+       chain a static-key tenant_config with role_arn set represents. When neither
+       key is given, the call falls back to ambient credentials (the production
+       path: an EC2/ECS instance profile or IRSA identity assumes into the
+       customer's role — nothing to chain from, since there's no static base
+       identity to sign with).
+    2. Static keys directly when aws_access_key_id + aws_secret_access_key are
+       provided and no role_arn (dev only).
+    3. Ambient credentials from the worker environment (instance profile / env vars).
     """
     if role_arn:
-        sts = boto3.client("sts", region_name="us-east-1")
+        sts_kwargs: dict[str, Any] = {"region_name": "us-east-1"}
+        if aws_access_key_id and aws_secret_access_key:
+            sts_kwargs["aws_access_key_id"] = aws_access_key_id
+            sts_kwargs["aws_secret_access_key"] = aws_secret_access_key
+        sts = boto3.client("sts", **sts_kwargs)
         assume_kwargs: dict[str, Any] = {
             "RoleArn": role_arn,
             "RoleSessionName": "ogum-discovery",
