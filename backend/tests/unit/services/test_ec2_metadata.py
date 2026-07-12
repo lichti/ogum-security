@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.services.side_scanning.ec2_metadata import resolve_ec2_scan_metadata
 
 
@@ -16,6 +18,7 @@ def _paginated_client(reservations: list[dict[str, Any]]) -> MagicMock:
     return client
 
 
+@pytest.mark.unit
 class TestResolveEc2ScanMetadata:
     def test_returns_empty_dict_for_no_instance_ids(self) -> None:
         client = _paginated_client([])

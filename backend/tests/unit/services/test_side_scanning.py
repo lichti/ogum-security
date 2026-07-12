@@ -146,7 +146,7 @@ class TestRunTrivyEbs:
 
     def test_nonzero_exit_raises_runtimeerror(self, monkeypatch: Any) -> None:
         monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _make_completed(returncode=2, stderr="fatal error"))
-        with pytest.raises(RuntimeError, match="trivy client exited 2"):
+        with pytest.raises(RuntimeError, match="trivy vm exited 2"):
             run_trivy_ebs("snap-abc")
 
     def test_includes_ignorefile_when_provided(self, monkeypatch: Any) -> None:
@@ -199,11 +199,13 @@ class TestScanWithEbsDirect:
         )
         cmd = captured[0]
         assert "trivy" in cmd
-        assert "client" in cmd
+        assert "vm" in cmd
         assert "--server" in cmd
         assert "http://trivy-server:4954" in cmd
-        assert "vm" in cmd
         assert "ebs:snap-xyz" in cmd
+        # "vm" must be a top-level subcommand, not nested under "client" — that FATALs
+        # with "unknown flag: --server" on current Trivy (client is image-only there).
+        assert "client" not in cmd
 
     def test_includes_ignorefile_when_provided(self, monkeypatch: Any) -> None:
         captured: list[list[str]] = []

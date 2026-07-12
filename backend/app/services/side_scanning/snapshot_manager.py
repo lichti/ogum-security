@@ -125,10 +125,9 @@ def scan_with_ebs_direct(
     """
     cmd = [
         "trivy",
-        "client",
+        "vm",
         "--server",
         trivy_server_url,
-        "vm",
         f"ebs:{snapshot_id}",
         "--scanners",
         "vuln,secret",
@@ -151,7 +150,7 @@ def scan_with_ebs_direct(
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
     if result.returncode not in (0, 1):
-        raise RuntimeError(f"trivy client exited {result.returncode} for snapshot {snapshot_id}: {result.stderr[:500]}")
+        raise RuntimeError(f"trivy vm exited {result.returncode} for snapshot {snapshot_id}: {result.stderr[:500]}")
     if not result.stdout.strip():
         return {"Results": []}
     parsed: dict[str, Any] = json.loads(result.stdout)

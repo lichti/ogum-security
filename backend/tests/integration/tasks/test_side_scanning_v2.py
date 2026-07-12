@@ -218,6 +218,56 @@ def test_v2_reuses_caller_provided_job_id(db_tenant_a: Any, mocker: Any) -> None
 
 @pytest.mark.integration
 @mock_aws
+def test_v2_passes_external_id_to_aws_session(db_tenant_a: Any, mocker: Any) -> None:
+    """
+    Regression test: scan_ec2_instance_v2 must forward its external_id parameter to
+    _get_aws_session. It previously had no external_id parameter at all, so a
+    cross-account role whose trust policy requires a matching sts:ExternalId (the
+    confused-deputy protection every registered provider gets) would always fail
+    AssumeRole from inside the Celery task — even though the same role assumption
+    succeeded moments earlier in enqueue_side_scan's own describe_instances call,
+    which did pass it. Only surfaced testing a real role_arn + external_id
+    combination end-to-end; every prior test used static keys only.
+    """
+    ec2_client = boto3.client("ec2", region_name=REGION)
+    instance_id, volume_id = _seed_ec2(ec2_client)
+    init_tenant_schema(db_tenant_a)
+
+    def _subprocess_mock(cmd: list[str], **kw: Any) -> CompletedProcess[str]:
+        if "cyclonedx" in cmd:
+            return _ok(_trivy_sbom_json())
+        return _ok(_trivy_vuln_json())
+
+    mocker.patch("app.workers.tasks.side_scanning._get_tenant_db", return_value=db_tenant_a)
+    mocker.patch("app.services.side_scanning.analyzers.trivy_analyzer.subprocess.run", _subprocess_mock)
+    mocker.patch("app.workers.tasks.side_scanning.subprocess.run", _subprocess_mock)
+    mocker.patch("app.workers.tasks.side_scanning.wait_for_snapshot", return_value=None)
+    session_spy = mocker.patch("app.workers.tasks.side_scanning._get_aws_session", wraps=lambda **kw: boto3.Session())
+
+    scan_ec2_instance_v2(
+        tenant_id=TENANT,
+        instance_id=instance_id,
+        volume_id=volume_id,
+        provider_id="test-provider",
+        job_id="job-v2-external-id",
+        trivy_server_url=TRIVY_URL,
+        region=REGION,
+        account_id=ACCOUNT,
+        resource_key="test-ec2-key-extid",
+        role_arn="arn:aws:iam::123456789012:role/ogum-scanner",
+        external_id="ogum-dev-dev",
+    )
+
+    session_spy.assert_called_once_with(
+        role_arn="arn:aws:iam::123456789012:role/ogum-scanner",
+        external_id="ogum-dev-dev",
+        aws_access_key_id=None,
+        aws_secret_access_key=None,
+    )
+
+
+@pytest.mark.integration
+@mock_aws
 def test_v2_findings_persisted_in_arango(db_tenant_a: Any, mocker: Any) -> None:
     """CVE + secret findings are persisted in ArangoDB with correct tenant_id."""
     ec2_client = boto3.client("ec2", region_name=REGION)
