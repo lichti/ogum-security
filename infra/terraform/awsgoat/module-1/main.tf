@@ -1,27 +1,24 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.24.0"
-    }
-  }
-}
-provider "aws" {
-  region = "us-east-1"
-}
+# NOTE: upstream's own `terraform { required_providers {...} }` / `provider "aws" {...}`
+# blocks were removed here so this can be called as a child module from
+# infra/terraform/test-fixtures (a module used with count/for_each cannot declare its
+# own provider block) — it now inherits the aws provider from the calling root.
+# All local file paths below were changed from plain relative paths to
+# `${path.module}/...` for the same reason: unqualified relative paths resolve against
+# the root module's working directory, not this module's directory, so they broke once
+# this stopped being a standalone root module. See ../README.md#updating before re-vendoring.
 
 data "aws_caller_identity" "current" {}
 
 
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_dir  = "resources/lambda/react"
-  output_path = "resources/lambda/out/reactapp.zip"
+  source_dir  = "${path.module}/resources/lambda/react"
+  output_path = "${path.module}/resources/lambda/out/reactapp.zip"
   depends_on  = [aws_s3_object.upload_folder_prod]
 }
 
 resource "aws_lambda_function" "react_lambda_app" {
-  filename      = "resources/lambda/out/reactapp.zip"
+  filename      = "${path.module}/resources/lambda/out/reactapp.zip"
   function_name = "blog-application"
   handler       = "index.handler"
   runtime       = "nodejs18.x"
@@ -3067,21 +3064,21 @@ resource "aws_api_gateway_deployment" "apideploy_ba" {
 
 data "archive_file" "lambda_zip_bap" {
   type        = "zip"
-  source_file = "resources/lambda/data/lambda_function.py"
-  output_path = "resources/lambda/out/data_app.zip"
+  source_file = "${path.module}/resources/lambda/data/lambda_function.py"
+  output_path = "${path.module}/resources/lambda/out/data_app.zip"
   depends_on = [
     null_resource.file_replacement_lambda_data
   ]
 }
 resource "aws_lambda_layer_version" "lambda_layer" {
-  filename                 = "resources/lambda/layer/bcrypt-pyjwt.zip"
+  filename                 = "${path.module}/resources/lambda/layer/bcrypt-pyjwt.zip"
   layer_name               = "bcrypt-pyjwt"
   compatible_architectures = ["x86_64"]
   compatible_runtimes      = ["python3.9"]
 }
 
 resource "aws_lambda_function" "lambda_ba_data" {
-  filename      = "resources/lambda/out/data_app.zip"
+  filename      = "${path.module}/resources/lambda/out/data_app.zip"
   function_name = "blog-application-data"
   handler       = "lambda_function.lambda_handler"
   runtime       = "python3.9"
@@ -3219,8 +3216,8 @@ resource "aws_s3_bucket_ownership_controls" "bucket_upload" {
 
 resource "aws_s3_bucket_acl" "bucket_upload" {
   depends_on = [
-	aws_s3_bucket_public_access_block.bucket_upload,
-	aws_s3_bucket_ownership_controls.bucket_upload,
+    aws_s3_bucket_public_access_block.bucket_upload,
+    aws_s3_bucket_ownership_controls.bucket_upload,
   ]
 
   bucket = aws_s3_bucket.bucket_upload.id
@@ -3231,7 +3228,7 @@ resource "aws_s3_bucket_policy" "allow_access_for_prod" {
   bucket = aws_s3_bucket.bucket_upload.id
   policy = data.aws_iam_policy_document.allow_get_access.json
 
-  depends_on = [ aws_s3_bucket_acl.bucket_upload ]
+  depends_on = [aws_s3_bucket_acl.bucket_upload]
 }
 data "aws_iam_policy_document" "allow_get_access" {
   statement {
@@ -3266,11 +3263,11 @@ resource "aws_s3_bucket_cors_configuration" "bucket_upload" {
 # Upload in production bucket
 
 resource "aws_s3_object" "upload_folder_prod" {
-  for_each     = fileset("./resources/s3/webfiles/", "**")
+  for_each     = fileset("${path.module}/resources/s3/webfiles/", "**")
   bucket       = aws_s3_bucket.bucket_upload.bucket
   key          = each.value
   acl          = "public-read"
-  source       = "./resources/s3/webfiles/${each.value}"
+  source       = "${path.module}/resources/s3/webfiles/${each.value}"
   content_type = lookup(local.content_type_map, regex("\\.(?P<extension>[A-Za-z0-9]+)$", each.value).extension, "application/octet-stream")
   depends_on   = [aws_s3_bucket.bucket_upload, null_resource.file_replacement_api_gw, aws_s3_bucket_acl.bucket_upload]
 }
@@ -3306,8 +3303,8 @@ resource "aws_s3_bucket_ownership_controls" "dev" {
 
 resource "aws_s3_bucket_acl" "dev" {
   depends_on = [
-	aws_s3_bucket_public_access_block.dev,
-	aws_s3_bucket_ownership_controls.dev,
+    aws_s3_bucket_public_access_block.dev,
+    aws_s3_bucket_ownership_controls.dev,
   ]
 
   bucket = aws_s3_bucket.dev.id
@@ -3318,7 +3315,7 @@ resource "aws_s3_bucket_policy" "allow_access_for_dev" {
   bucket = aws_s3_bucket.dev.bucket
   policy = data.aws_iam_policy_document.allow_get_list_access.json
 
-  depends_on = [ aws_s3_bucket_acl.dev ]
+  depends_on = [aws_s3_bucket_acl.dev]
 }
 data "aws_iam_policy_document" "allow_get_list_access" {
   statement {
@@ -3336,21 +3333,21 @@ data "aws_iam_policy_document" "allow_get_list_access" {
 # Upload in dev bucket
 
 resource "aws_s3_object" "upload_folder_dev" {
-  for_each     = fileset("./resources/s3/webfiles/build/", "**")
+  for_each     = fileset("${path.module}/resources/s3/webfiles/build/", "**")
   bucket       = aws_s3_bucket.dev.bucket
   key          = each.value
   acl          = "public-read"
-  source       = "./resources/s3/webfiles/build/${each.value}"
+  source       = "${path.module}/resources/s3/webfiles/build/${each.value}"
   content_type = lookup(local.content_type_map, regex("\\.(?P<extension>[A-Za-z0-9]+)$", each.value).extension, "application/octet-stream")
   depends_on   = [aws_s3_bucket.dev, null_resource.file_replacement_ec2_ip, aws_s3_bucket_acl.dev]
 }
 
 resource "aws_s3_object" "upload_folder_dev_2" {
-  for_each     = fileset("./resources/s3/shared/", "**")
+  for_each     = fileset("${path.module}/resources/s3/shared/", "**")
   bucket       = aws_s3_bucket.dev.bucket
   key          = each.value
   acl          = "public-read"
-  source       = "./resources/s3/shared/${each.value}"
+  source       = "${path.module}/resources/s3/shared/${each.value}"
   content_type = lookup(local.content_type_map, regex("\\.(?P<extension>[A-Za-z0-9]+)$", each.value).extension, "application/octet-stream")
   depends_on   = [aws_s3_bucket.dev, null_resource.file_replacement_ec2_ip, aws_s3_bucket_acl.dev]
 }
@@ -3386,8 +3383,8 @@ resource "aws_s3_bucket_ownership_controls" "bucket_temp" {
 
 resource "aws_s3_bucket_acl" "bucket_temp" {
   depends_on = [
-	aws_s3_bucket_public_access_block.bucket_temp,
-	aws_s3_bucket_ownership_controls.bucket_temp,
+    aws_s3_bucket_public_access_block.bucket_temp,
+    aws_s3_bucket_ownership_controls.bucket_temp,
   ]
 
   bucket = aws_s3_bucket.bucket_temp.id
@@ -3397,27 +3394,29 @@ resource "aws_s3_bucket_acl" "bucket_temp" {
 /* Uploading all files to ec2-temp-bucket-ACCOUNT_ID bucket */
 
 resource "aws_s3_object" "upload_temp_object" {
-  for_each     = fileset("./resources/s3/webfiles/build/", "**")
+  for_each     = fileset("${path.module}/resources/s3/webfiles/build/", "**")
   acl          = "public-read"
   bucket       = aws_s3_bucket.bucket_temp.bucket
   key          = each.value
-  source       = "./resources/s3/webfiles/build/${each.value}"
+  source       = "${path.module}/resources/s3/webfiles/build/${each.value}"
   content_type = lookup(local.content_type_map, regex("\\.(?P<extension>[A-Za-z0-9]+)$", each.value).extension, "application/octet-stream")
   depends_on   = [aws_s3_bucket.bucket_upload, null_resource.file_replacement_lambda_react, aws_s3_bucket_acl.bucket_temp]
 }
 
 resource "aws_s3_object" "upload_temp_object_2" {
-  for_each     = fileset("./resources/s3/shared/", "**")
+  for_each     = fileset("${path.module}/resources/s3/shared/", "**")
   acl          = "public-read"
   bucket       = aws_s3_bucket.bucket_temp.bucket
   key          = each.value
-  source       = "./resources/s3/shared/${each.value}"
+  source       = "${path.module}/resources/s3/shared/${each.value}"
   content_type = lookup(local.content_type_map, regex("\\.(?P<extension>[A-Za-z0-9]+)$", each.value).extension, "application/octet-stream")
   depends_on   = [aws_s3_bucket.bucket_upload, null_resource.file_replacement_lambda_react, aws_s3_bucket_acl.bucket_temp]
 }
 /* Creating a S3 Bucket for Terraform state file upload. */
 resource "aws_s3_bucket" "bucket_tf_files" {
-  bucket        = "do-not-delete-awsgoat-state-files-${data.aws_caller_identity.current.account_id}"
+  # NOTE: renamed from upstream's "do-not-delete-awsgoat-state-files-..." — module-2 uses the
+  # identical literal name, which collided when both modules run together in the same account.
+  bucket        = "do-not-delete-awsgoat-module1-state-files-${data.aws_caller_identity.current.account_id}"
   force_destroy = true
   tags = {
     Name        = "Do not delete Bucket"
@@ -3575,7 +3574,7 @@ resource "aws_iam_policy" "goat_inline_policy_2" {
 }
 
 data "template_file" "goat_script" {
-  template = file("resources/ec2/goat_user_data.tpl")
+  template = file("${path.module}/resources/ec2/goat_user_data.tpl")
   vars = {
     S3_BUCKET_NAME = aws_s3_bucket.bucket_temp.bucket
   }
@@ -3645,6 +3644,7 @@ sed -i 's/replace-bucket-name/${aws_s3_bucket.bucket_upload.bucket}/g' resources
 python3 resources/dynamodb/populate-table.py
 EOF
     interpreter = ["/bin/bash", "-c"]
+    working_dir = path.module
   }
   depends_on = [aws_s3_bucket.bucket_upload, aws_dynamodb_table.users_table, aws_dynamodb_table.posts_table]
 }
@@ -3655,6 +3655,7 @@ resource "null_resource" "file_replacement_ec2_ip" {
   provisioner "local-exec" {
     command     = "sed -i 's/EC2_IP_ADDR/${aws_instance.goat_instance.public_ip}/g' resources/s3/shared/shared/files/.ssh/config.txt"
     interpreter = ["/bin/bash", "-c"]
+    working_dir = path.module
   }
   depends_on = [aws_instance.goat_instance]
 }
@@ -3664,6 +3665,7 @@ resource "null_resource" "file_replacement_lambda_react" {
   provisioner "local-exec" {
     command     = "sed -i 's/replace-bucket-name/${aws_s3_bucket.bucket_upload.bucket}/g' resources/lambda/react/index.js"
     interpreter = ["/bin/bash", "-c"]
+    working_dir = path.module
   }
   depends_on = [
     aws_s3_bucket.bucket_upload
@@ -3674,6 +3676,7 @@ resource "null_resource" "file_replacement_lambda_data" {
   provisioner "local-exec" {
     command     = "sed -i 's/replace-bucket-name/${aws_s3_bucket.bucket_upload.bucket}/g' resources/lambda/data/lambda_function.py"
     interpreter = ["/bin/bash", "-c"]
+    working_dir = path.module
   }
   depends_on = [
     aws_s3_bucket.bucket_upload
@@ -3690,6 +3693,7 @@ sed -i 's/"\/static/"https:\/\/${aws_s3_bucket.bucket_upload.bucket}\.s3\.amazon
 sed -i 's/n.p+"static/"https:\/\/${aws_s3_bucket.bucket_upload.bucket}\.s3\.amazonaws\.com\/build\/static/g' resources/s3/webfiles/build/static/js/main.e5839717.js
 EOF
     interpreter = ["/bin/bash", "-c"]
+    working_dir = path.module
   }
   depends_on = [
     aws_api_gateway_deployment.apideploy_ba
@@ -3705,6 +3709,7 @@ sed -i "s,${aws_api_gateway_deployment.apideploy_ba.invoke_url},API_GATEWAY_URL,
 sed -i 's/${aws_instance.goat_instance.public_ip}/EC2_IP_ADDR/g' resources/s3/shared/shared/files/.ssh/config.txt
 EOF
     interpreter = ["/bin/bash", "-c"]
+    working_dir = path.module
   }
   depends_on = [
     aws_s3_object.upload_temp_object, aws_s3_object.upload_temp_object_2, aws_s3_object.upload_folder_dev, aws_s3_object.upload_folder_dev_2, aws_s3_object.upload_folder_prod

@@ -1,15 +1,9 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 3.27"
-    }
-  }
-}
-
-provider "aws" {
-  region = "us-east-1"
-}
+# NOTE: upstream's own `terraform { required_providers {...} }` (pinned to aws ~> 3.27) /
+# `provider "aws" {...}` blocks were removed here so this can be called as a child module
+# from infra/terraform/test-fixtures (a module used with count/for_each cannot declare its
+# own provider block) — it now inherits the aws ~> 5.0 provider from the calling root.
+# All local file paths in this module already used `${path.module}/...`, so no path fixes
+# were needed here (unlike module-1). See ../README.md#updating before re-vendoring.
 
 data "aws_caller_identity" "current" {}
 
@@ -514,7 +508,9 @@ EOF
 
 /* Creating a S3 Bucket for Terraform state file upload. */
 resource "aws_s3_bucket" "bucket_tf_files" {
-  bucket        = "do-not-delete-awsgoat-state-files-${data.aws_caller_identity.current.account_id}"
+  # NOTE: renamed from upstream's "do-not-delete-awsgoat-state-files-..." — module-1 uses the
+  # identical literal name, which collided when both modules run together in the same account.
+  bucket        = "do-not-delete-awsgoat-module2-state-files-${data.aws_caller_identity.current.account_id}"
   force_destroy = true
   tags = {
     Name        = "Do not delete Bucket"

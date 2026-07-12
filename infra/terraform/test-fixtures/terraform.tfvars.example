@@ -11,3 +11,7 @@ create_dvwa_ec2              = false
 vulnerable_apps_allowed_cidrs = [] # e.g. ["203.0.113.4/32"] — your own IP only, never 0.0.0.0/0
 metasploitable_ami_id         = "" # or leave empty and set metasploitable_ami_name to look up by tag
 metasploitable_ami_name       = "metasploitable3*"
+
+# AWSGoat (real exploitable apps, vendored in ../awsgoat/) — off by default, dedicated sandbox account only.
+create_awsgoat_module1 = false
+create_awsgoat_module2 = false

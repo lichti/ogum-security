@@ -129,6 +129,14 @@ output "expected_findings" {
   )
 }
 
+output "awsgoat_urls" {
+  description = "Entry points for the deployed AWSGoat apps, if enabled — real, internet-reachable, deliberately exploitable"
+  value = {
+    module1_blog_app_url   = try(module.awsgoat_module1[0].app_url, null)
+    module2_hr_payroll_url = try(module.awsgoat_module2[0].ad_Target_URL, null)
+  }
+}
+
 output "ogum_scanner_config" {
   description = "Values to configure in the Ogum provider connection for this test account"
   value = {

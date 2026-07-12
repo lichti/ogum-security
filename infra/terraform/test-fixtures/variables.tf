@@ -55,3 +55,15 @@ variable "metasploitable_ami_name" {
   type        = string
   default     = "metasploitable3*"
 }
+
+variable "create_awsgoat_module1" {
+  description = "Deploy AWSGoat module-1 (serverless blog: Lambda/API Gateway/DynamoDB/S3, real exploitable app chaining app-layer bugs into IAM privilege escalation). Off by default. See ../awsgoat/README.md before enabling — the app is meant to be internet-reachable by design."
+  type        = bool
+  default     = false
+}
+
+variable "create_awsgoat_module2" {
+  description = "Deploy AWSGoat module-2 (ECS/Fargate HR payroll app, real exploitable app chaining app-layer bugs into container breakout + IAM privilege escalation). Off by default. See ../awsgoat/README.md before enabling — the app is meant to be internet-reachable by design."
+  type        = bool
+  default     = false
+}
