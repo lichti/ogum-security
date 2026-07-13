@@ -15,6 +15,10 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Added
+
+- `docs/qa/awsgoat-detection-coverage.md`: maps every vulnerability in the vendored AWSGoat modules (`infra/terraform/awsgoat/`) to the Ogum module/mechanism that should detect it, marking explicit gaps (application-layer SAST/DAST logic bugs, S3 object-content secret scanning, a missing `PASSES_ROLE` graph edge for the `iam:PassRole` + `ec2:RunInstances` escalation pattern) where nothing today does. Use it to plan a live end-to-end validation session and to prioritize backlog items.
+
 ### Security
 
 - **`langchain-core` known vulnerability (`PYSEC-2026-2193`) with no fix in the `0.3.x` line**: upgraded `langchain` to `^1.0.0` and `langchain-community` to `^0.4.0` (`backend/pyproject.toml`), resolving to `langchain-core` 1.4.9 and `langchain-text-splitters` 1.1.2. This also removes the two prior `pip-audit` ignore entries (`GHSA-gr75-jv2w-4656`, `PYSEC-2026-77`) that were waiting on a `langchain` 1.x release to exist on PyPI — it now does. No application code depends on `langchain` yet (RAG/GitOps module not yet implemented), so this upgrade carries no migration risk.
