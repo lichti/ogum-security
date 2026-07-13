@@ -30,6 +30,7 @@ from app.services.side_scanning.trigger import (
 )
 from app.workers.celery_app import celery_app
 from app.workers.tasks.cloud_utils import _get_tenant_db, _upsert
+from app.workers.tasks.job_logging import JobLogHandler
 
 logger = logging.getLogger(__name__)
 
@@ -246,12 +247,21 @@ def run_cspm_scan(
         tenant_id=tenant_id,
         provider_id=provider_id,
         provider=provider,
+        task_name=f"cspm_scan/{provider}",
         frameworks=frameworks or [],
         regions=regions or [],
         status=ScanJobStatus.RUNNING,
         started_at=datetime.now(UTC),
     )
     db.collection("scan_jobs").insert(job.to_arango_doc())
+
+    # Captures this task's own logging plus anything that propagates through
+    # it (Prowler, boto3 at WARNING+) into the job doc's `logs` field, so the
+    # Admin Jobs UI can show what happened — see job_logging.py for why this
+    # is attach/detach rather than a `with` block (avoids reindenting the
+    # whole try/except below).
+    log_handler = JobLogHandler(db, job_id)
+    logging.getLogger().addHandler(log_handler)
 
     try:
         prowler = ProwlerService()
@@ -360,3 +370,6 @@ def run_cspm_scan(
             completed_at=datetime.now(UTC).isoformat(),
         )
         raise self.retry(exc=exc)
+    finally:
+        log_handler.flush_to_db()
+        logging.getLogger().removeHandler(log_handler)

@@ -110,8 +110,11 @@ def enqueue_side_scan(
             db,
             {
                 "_key": job_id,
+                "job_id": job_id,
                 "tenant_id": tenant_id,
                 "type": "ec2",
+                "task_name": "side_scan/ec2",
+                "provider": "aws",
                 "status": "queued",
                 "resource_id": resource_key,
                 "provider_id": provider_id,
@@ -145,8 +148,11 @@ def enqueue_side_scan(
             db,
             {
                 "_key": job_id,
+                "job_id": job_id,
                 "tenant_id": tenant_id,
                 "type": "lambda",
+                "task_name": "side_scan/lambda",
+                "provider": "aws",
                 "status": "queued",
                 "resource_id": resource_key,
                 "provider_id": provider_id,
