@@ -349,6 +349,17 @@ def extract_inventory_from_findings(
         type_name = _normalize_type_name(raw_type, provider)
         collection = _collection_for(raw_type or type_name)
 
+        # AWS (and Prowler's own EC2 collector) keep reporting an instance for a
+        # while after termination — including it here would upsert status="active"
+        # over a resource that's actually gone, either resurrecting a correct prior
+        # soft-delete or, once AWS's own post-termination visibility window elapses
+        # and Prowler stops reporting it too, permanently stranding it as "active"
+        # since it never has a chance to be caught as newly-absent by
+        # _soft_delete_stale. Skipping it here lets that existing mechanism mark it
+        # deleted on this same pass instead.
+        if type_name == "ec2_instance" and str(metadata_dict.get("state", "")).lower() == "terminated":
+            continue
+
         arn = resource_uid if resource_uid.startswith("arn:") else None
 
         doc: dict[str, Any] = {
