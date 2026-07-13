@@ -3,17 +3,38 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 
+jest.mock('next/navigation', () => ({
+  useRouter: jest.fn(),
+  usePathname: jest.fn(),
+  useSearchParams: jest.fn(),
+}))
+
 jest.mock('@/lib/api', () => ({
   sideScanApi: {
     triggerScan: jest.fn(),
   },
+  inventoryApi: {
+    summary: jest.fn(),
+    blastRadius: jest.fn(),
+  },
 }))
 
+jest.mock('@/components/graph/AttackPathCanvas', () => ({
+  AttackPathCanvas: () => <div data-testid="mock-canvas" />,
+}))
+
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { DetailPanel } from '@/components/inventory/DetailPanel'
-import { sideScanApi } from '@/lib/api'
+import { sideScanApi, inventoryApi } from '@/lib/api'
 import type { ResourceDetail } from '@/lib/types'
 
 const mockTriggerScan = sideScanApi.triggerScan as jest.Mock
+const mockSummary = inventoryApi.summary as jest.Mock
+const mockBlastRadius = inventoryApi.blastRadius as jest.Mock
+const mockUseRouter = useRouter as jest.Mock
+const mockUsePathname = usePathname as jest.Mock
+const mockUseSearchParams = useSearchParams as jest.Mock
+const mockReplace = jest.fn()
 
 function wrapper({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -50,6 +71,16 @@ const mockResource: ResourceDetail = {
 describe('DetailPanel', () => {
   beforeEach(() => {
     mockTriggerScan.mockReset()
+    mockReplace.mockReset()
+    mockSummary.mockReset().mockResolvedValue({
+      data: { data: { narrative: 'A summary.', deep_links: [], finding_counts: {}, attack_path_count: 0 } },
+    })
+    mockBlastRadius.mockReset().mockResolvedValue({
+      data: { data: { nodes: [], edges: [], grouped_counts: {} } },
+    })
+    mockUseRouter.mockReturnValue({ replace: mockReplace })
+    mockUsePathname.mockReturnValue('/inventory')
+    mockUseSearchParams.mockReturnValue(new URLSearchParams())
   })
 
   it('renders nothing when resource is null', () => {
@@ -62,15 +93,49 @@ describe('DetailPanel', () => {
     expect(screen.getByTestId('detail-panel')).toBeInTheDocument()
   })
 
-  it('renders resource name and ID', () => {
+  it('renders the breadcrumb with account, region, and name', () => {
     render(<DetailPanel resource={mockResource} onClose={jest.fn()} />, { wrapper })
-    expect(screen.getByText('web-server')).toBeInTheDocument()
-    expect(screen.getByText('i-001')).toBeInTheDocument()
+    expect(screen.getByText('111111111111', { exact: false })).toBeInTheDocument()
+    expect(screen.getAllByText('web-server').length).toBeGreaterThan(0)
   })
 
-  it('renders ARN', () => {
+  it('renders all 7 main tabs', () => {
     render(<DetailPanel resource={mockResource} onClose={jest.fn()} />, { wrapper })
-    expect(screen.getByText('arn:aws:ec2:us-east-1:111111111111:instance/i-001')).toBeInTheDocument()
+    for (const label of ['Info', 'Risk', 'Network', 'IAM', 'Configurations', 'Software Inventory', 'Compliance']) {
+      expect(screen.getByRole('tab', { name: label })).toBeInTheDocument()
+    }
+  })
+
+  it('defaults to the Info tab with the Overview sub-tab active', () => {
+    render(<DetailPanel resource={mockResource} onClose={jest.fn()} />, { wrapper })
+    expect(screen.getByRole('tab', { name: 'Info' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('switches tab and updates the URL on click', () => {
+    render(<DetailPanel resource={mockResource} onClose={jest.fn()} />, { wrapper })
+    fireEvent.click(screen.getByRole('tab', { name: 'Risk' }))
+    expect(screen.getByRole('tab', { name: 'Risk' })).toHaveAttribute('aria-selected', 'true')
+    expect(mockReplace).toHaveBeenCalledWith(expect.stringContaining('tab=risk'), { scroll: false })
+  })
+
+  it('navigates to Risk/Blast Radius via ArrowRight from Info', () => {
+    render(<DetailPanel resource={mockResource} onClose={jest.fn()} />, { wrapper })
+    fireEvent.keyDown(screen.getByRole('tablist', { name: 'Resource detail tabs' }), { key: 'ArrowRight' })
+    expect(screen.getByRole('tab', { name: 'Risk' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('shows an empty-state message for tabs without content yet', () => {
+    render(<DetailPanel resource={mockResource} onClose={jest.fn()} />, { wrapper })
+    fireEvent.click(screen.getByRole('tab', { name: 'IAM' }))
+    expect(screen.getByText(/available yet/)).toBeInTheDocument()
+  })
+
+  it('reads the initial tab from the URL search params', () => {
+    mockUseSearchParams.mockReturnValue(new URLSearchParams('tab=risk&subtab=blast_radius'))
+    render(<DetailPanel resource={mockResource} onClose={jest.fn()} />, { wrapper })
+    expect(screen.getByRole('tab', { name: 'Risk' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Blast Radius' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('renders tags', () => {
@@ -79,21 +144,16 @@ describe('DetailPanel', () => {
     expect(screen.getByText('team: platform')).toBeInTheDocument()
   })
 
-  it('renders edge type and peer key', () => {
-    render(<DetailPanel resource={mockResource} onClose={jest.fn()} />, { wrapper })
-    expect(screen.getByText('BELONGS_TO')).toBeInTheDocument()
-    expect(screen.getByText('aws_vpc_vpc-001')).toBeInTheDocument()
-    expect(screen.getByText('(vpc)')).toBeInTheDocument()
-  })
-
-  it('renders Relationships count', () => {
+  it('renders Relationships count and grouped rows', () => {
     render(<DetailPanel resource={mockResource} onClose={jest.fn()} />, { wrapper })
     expect(screen.getByText('Relationships (1)')).toBeInTheDocument()
+    expect(screen.getByText('1 BELONGS TO')).toBeInTheDocument()
+    expect(screen.getByText('aws_vpc_vpc-001')).toBeInTheDocument()
   })
 
-  it('renders findings placeholder', () => {
+  it('renders the narrative summary', async () => {
     render(<DetailPanel resource={mockResource} onClose={jest.fn()} />, { wrapper })
-    expect(screen.getByText(/No findings yet/)).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('A summary.')).toBeInTheDocument())
   })
 
   it('calls onClose when close button is clicked', () => {
@@ -103,18 +163,27 @@ describe('DetailPanel', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('renders empty edges message when no edges', () => {
+  it('renders "no relationships" message when there are no edges', () => {
     const noEdgesResource = { ...mockResource, edges: [] }
     render(<DetailPanel resource={noEdgesResource} onClose={jest.fn()} />, { wrapper })
-    expect(screen.getByText('No edges found.')).toBeInTheDocument()
+    expect(screen.getByText('No relationships found.')).toBeInTheDocument()
     expect(screen.getByText('Relationships (0)')).toBeInTheDocument()
   })
 
   it('renders console link for ec2 instance', () => {
     render(<DetailPanel resource={mockResource} onClose={jest.fn()} />, { wrapper })
-    const link = screen.getByTitle('Open in console')
+    const link = screen.getByText('Open in Console').closest('a')
     expect(link).toHaveAttribute('href', expect.stringContaining('console.aws.amazon.com'))
     expect(link).toHaveAttribute('target', '_blank')
+  })
+
+  describe('kebab menu', () => {
+    it('opens and shows Copy ARN / Copy Resource ID actions', () => {
+      render(<DetailPanel resource={mockResource} onClose={jest.fn()} />, { wrapper })
+      fireEvent.click(screen.getByLabelText('More actions'))
+      expect(screen.getByText('Copy ARN')).toBeInTheDocument()
+      expect(screen.getByText('Copy Resource ID')).toBeInTheDocument()
+    })
   })
 
   describe('Scan Now', () => {

@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useMemo, useState } from 'react'
+import { Suspense, useCallback, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { RefreshCw } from 'lucide-react'
@@ -23,6 +23,16 @@ function toggleValue(list: string[], value: string): string[] {
 }
 
 export default function InventoryPage() {
+  return (
+    // DetailPanel reads the active tab from useSearchParams for deep-linking (?tab=risk&subtab=blast_radius) —
+    // Next.js requires a Suspense boundary around any client component using that hook.
+    <Suspense fallback={null}>
+      <InventoryPageContent />
+    </Suspense>
+  )
+}
+
+function InventoryPageContent() {
   const [providers, setProviders] = useState<string[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [regions, setRegions] = useState<string[]>([])

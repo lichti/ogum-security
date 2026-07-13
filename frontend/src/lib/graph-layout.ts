@@ -1,6 +1,6 @@
 import dagre from '@dagrejs/dagre'
 import type { Node, Edge } from '@xyflow/react'
-import type { AttackPath } from './types'
+import type { AttackPath, BlastRadiusEdge, BlastRadiusNode } from './types'
 
 const NODE_WIDTH = 180
 const NODE_HEIGHT = 72
@@ -64,6 +64,52 @@ export function buildFlowGraph(
       labelBgStyle: { fill: '#1e293b', fillOpacity: 0.85 },
     })
   }
+
+  dagre.layout(g)
+
+  flowNodes.forEach((node) => {
+    const pos = g.node(node.id)
+    node.position = { x: pos.x - NODE_WIDTH / 2, y: pos.y - NODE_HEIGHT / 2 }
+  })
+
+  return { nodes: flowNodes, edges: flowEdges }
+}
+
+/** Builds a small, non-linear graph (a resource and its reachable neighbors) for the mini blast-radius canvas. */
+export function buildMiniGraph(
+  centerId: string,
+  centerNode: Record<string, unknown>,
+  nodes: BlastRadiusNode[],
+  edges: BlastRadiusEdge[],
+): { nodes: Node[]; edges: Edge[] } {
+  const g = new dagre.graphlib.Graph()
+  g.setDefaultEdgeLabel(() => ({}))
+  g.setGraph({ rankdir: 'LR', ranksep: 70, nodesep: 30 })
+
+  const flowNodes: Node[] = [
+    { id: centerId, type: 'center', data: { node: centerNode }, position: { x: 0, y: 0 } },
+    ...nodes.map((n) => ({
+      id: n.id,
+      type: 'resource' as const,
+      data: { node: { name: n.name, resource_type: n.resource_type } },
+      position: { x: 0, y: 0 },
+    })),
+  ]
+  flowNodes.forEach((n) => g.setNode(n.id, { width: NODE_WIDTH, height: NODE_HEIGHT }))
+
+  const flowEdges: Edge[] = edges.map((e, i) => {
+    g.setEdge(e.source, e.target)
+    return {
+      id: `mini-e-${i}`,
+      source: e.source,
+      target: e.target,
+      label: e.edge_type,
+      type: 'smoothstep',
+      style: { stroke: '#475569' },
+      labelStyle: { fill: '#94a3b8', fontSize: 10 },
+      labelBgStyle: { fill: '#1e293b', fillOpacity: 0.85 },
+    }
+  })
 
   dagre.layout(g)
 

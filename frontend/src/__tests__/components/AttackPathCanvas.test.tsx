@@ -72,4 +72,52 @@ describe('AttackPathCanvas', () => {
     // E2E tests cover the full interaction. Here we just verify no crash.
     expect(container.querySelector('.react-flow')).toBeTruthy()
   })
+
+  describe('mode="mini"', () => {
+    it('shows an empty state when the mini graph has no nodes', () => {
+      render(<AttackPathCanvas mode="mini" miniGraph={{ nodes: [], edges: [] }} emptyLabel="No exposure edges" />)
+      expect(screen.getByText('No exposure edges')).toBeInTheDocument()
+    })
+
+    it('renders the canvas when the mini graph has nodes', () => {
+      const { container } = render(
+        <AttackPathCanvas
+          mode="mini"
+          miniGraph={{
+            nodes: [{ id: 'resources/r1', type: 'center', data: { node: {} }, position: { x: 0, y: 0 } }],
+            edges: [],
+          }}
+        />,
+      )
+      expect(container.querySelector('.react-flow')).toBeTruthy()
+    })
+
+    it('does not render a MiniMap in mini mode', () => {
+      const { container } = render(
+        <AttackPathCanvas
+          mode="mini"
+          miniGraph={{
+            nodes: [{ id: 'resources/r1', type: 'center', data: { node: {} }, position: { x: 0, y: 0 } }],
+            edges: [],
+          }}
+        />,
+      )
+      expect(container.querySelector('.react-flow__minimap')).toBeFalsy()
+    })
+
+    it('renders a "View full" link when onViewFull is provided', () => {
+      const onViewFull = jest.fn()
+      render(
+        <AttackPathCanvas
+          mode="mini"
+          miniGraph={{
+            nodes: [{ id: 'resources/r1', type: 'center', data: { node: {} }, position: { x: 0, y: 0 } }],
+            edges: [],
+          }}
+          onViewFull={onViewFull}
+        />,
+      )
+      expect(screen.getByText(/View full in Attack Paths/)).toBeInTheDocument()
+    })
+  })
 })
