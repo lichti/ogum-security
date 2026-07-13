@@ -21,6 +21,12 @@ variable "create_ec2_instances" {
   default     = true
 }
 
+variable "ec2_instances_ami_id" {
+  description = "AMI used by the create_ec2_instances-gated EC2 instances (public_exposed, private_clean). Pinned to a specific Debian 11 build (debian-11-amd64-20241202-1949) for reproducible side-scanning test runs — region-specific, re-pin if you change aws_region."
+  type        = string
+  default     = "ami-053413bdacb39d8dc"
+}
+
 variable "create_metasploitable_ec2" {
   description = "Deploy a Metasploitable EC2 instance (real known-vulnerable target) for side-scanning validation. Off by default — requires a self-owned AMI, see metasploitable_ami_id/metasploitable_ami_name. Never expose to the public internet."
   type        = bool

@@ -152,7 +152,7 @@ data "aws_ami" "amazon_linux" {
 # Public-facing instance with open SG — should appear in Attack Paths
 resource "aws_instance" "public_exposed" {
   count                  = var.create_ec2_instances ? 1 : 0
-  ami                    = data.aws_ami.amazon_linux.id
+  ami                    = var.ec2_instances_ami_id
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.open_ssh.id]
@@ -174,7 +174,7 @@ resource "aws_instance" "public_exposed" {
 # Private instance with restricted SG — clean baseline
 resource "aws_instance" "private_clean" {
   count                  = var.create_ec2_instances ? 1 : 0
-  ami                    = data.aws_ami.amazon_linux.id
+  ami                    = var.ec2_instances_ami_id
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.private.id
   vpc_security_group_ids = [aws_security_group.restricted.id]

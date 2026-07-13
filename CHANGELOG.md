@@ -28,6 +28,8 @@ Commit types that trigger version bumps:
 
 ### Changed
 
+- **`infra/terraform/awsgoat/module-1`: fixed 5 `terraform validate` deprecation warnings on `aws_api_gateway_deployment.apideploy_ba`** — surfaced while validating the AMI pin change above. Setting `stage_name`/`variables` directly on an `aws_api_gateway_deployment` is deprecated by the AWS provider; split into a dedicated `aws_api_gateway_stage.apideploy_ba` resource (mirroring the pattern already used elsewhere in the same file for `aws_api_gateway_stage.api`) and repointed the 4 `.invoke_url` references in `null_resource.file_replacement_api_gw`/`_cleanup` from the deployment to the new stage resource. `terraform validate` now returns zero diagnostics for this module.
+- **`infra/terraform/test-fixtures`: pinned the `create_ec2_instances`-gated instances (`public_exposed`, `private_clean`) to a fixed Debian 11 AMI** (`ami-053413bdacb39d8dc`, `debian-11-amd64-20241202-1949`) via new `ec2_instances_ami_id` variable, instead of a `data "aws_ami"` lookup that resolved to whatever the latest Amazon Linux 2023 build happened to be on a given `terraform apply` — reproducible side-scanning test runs need a fixed OS/package baseline, not a moving target. Region-specific; re-pin if `aws_region` changes. The DVWA instance in `vulnerable_apps.tf` still uses the dynamic Amazon Linux lookup (unrelated flag, out of scope for this pin).
 - Documented the two-tier tab detail panel, embedded exposure/blast-radius mini-graphs, and pill-filter/saved-Views pattern as the standard frontend convention for resource, finding, and path detail views (`CLAUDE.md`); added corresponding roadmap items to Phase 2 (`README.md`).
 
 ### Fixed
