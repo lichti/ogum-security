@@ -15,6 +15,10 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Changed
+
+- Documented the two-tier tab detail panel, embedded exposure/blast-radius mini-graphs, and pill-filter/saved-Views pattern as the standard frontend convention for resource, finding, and path detail views (`CLAUDE.md`); added corresponding roadmap items to Phase 2 (`README.md`).
+
 ### Fixed
 
 - **Terminated EC2 instances resurrected as `status: "active"`, permanently breaking "Scan Now" (`app/services/prowler_inventory.py`)**: found live in `dev-tenant` — two `public-exposed`/`private-clean` test-fixtures EC2 instances, replaced by a `terraform apply` days earlier, kept showing as active inventory with a "Scan Now" button that always failed 422 ("Resource could not be resolved to a scannable target"). Root cause: AWS's `describe_instances` (and therefore Prowler's own EC2 collector) keeps reporting a terminated instance for a limited window after termination — `extract_inventory_from_findings` unconditionally wrote `status: "active"` for every resource Prowler reported, with no check against the EC2 instance's own `state` field. This silently undid a correct prior soft-delete (the stale doc still carried a `deleted_at` from days earlier) the next time a scan happened to catch the instance inside that post-termination window, and left it permanently stranded as "active" once AWS's window elapsed and Prowler stopped reporting it too — at that point `_soft_delete_stale` (`app/workers/tasks/cspm_scan.py`) never gets a chance to mark it deleted, since that only fires for resources absent from the *current* scan, not ones that were merely absent from a *past* one. Fixed by skipping `ec2_instance` findings with `raw_metadata.state == "terminated"` during extraction entirely, so `_soft_delete_stale`'s existing absence-based logic catches them on the very next scan instead of a second code path fighting it. Manually corrected the two stale documents found live during this investigation.
