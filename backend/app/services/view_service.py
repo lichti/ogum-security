@@ -98,9 +98,7 @@ def get_view(db: StandardDatabase, view_id: str) -> SavedView | None:
     return _doc_to_view(doc) if doc else None
 
 
-def update_view(
-    db: StandardDatabase, owner: str, view_id: str, update: SavedViewUpdateRequest
-) -> SavedView | None:
+def update_view(db: StandardDatabase, owner: str, view_id: str, update: SavedViewUpdateRequest) -> SavedView | None:
     """Returns None if the view doesn't exist, isn't owned by `owner`, or is a system view."""
     _ensure_collection(db)
     doc = db.collection("views").get(view_id)

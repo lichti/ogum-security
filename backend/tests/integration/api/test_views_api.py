@@ -126,9 +126,7 @@ class TestUpdateViewEndpoint:
 
     def test_rename_own_view(self, api_client):
         view = _create_view(api_client)
-        resp = api_client.patch(
-            f"/api/v1/views/{view['key']}", json={"name": "Renamed"}, headers=TENANT_A_HEADERS
-        )
+        resp = api_client.patch(f"/api/v1/views/{view['key']}", json={"name": "Renamed"}, headers=TENANT_A_HEADERS)
         assert resp.json()["data"]["name"] == "Renamed"
 
     def test_update_nonexistent_view_returns_404(self, api_client):
