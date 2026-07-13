@@ -4,3 +4,14 @@
 aws_region           = "us-east-1"
 suffix               = "dev"   # your username or "ci" — keeps resource names unique per developer
 create_ec2_instances = true    # set false to save ~$15/month when not testing EC2 side-scanning
+
+# Known-vulnerable apps for side-scanning validation — off by default, never expose publicly.
+create_metasploitable_ec2    = false
+create_dvwa_ec2              = false
+vulnerable_apps_allowed_cidrs = [] # e.g. ["203.0.113.4/32"] — your own IP only, never 0.0.0.0/0
+metasploitable_ami_id         = "" # or leave empty and set metasploitable_ami_name to look up by tag
+metasploitable_ami_name       = "metasploitable3*"
+
+# AWSGoat (real exploitable apps, vendored in ../awsgoat/) — off by default, dedicated sandbox account only.
+create_awsgoat_module1 = false
+create_awsgoat_module2 = false

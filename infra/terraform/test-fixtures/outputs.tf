@@ -40,6 +40,10 @@ output "test_resources" {
       app_repository       = aws_ecr_repository.app.repository_url
       compliant_repository = aws_ecr_repository.compliant_app.repository_url
     }
+    vulnerable_apps = {
+      metasploitable = try(aws_instance.metasploitable[0].id, null)
+      dvwa           = try(aws_instance.dvwa[0].id, null)
+    }
     ogum_scanner = {
       role_arn         = aws_iam_role.ogum_scanner.arn
       external_id      = "ogum-dev-${var.suffix}"
@@ -123,6 +127,14 @@ output "expected_findings" {
       "PRIVESC-10: iam:PassRole + ec2:RunInstances on ${aws_iam_role.privesc_passrole_ec2.name}",
     ]
   )
+}
+
+output "awsgoat_urls" {
+  description = "Entry points for the deployed AWSGoat apps, if enabled — real, internet-reachable, deliberately exploitable"
+  value = {
+    module1_blog_app_url   = try(module.awsgoat_module1[0].app_url, null)
+    module2_hr_payroll_url = try(module.awsgoat_module2[0].ad_Target_URL, null)
+  }
 }
 
 output "ogum_scanner_config" {
