@@ -296,6 +296,11 @@ We are building this in public. Here is where we are and where we are going:
 - [ ] **Ogum.Connect:** Jira bidirectional integration
 - [ ] **Ogum.Connect:** Slack / MS Teams / Telegram alerts
 - [ ] CIEM privilege gap (granted vs. used — requires CloudTrail data from Phase 3)
+- [ ] **Ogum.Frontend:** Two-tier tab detail panel for resources, findings, and paths (Info/Risk/Network/IAM/Configurations/Software/Compliance)
+- [ ] **Ogum.Frontend:** AI-generated narrative summaries in the detail panel (Ogum.AI, with deterministic fallback)
+- [ ] **Ogum.Frontend:** Embedded exposure/blast-radius mini-graphs in the detail panel (reuses the Attack Path canvas)
+- [ ] **Ogum.Frontend:** Pill-based composite filters and saved Views for Inventory, Findings, and Compliance
+- [ ] **Ogum.Frontend:** Specialized dashboards (Identity & Access, Threat Detection, Vulnerabilities)
 
 ### Phase 3 — Beta (Planned 📋)
 > Real-time detection, enterprise auth, SIEM connectors, and hybrid coverage
