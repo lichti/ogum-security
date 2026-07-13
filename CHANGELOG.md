@@ -15,6 +15,10 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Security
+
+- **`langchain-core` known vulnerability (`PYSEC-2026-2193`) with no fix in the `0.3.x` line**: upgraded `langchain` to `^1.0.0` and `langchain-community` to `^0.4.0` (`backend/pyproject.toml`), resolving to `langchain-core` 1.4.9 and `langchain-text-splitters` 1.1.2. This also removes the two prior `pip-audit` ignore entries (`GHSA-gr75-jv2w-4656`, `PYSEC-2026-77`) that were waiting on a `langchain` 1.x release to exist on PyPI — it now does. No application code depends on `langchain` yet (RAG/GitOps module not yet implemented), so this upgrade carries no migration risk.
+
 ### Changed
 
 - Documented the two-tier tab detail panel, embedded exposure/blast-radius mini-graphs, and pill-filter/saved-Views pattern as the standard frontend convention for resource, finding, and path detail views (`CLAUDE.md`); added corresponding roadmap items to Phase 2 (`README.md`).
