@@ -329,6 +329,39 @@ class TestExtractInventoryAws:
         for doc in inv["resources"]:
             assert doc["status"] == "active"
 
+    def test_terminated_ec2_instance_is_skipped(self):
+        """AWS (and Prowler's own EC2 collector) keep reporting an instance for a
+        while after termination — including it would upsert status="active" over a
+        resource that's actually gone, permanently masking a stale "Scan Now" ghost
+        that always 422s. See CHANGELOG for the incident this regression-guards."""
+        f = _make_finding(metadata={"state": "terminated"})
+        inv = extract_inventory_from_findings([f], "t1", "aws", "123")
+        assert inv["resources"] == []
+
+    def test_terminated_state_check_is_case_insensitive(self):
+        f = _make_finding(metadata={"state": "Terminated"})
+        inv = extract_inventory_from_findings([f], "t1", "aws", "123")
+        assert inv["resources"] == []
+
+    def test_running_ec2_instance_is_not_skipped(self):
+        f = _make_finding(metadata={"state": "running"})
+        inv = extract_inventory_from_findings([f], "t1", "aws", "123")
+        assert len(inv["resources"]) == 1
+        assert inv["resources"][0]["status"] == "active"
+
+    def test_terminated_state_only_skips_ec2_instances(self):
+        """A non-EC2 resource type that happens to carry a `state` key (unlikely in
+        practice, but the type check must gate on resource_type, not field presence)
+        must not be skipped."""
+        f = _make_finding(
+            resource_uid="arn:aws:s3:::b",
+            resource_name="b",
+            resource_type="AwsS3Bucket",
+            metadata={"state": "terminated"},
+        )
+        inv = extract_inventory_from_findings([f], "t1", "aws", "123")
+        assert len(inv["data_assets"]) == 1
+
 
 # ---------------------------------------------------------------------------
 # extract_inventory_from_findings — Azure
