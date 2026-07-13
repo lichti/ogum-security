@@ -79,6 +79,32 @@
         "title": "ApiResponse[AttackPathStats]",
         "type": "object"
       },
+      "ApiResponse_BlastRadiusResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/BlastRadiusResponse"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[BlastRadiusResponse]",
+        "type": "object"
+      },
       "ApiResponse_DiscoverJobResponse_": {
         "properties": {
           "data": {
@@ -389,6 +415,32 @@
           "data"
         ],
         "title": "ApiResponse[ResourceDetail]",
+        "type": "object"
+      },
+      "ApiResponse_ResourceNarrativeSummary_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ResourceNarrativeSummary"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[ResourceNarrativeSummary]",
         "type": "object"
       },
       "ApiResponse_SavedQuery_": {
@@ -959,6 +1011,91 @@
           "new_24h"
         ],
         "title": "AttackPathStats",
+        "type": "object"
+      },
+      "BlastRadiusEdge": {
+        "properties": {
+          "edge_type": {
+            "title": "Edge Type",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "target",
+          "edge_type"
+        ],
+        "title": "BlastRadiusEdge",
+        "type": "object"
+      },
+      "BlastRadiusNode": {
+        "properties": {
+          "hop": {
+            "title": "Hop",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "resource_type": {
+            "title": "Resource Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "resource_type",
+          "name",
+          "hop"
+        ],
+        "title": "BlastRadiusNode",
+        "type": "object"
+      },
+      "BlastRadiusResponse": {
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/BlastRadiusEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "grouped_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Grouped Counts",
+            "type": "object"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/BlastRadiusNode"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "resource_key": {
+            "title": "Resource Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource_key"
+        ],
+        "title": "BlastRadiusResponse",
         "type": "object"
       },
       "CrownJewelRequest": {
@@ -1737,6 +1874,41 @@
         "title": "Meta",
         "type": "object"
       },
+      "NarrativeDeepLink": {
+        "description": "A clickable chip below the narrative that jumps to the tab backing a mentioned number.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "subtab": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtab"
+          },
+          "tab": {
+            "title": "Tab",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "tab",
+          "count"
+        ],
+        "title": "NarrativeDeepLink",
+        "type": "object"
+      },
       "PagedAttackPaths": {
         "properties": {
           "count": {
@@ -2453,6 +2625,49 @@
           "edges"
         ],
         "title": "ResourceDetail",
+        "type": "object"
+      },
+      "ResourceNarrativeSummary": {
+        "description": "Deterministic, data-driven narrative for the Overview sub-tab (US-14.02).\n\n`generated_by` is always \"template\" today \u2014 Ogum.AI/RAG (Epic 05) is not yet\nimplemented, so there is no LLM path to fall back *from*. This response shape\nis what an LLM-backed version would also return, so wiring one in later is an\nadditive change, not a rewrite.",
+        "properties": {
+          "attack_path_count": {
+            "default": 0,
+            "title": "Attack Path Count",
+            "type": "integer"
+          },
+          "deep_links": {
+            "items": {
+              "$ref": "#/components/schemas/NarrativeDeepLink"
+            },
+            "title": "Deep Links",
+            "type": "array"
+          },
+          "finding_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Finding Counts",
+            "type": "object"
+          },
+          "generated_by": {
+            "default": "template",
+            "title": "Generated By",
+            "type": "string"
+          },
+          "narrative": {
+            "title": "Narrative",
+            "type": "string"
+          },
+          "resource_key": {
+            "title": "Resource Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource_key",
+          "narrative"
+        ],
+        "title": "ResourceNarrativeSummary",
         "type": "object"
       },
       "ResourceSummary": {
@@ -5804,6 +6019,108 @@
           }
         },
         "summary": "Get Resource Detail",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/{resource_key}/blast-radius": {
+      "get": {
+        "operationId": "get_resource_blast_radius_api_v1_inventory__resource_key__blast_radius_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resource_key",
+            "required": true,
+            "schema": {
+              "title": "Resource Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_BlastRadiusResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Resource Blast Radius",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/{resource_key}/summary": {
+      "get": {
+        "operationId": "get_resource_summary_api_v1_inventory__resource_key__summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resource_key",
+            "required": true,
+            "schema": {
+              "title": "Resource Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ResourceNarrativeSummary_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Resource Summary",
         "tags": [
           "inventory"
         ]

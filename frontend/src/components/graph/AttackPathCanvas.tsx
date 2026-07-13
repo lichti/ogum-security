@@ -19,6 +19,7 @@ import { ResourceNode } from './nodes/ResourceNode'
 import { EntryPointNode } from './nodes/EntryPointNode'
 import { TargetNode } from './nodes/TargetNode'
 import { IdentityNode } from './nodes/IdentityNode'
+import { CenterNode } from './nodes/CenterNode'
 import { buildFlowGraph } from '@/lib/graph-layout'
 import type { AttackPathDetail } from '@/lib/types'
 
@@ -27,19 +28,44 @@ const NODE_TYPES: NodeTypes = {
   entryPoint: EntryPointNode,
   target: TargetNode,
   identity: IdentityNode,
+  center: CenterNode,
 }
 
 interface AttackPathCanvasProps {
-  detail: AttackPathDetail | null
+  /** 'mini' reuses this same canvas at a reduced size/toolbar for embedded context graphs (US-14.03/US-14.09) — never fork this component. */
+  mode?: 'full' | 'mini'
+  detail?: AttackPathDetail | null
+  /** Pre-built graph for mode="mini" — the caller (e.g. blast-radius) owns its own layout adapter. */
+  miniGraph?: { nodes: Node[]; edges: Edge[] } | null
   loading?: boolean
   onNodeClick?: (nodeId: string) => void
+  /** mode="mini" only — renders a "View full in Attack Paths →" link in the toolbar. */
+  onViewFull?: () => void
+  emptyLabel?: string
 }
 
-export function AttackPathCanvas({ detail, loading, onNodeClick }: AttackPathCanvasProps) {
+export function AttackPathCanvas({
+  mode = 'full',
+  detail = null,
+  miniGraph = null,
+  loading,
+  onNodeClick,
+  onViewFull,
+  emptyLabel,
+}: AttackPathCanvasProps) {
+  const isMini = mode === 'mini'
+  // Mini mode isn't guaranteed a flex ancestor (it's embedded in plain detail-panel sections), so it
+  // needs a definite height — ReactFlow's internal height:100% chain collapses to 0 with min-height alone.
+  const sizeClasses = isMini ? 'h-[220px]' : 'flex-1 min-h-[460px]'
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
   useEffect(() => {
+    if (isMini) {
+      setNodes(miniGraph?.nodes ?? [])
+      setEdges(miniGraph?.edges ?? [])
+      return
+    }
     if (!detail || detail.nodes.length === 0) {
       setNodes([])
       setEdges([])
@@ -48,7 +74,7 @@ export function AttackPathCanvas({ detail, loading, onNodeClick }: AttackPathCan
     const { nodes: n, edges: e } = buildFlowGraph(detail.nodes, detail.path)
     setNodes(n)
     setEdges(e)
-  }, [detail, setNodes, setEdges])
+  }, [isMini, miniGraph, detail, setNodes, setEdges])
 
   const handleNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -57,9 +83,11 @@ export function AttackPathCanvas({ detail, loading, onNodeClick }: AttackPathCan
     [onNodeClick],
   )
 
-  if (!detail && !loading) {
+  const isEmpty = isMini ? (miniGraph?.nodes.length ?? 0) === 0 : detail !== null && detail.nodes.length === 0
+
+  if (!isMini && !detail && !loading) {
     return (
-      <div className="flex-1 flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50 min-h-[460px]">
+      <div className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}>
         <div className="text-center">
           <p className="text-slate-400 text-sm font-medium">Select a path to visualize</p>
           <p className="text-slate-600 text-xs mt-1">Click any item in the list on the left</p>
@@ -70,7 +98,7 @@ export function AttackPathCanvas({ detail, loading, onNodeClick }: AttackPathCan
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50 min-h-[460px]">
+      <div className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}>
         <div className="flex flex-col items-center gap-2">
           <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-slate-500 text-xs">Loading graph...</p>
@@ -79,16 +107,16 @@ export function AttackPathCanvas({ detail, loading, onNodeClick }: AttackPathCan
     )
   }
 
-  if (detail && detail.nodes.length === 0) {
+  if (isEmpty) {
     return (
-      <div className="flex-1 flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50 min-h-[460px]">
-        <p className="text-slate-500 text-sm">No graph data available for this path</p>
+      <div className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}>
+        <p className="text-slate-500 text-sm">{emptyLabel ?? 'No graph data available for this path'}</p>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 min-h-[460px] rounded-lg overflow-hidden border border-slate-800">
+    <div className={`${sizeClasses} rounded-lg overflow-hidden border border-slate-800 relative`}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -103,20 +131,35 @@ export function AttackPathCanvas({ detail, loading, onNodeClick }: AttackPathCan
         colorMode="dark"
         className="bg-slate-950"
         proOptions={{ hideAttribution: false }}
+        nodesDraggable={!isMini}
       >
-        <Controls className="!bg-slate-800 !border-slate-700 [&>button]:!bg-slate-800 [&>button]:!border-slate-700 [&>button]:!text-slate-300" />
-        <MiniMap
-          className="!bg-slate-900 !border-slate-700"
-          nodeColor={(node) => {
-            if (node.type === 'entryPoint') return '#ef4444'
-            if (node.type === 'target') return '#eab308'
-            if (node.type === 'identity') return '#a855f7'
-            return '#475569'
-          }}
-          maskColor="rgba(2, 6, 23, 0.7)"
+        <Controls
+          showInteractive={!isMini}
+          className="!bg-slate-800 !border-slate-700 [&>button]:!bg-slate-800 [&>button]:!border-slate-700 [&>button]:!text-slate-300"
         />
+        {!isMini && (
+          <MiniMap
+            className="!bg-slate-900 !border-slate-700"
+            nodeColor={(node) => {
+              if (node.type === 'entryPoint') return '#ef4444'
+              if (node.type === 'target') return '#eab308'
+              if (node.type === 'identity') return '#a855f7'
+              return '#475569'
+            }}
+            maskColor="rgba(2, 6, 23, 0.7)"
+          />
+        )}
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#1e293b" />
       </ReactFlow>
+      {isMini && onViewFull && (
+        <button
+          type="button"
+          onClick={onViewFull}
+          className="absolute bottom-2 right-2 z-10 px-2 py-1 rounded bg-slate-900/90 border border-slate-700 text-orange-400 text-xs hover:border-orange-500"
+        >
+          View full in Attack Paths →
+        </button>
+      )}
     </div>
   )
 }

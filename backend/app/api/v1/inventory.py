@@ -20,6 +20,8 @@ from app.models.api_responses import (
     ResourceDetail,
     ResourceSummary,
 )
+from app.models.inventory_detail import BlastRadiusResponse, ResourceNarrativeSummary
+from app.services.inventory_detail_service import build_resource_summary, get_blast_radius
 from app.services.inventory_service import get_inventory_stats, get_resource, list_resources
 from app.workers.tasks.cspm_scan import run_cspm_scan
 
@@ -199,6 +201,30 @@ async def get_resource_detail(
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
     return ApiResponse(data=resource)
+
+
+@router.get("/{resource_key}/summary", response_model=ApiResponse[ResourceNarrativeSummary])
+async def get_resource_summary(
+    resource_key: str,
+    db: StandardDatabase = Depends(get_tenant_db),
+    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+) -> ApiResponse[ResourceNarrativeSummary]:
+    resource = get_resource(db, x_tenant_id, resource_key)
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    return ApiResponse(data=build_resource_summary(db, x_tenant_id, resource))
+
+
+@router.get("/{resource_key}/blast-radius", response_model=ApiResponse[BlastRadiusResponse])
+async def get_resource_blast_radius(
+    resource_key: str,
+    db: StandardDatabase = Depends(get_tenant_db),
+    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+) -> ApiResponse[BlastRadiusResponse]:
+    resource = get_resource(db, x_tenant_id, resource_key)
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    return ApiResponse(data=get_blast_radius(db, x_tenant_id, resource_key))
 
 
 @router.post("/discover", response_model=ApiResponse[DiscoverJobResponse], status_code=202)

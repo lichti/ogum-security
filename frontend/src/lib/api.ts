@@ -18,6 +18,8 @@ import type {
   PagedSideScanJobs,
   ResourceSummary,
   ResourceDetail,
+  ResourceNarrativeSummary,
+  BlastRadiusResponse,
   InventoryStats,
   InventoryFilters,
   ProviderConfig,
@@ -91,6 +93,12 @@ export const inventoryApi = {
 
   detail: (key: string) =>
     apiClient.get<ApiResponse<ResourceDetail>>(`/api/v1/inventory/${key}`),
+
+  summary: (key: string) =>
+    apiClient.get<ApiResponse<ResourceNarrativeSummary>>(`/api/v1/inventory/${key}/summary`),
+
+  blastRadius: (key: string) =>
+    apiClient.get<ApiResponse<BlastRadiusResponse>>(`/api/v1/inventory/${key}/blast-radius`),
 
   triggerDiscovery: (provider: string, regions: string[]) =>
     apiClient.post('/api/v1/inventory/discover', null, {

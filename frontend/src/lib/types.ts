@@ -30,6 +30,42 @@ export interface ResourceDetail extends ResourceSummary {
   edges: EdgeSummary[]
 }
 
+export interface NarrativeDeepLink {
+  label: string
+  tab: string
+  subtab: string | null
+  count: number
+}
+
+export interface ResourceNarrativeSummary {
+  resource_key: string
+  narrative: string
+  generated_by: string
+  finding_counts: Record<string, number>
+  attack_path_count: number
+  deep_links: NarrativeDeepLink[]
+}
+
+export interface BlastRadiusNode {
+  id: string
+  resource_type: string
+  name: string
+  hop: number
+}
+
+export interface BlastRadiusEdge {
+  source: string
+  target: string
+  edge_type: string
+}
+
+export interface BlastRadiusResponse {
+  resource_key: string
+  nodes: BlastRadiusNode[]
+  edges: BlastRadiusEdge[]
+  grouped_counts: Record<string, number>
+}
+
 export interface InventoryStats {
   by_provider: Record<string, number>
   by_resource_type: Record<string, number>
