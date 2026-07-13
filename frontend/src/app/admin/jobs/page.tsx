@@ -2,43 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import { StatusBadge } from "@/components/admin/StatusBadge";
+import { JobDetailPanel } from "@/components/admin/JobDetailPanel";
+import { formatDuration, formatTaskName, type Job } from "@/lib/jobFormat";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-interface Job {
-  job_id: string;
-  task_name: string;
-  tenant_id: string;
-  status: string;
-  provider: string | null;
-  created_at: string | null;
-  worker: string | null;
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  completed: "bg-green-900 text-green-300",
-  success: "bg-green-900 text-green-300",
-  running: "bg-blue-900 text-blue-300",
-  started: "bg-blue-900 text-blue-300",
-  failed: "bg-red-900 text-red-300",
-  failure: "bg-red-900 text-red-300",
-  queued: "bg-yellow-900 text-yellow-300",
-  pending: "bg-yellow-900 text-yellow-300",
-};
-
-function StatusBadge({ status }: { status: string }) {
-  const cls = STATUS_COLORS[status.toLowerCase()] ?? "bg-slate-700 text-slate-300";
-  return (
-    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${cls}`}>
-      {status}
-    </span>
-  );
-}
 
 export default function AdminJobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
 
   async function fetchJobs() {
     setLoading(true);
@@ -82,39 +56,47 @@ export default function AdminJobsPage() {
         <table className="w-full text-sm">
           <thead className="bg-slate-800 text-slate-400 text-xs uppercase tracking-wider">
             <tr>
+              <th className="px-4 py-3 text-left">Job Name</th>
               <th className="px-4 py-3 text-left">Job ID</th>
               <th className="px-4 py-3 text-left">Tenant</th>
               <th className="px-4 py-3 text-left">Status</th>
-              <th className="px-4 py-3 text-left">Provider</th>
-              <th className="px-4 py-3 text-left">Created At</th>
+              <th className="px-4 py-3 text-left">Started At</th>
+              <th className="px-4 py-3 text-left">Duration</th>
               <th className="px-4 py-3 text-left">Worker</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
             {loading && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && jobs.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                   No jobs found.
                 </td>
               </tr>
             )}
             {jobs.map((job) => (
-              <tr key={job.job_id} className="hover:bg-slate-800/50 transition-colors">
+              <tr
+                key={job.job_id}
+                onClick={() => setSelectedJob(job)}
+                className="hover:bg-slate-800/50 transition-colors cursor-pointer"
+              >
+                <td className="px-4 py-3 text-slate-200">{formatTaskName(job.task_name)}</td>
                 <td className="px-4 py-3 text-slate-300 font-mono text-xs">{job.job_id}</td>
                 <td className="px-4 py-3 text-slate-300">{job.tenant_id}</td>
                 <td className="px-4 py-3">
                   <StatusBadge status={job.status} />
                 </td>
-                <td className="px-4 py-3 text-slate-400">{job.provider ?? "—"}</td>
                 <td className="px-4 py-3 text-slate-400">
-                  {job.created_at ? new Date(job.created_at).toLocaleString() : "—"}
+                  {job.started_at ? new Date(job.started_at).toLocaleString() : "—"}
+                </td>
+                <td className="px-4 py-3 text-slate-400">
+                  {formatDuration(job.started_at, job.completed_at)}
                 </td>
                 <td className="px-4 py-3 text-slate-500 text-xs">{job.worker ?? "—"}</td>
               </tr>
@@ -122,6 +104,8 @@ export default function AdminJobsPage() {
           </tbody>
         </table>
       </div>
+
+      <JobDetailPanel job={selectedJob} onClose={() => setSelectedJob(null)} />
     </div>
   );
 }

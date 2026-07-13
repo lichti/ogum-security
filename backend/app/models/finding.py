@@ -92,6 +92,11 @@ class ScanJob(BaseModel):
     tenant_id: str
     provider_id: str
     provider: str
+    # Explicit rather than inferred from `provider`/`type` later — a plain
+    # provider string ("iac") can't distinguish a CSPM scan from an IaC scan,
+    # which previously made every ScanJob-backed job display as "cspm_scan/*"
+    # in the Admin Jobs UI regardless of what it actually was.
+    task_name: str | None = None
     frameworks: list[str]
     regions: list[str] = Field(default_factory=list)
     status: ScanJobStatus = ScanJobStatus.QUEUED

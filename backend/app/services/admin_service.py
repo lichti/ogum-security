@@ -58,10 +58,25 @@ def _all_tenant_ids() -> list[str]:
 # ── Job helpers ───────────────────────────────────────────────────────────────
 
 
+def _infer_task_name(doc: dict[str, Any]) -> str:
+    """Best-effort task_name for job docs written before this field existed —
+    a bare `provider` string ("iac") can't distinguish a CSPM scan from an IaC
+    scan, and side-scan (ec2/lambda) docs never had `provider` set at all, so
+    guess from whatever's actually present rather than defaulting every job
+    to "cspm_scan/*"."""
+    if doc.get("task_name"):
+        return str(doc["task_name"])
+    if doc.get("type") in ("ec2", "lambda"):
+        return f"side_scan/{doc['type']}"
+    if doc.get("iac_config") is not None:
+        return "iac_scan/iac"
+    return f"cspm_scan/{doc.get('provider') or doc.get('type') or 'unknown'}"
+
+
 def _doc_to_job_summary(doc: dict[str, Any]) -> JobSummary:
     return JobSummary(
         job_id=doc.get("job_id", doc.get("_key", "")),
-        task_name=doc.get("task_name", f"cspm_scan/{doc.get('provider', '')}"),
+        task_name=_infer_task_name(doc),
         tenant_id=doc.get("tenant_id", ""),
         status=doc.get("status", ""),
         created_at=doc.get("created_at"),
@@ -77,7 +92,7 @@ def _doc_to_job_summary(doc: dict[str, Any]) -> JobSummary:
 def _doc_to_job_detail(doc: dict[str, Any]) -> JobDetail:
     return JobDetail(
         job_id=doc.get("job_id", doc.get("_key", "")),
-        task_name=doc.get("task_name", f"cspm_scan/{doc.get('provider', '')}"),
+        task_name=_infer_task_name(doc),
         tenant_id=doc.get("tenant_id", ""),
         status=doc.get("status", ""),
         created_at=doc.get("created_at"),

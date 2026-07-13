@@ -64,6 +64,7 @@ def run_iac_scan(
         tenant_id=tenant_id,
         provider_id="iac",
         provider="iac",
+        task_name="iac_scan/iac",
         frameworks=["checkov"],
         status=ScanJobStatus.RUNNING,
         started_at=datetime.now(UTC),
