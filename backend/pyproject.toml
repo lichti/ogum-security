@@ -14,7 +14,7 @@ uvicorn = { extras = ["standard"], version = "^0.32.0" }
 pydantic = "^2.9.0"
 pydantic-settings = "^2.6.0"
 python-arango = "^8.1.0"
-redis = { extras = ["hiredis"], version = "^5.2.0" }
+redis = { extras = ["hiredis"], version = ">=5.2,<7.0" }
 celery = { extras = ["redis"], version = "^5.4.0" }
 confluent-kafka = "^2.6.0"
 prowler = "^5.31.0"
