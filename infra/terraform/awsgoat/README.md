@@ -19,7 +19,7 @@ detection.
 | Module | Stack | Escalation path | Attack manual |
 |---|---|---|---|
 | `module-1/` | Lambda + API Gateway + DynamoDB + S3 (serverless blog) | XSS → SQLi → IDOR → sensitive data exposure → Lambda SSRF → IMDS credential theft → IAM privilege escalation | `attack-manuals/module-1/` |
-| `module-2/` | ECS/Fargate + PHP (HR payroll app) | SQLi → file upload → ECS task metadata → container breakout → IAM privilege escalation | `attack-manuals/module-2/` |
+| `module-2/` | ECS (EC2-backed, not Fargate) + RDS MySQL + ALB + PHP (HR payroll app) | SQLi → file upload → ECS task metadata → container breakout → IAM privilege escalation | `attack-manuals/module-2/` |
 
 `policy/policy.json` is the minimum IAM policy upstream documents for the AWS credentials used to
 deploy (not the vulnerable app's own roles — those are intentionally overprivileged, that's the
@@ -98,8 +98,44 @@ These are **real, exploitable applications**, not simulated findings:
   black-box target. Do not treat public exposure as a bug to fix; treat it as a reason to isolate
   the account.
 - **Destroy immediately after each test session.** Do not leave these running.
-- Estimated cost while running (per upstream, `us-east-1`, on-demand): module-1 ~$0.0125/hour,
-  module-2 ~$0.0505/hour.
+
+### Cost estimate (us-east-1, on-demand, no free tier)
+
+Itemized by resource — upstream only quotes a single blended figure per module (module-1
+~$0.0125/hour, module-2 ~$0.0505/hour), which is close to the total below but doesn't show that
+the ALB, not RDS, is module-2's biggest cost driver:
+
+**module-1** (serverless blog — 1 always-on EC2, not purely serverless):
+
+| Resource | Config | Rate | ~monthly (730h) |
+|---|---|---|---|
+| EC2 `goat_instance` | 1× t2.micro, always on | $0.0116/h | ~$8.50 |
+| DynamoDB (2 tables) | PROVISIONED, 2 RCU + 2 WCU each | $0.00013/RCU-h + $0.00065/WCU-h | ~$2.30 |
+| Lambda (2 functions) | low test-traffic volume | within free tier | ~$0 |
+| API Gateway | REST API, no caching | $3.50/million req | ~$0 |
+| S3 (3 buckets) | a few MB of static assets | within free tier | ~$0 |
+| **Total** | | **≈ $0.015/h** | **≈ $11/month** |
+
+**module-2** (ECS on EC2, not Fargate — RDS + ALB dominate):
+
+| Resource | Config | Rate | ~monthly (730h) |
+|---|---|---|---|
+| EC2 (ASG container instance) | 1× t2.micro, `desired_capacity = 1` | $0.0116/h | ~$8.50 |
+| RDS MySQL | `db.t3.micro`, single-AZ, 10GB gp2 | $0.017/h + $1.15/mo storage | ~$13.55 |
+| ALB | 1×, minimal LCU | $0.0225/h + ~$0.008/h LCU | ~$22.30 |
+| Secrets Manager | 1 secret | $0.40/month flat | ~$0.40 |
+| **Total** | | **≈ $0.052/h** | **≈ $38/month** |
+
+Both modules together: **≈ $0.067/h ≈ $49/month** if left running continuously — always
+`terraform apply -var="create_awsgoat_module1=false" -var="create_awsgoat_module2=false"` (or
+`terraform destroy`) when done.
+
+These are on-demand rates with **no AWS Free Tier applied**. A new AWS account (first 12 months)
+gets 750 free hours/month each of `t2.micro` EC2 and `db.t2/t3.micro` RDS — under Free Tier,
+module-1's EC2 and module-2's EC2+RDS would each cost close to $0, leaving the ALB
+(~$22/month) as module-2's dominant real cost. Free Tier does not cover ALB. Treat all figures
+here as estimates, not a bill — check the AWS Pricing Calculator or your account's Cost Explorer
+for exact numbers.
 
 ## Updating
 

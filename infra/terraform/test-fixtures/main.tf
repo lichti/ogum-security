@@ -31,8 +31,10 @@ terraform {
 # Total:            ~$21/month with EC2  |  ~$6/month without (create_ec2_instances=false)
 # Vulnerable apps:   off by default. Metasploitable (t3.small) ~$0.02/h, DVWA (t3.micro) ~$0.01/h — opt-in via
 #                    create_metasploitable_ec2 / create_dvwa_ec2.
-# AWSGoat:           off by default. module-1 (Lambda/API GW/DynamoDB) ~$0.0125/h, module-2 (ECS/RDS/ALB)
-#                    ~$0.0505/h — opt-in via create_awsgoat_module1 / create_awsgoat_module2. See ../awsgoat/README.md.
+# AWSGoat:           off by default, opt-in via create_awsgoat_module1 / create_awsgoat_module2.
+#   module-1: EC2 t2.micro (always on) + DynamoDB provisioned (2 tables) ~$0.015/h  ~$11/month
+#   module-2: EC2 t2.micro (ASG) + RDS db.t3.micro + ALB (biggest cost) ~$0.052/h  ~$38/month
+#   Full per-resource breakdown and Free Tier caveats: ../awsgoat/README.md#cost-estimate-us-east-1-on-demand-no-free-tier
 # ─────────────────────────────────────────────────────────────────────────────
 
 provider "aws" {
