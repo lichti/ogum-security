@@ -25,7 +25,7 @@
     "react-dom": "^19.0.0",
     "reactflow": "^11.11.4",
     "recharts": "^2.13.3",
-    "tailwind-merge": "^2.5.4",
+    "tailwind-merge": "^3.6.0",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
