@@ -3054,7 +3054,12 @@ resource "aws_api_gateway_deployment" "apideploy_ba" {
   ]
 
   rest_api_id = aws_api_gateway_rest_api.apiLambda_ba.id
-  stage_name  = "v1"
+}
+
+resource "aws_api_gateway_stage" "apideploy_ba" {
+  stage_name    = "v1"
+  rest_api_id   = aws_api_gateway_rest_api.apiLambda_ba.id
+  deployment_id = aws_api_gateway_deployment.apideploy_ba.id
   variables = {
     "BLOG_KEY" = "655877f0f8ade541e1d21a48fe396ddb"
   }
@@ -3691,8 +3696,8 @@ resource "null_resource" "file_replacement_lambda_data" {
 resource "null_resource" "file_replacement_api_gw" {
   provisioner "local-exec" {
     command     = <<EOF
-sed -i.bak "s,API_GATEWAY_URL,${aws_api_gateway_deployment.apideploy_ba.invoke_url},g" resources/s3/webfiles/build/static/js/main.e5839717.js
-sed -i.bak "s,API_GATEWAY_URL,${aws_api_gateway_deployment.apideploy_ba.invoke_url},g" resources/s3/webfiles/build/static/js/main.e5839717.js.map
+sed -i.bak "s,API_GATEWAY_URL,${aws_api_gateway_stage.apideploy_ba.invoke_url},g" resources/s3/webfiles/build/static/js/main.e5839717.js
+sed -i.bak "s,API_GATEWAY_URL,${aws_api_gateway_stage.apideploy_ba.invoke_url},g" resources/s3/webfiles/build/static/js/main.e5839717.js.map
 sed -i.bak 's/"\/static/"https:\/\/${aws_s3_bucket.bucket_upload.bucket}\.s3\.amazonaws\.com\/build\/static/g' resources/s3/webfiles/build/static/js/main.e5839717.js
 sed -i.bak 's/n.p+"static/"https:\/\/${aws_s3_bucket.bucket_upload.bucket}\.s3\.amazonaws\.com\/build\/static/g' resources/s3/webfiles/build/static/js/main.e5839717.js
 rm -f resources/s3/webfiles/build/static/js/main.e5839717.js.bak resources/s3/webfiles/build/static/js/main.e5839717.js.map.bak
@@ -3701,7 +3706,7 @@ EOF
     working_dir = path.module
   }
   depends_on = [
-    aws_api_gateway_deployment.apideploy_ba
+    aws_api_gateway_stage.apideploy_ba
   ]
 }
 
@@ -3709,8 +3714,8 @@ EOF
 resource "null_resource" "file_replacement_api_gw_cleanup" {
   provisioner "local-exec" {
     command     = <<EOF
-sed -i.bak "s,${aws_api_gateway_deployment.apideploy_ba.invoke_url},API_GATEWAY_URL,g" resources/s3/webfiles/build/static/js/main.e5839717.js
-sed -i.bak "s,${aws_api_gateway_deployment.apideploy_ba.invoke_url},API_GATEWAY_URL,g" resources/s3/webfiles/build/static/js/main.e5839717.js.map
+sed -i.bak "s,${aws_api_gateway_stage.apideploy_ba.invoke_url},API_GATEWAY_URL,g" resources/s3/webfiles/build/static/js/main.e5839717.js
+sed -i.bak "s,${aws_api_gateway_stage.apideploy_ba.invoke_url},API_GATEWAY_URL,g" resources/s3/webfiles/build/static/js/main.e5839717.js.map
 sed -i.bak 's/${aws_instance.goat_instance.public_ip}/EC2_IP_ADDR/g' resources/s3/shared/shared/files/.ssh/config.txt
 rm -f resources/s3/webfiles/build/static/js/main.e5839717.js.bak resources/s3/webfiles/build/static/js/main.e5839717.js.map.bak resources/s3/shared/shared/files/.ssh/config.txt.bak
 EOF
