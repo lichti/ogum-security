@@ -2662,6 +2662,17 @@
             "$ref": "#/components/schemas/ScanJobStatus",
             "default": "queued"
           },
+          "task_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Name"
+          },
           "tenant_id": {
             "title": "Tenant Id",
             "type": "string"

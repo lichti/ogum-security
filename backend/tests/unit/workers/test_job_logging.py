@@ -18,9 +18,7 @@ class TestJobLogHandler:
     def test_emit_formats_and_buffers_lines(self) -> None:
         db = MagicMock()
         handler = JobLogHandler(db, "job-1")
-        record = _TEST_LOGGER.makeRecord(
-            _TEST_LOGGER.name, logging.INFO, __file__, 1, "scan started", (), None
-        )
+        record = _TEST_LOGGER.makeRecord(_TEST_LOGGER.name, logging.INFO, __file__, 1, "scan started", (), None)
         handler.emit(record)
         assert len(handler._lines) == 1
         assert "scan started" in handler._lines[0]
