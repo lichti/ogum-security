@@ -376,6 +376,35 @@ export interface SavedQuery {
   updated_at: string
 }
 
+export type ViewScope = 'inventory' | 'findings' | 'compliance'
+
+export interface SavedView {
+  key: string
+  scope: ViewScope
+  name: string
+  filters: Record<string, unknown>
+  columns: string[] | null
+  owner: string
+  is_system: boolean
+  pinned: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface SavedViewCreateRequest {
+  scope: ViewScope
+  name: string
+  filters?: Record<string, unknown>
+  columns?: string[] | null
+}
+
+export interface SavedViewUpdateRequest {
+  name?: string
+  filters?: Record<string, unknown>
+  columns?: string[] | null
+  pinned?: boolean
+}
+
 export interface AqlResult {
   rows: unknown[]
   count: number

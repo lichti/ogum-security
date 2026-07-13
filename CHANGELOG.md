@@ -17,6 +17,7 @@ Commit types that trigger version bumps:
 
 ### Added
 
+- Epic 14 Sprint 1 (UX Avançado II — foundation): new `components/ui/` primitives — `RiskScoreBadge` (numeric 0.0–10.0), `AlertVulnQuintet`, `ExposureBadge`, `CrownJewelBadge`, `SLABadge` (with `classifySLA` helper) — plus `PillFilter` (search + operator + count popover, apply/clear semantics) and `SavedViewSelector` (pinned quick-access + all-views dropdown + save-as-new). Backed by a new `GET/POST/PATCH/DELETE /api/v1/views` endpoint (`app/api/v1/views.py`, `app/services/view_service.py`) with three curated system views seeded per tenant and per-user scoping via the same dev-mode header pattern as `X-Tenant-ID` (`X-User-Id` — Epic 06/RBAC replaces this later). System views are read-only from the API; only the owning user can rename, edit, pin, or delete their own views.
 - `docs/qa/awsgoat-detection-coverage.md`: maps every vulnerability in the vendored AWSGoat modules (`infra/terraform/awsgoat/`) to the Ogum module/mechanism that should detect it, marking explicit gaps (application-layer SAST/DAST logic bugs, S3 object-content secret scanning, a missing `PASSES_ROLE` graph edge for the `iam:PassRole` + `ec2:RunInstances` escalation pattern) where nothing today does. Use it to plan a live end-to-end validation session and to prioritize backlog items.
 
 ### Security

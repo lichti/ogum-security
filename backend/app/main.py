@@ -12,6 +12,7 @@ from app.api.v1 import (
     providers,
     scans,
     side_scans,
+    views,
 )
 from app.api.v1 import dev as dev_module
 from app.api.v1.admin import jobs as admin_jobs
@@ -50,4 +51,5 @@ app.include_router(attack_paths.router)
 app.include_router(graph.router)
 app.include_router(side_scans.router)
 app.include_router(admin_jobs.router)
+app.include_router(views.router)
 app.include_router(dev_module.router)  # endpoints return 404 unless DEV_MODE=true

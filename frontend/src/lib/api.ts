@@ -27,11 +27,15 @@ import type {
   DiscoverRequest,
   DiscoverResponse,
   SavedQuery,
+  SavedView,
+  SavedViewCreateRequest,
+  SavedViewUpdateRequest,
   ShortestPathResult,
   ScanJob,
   ScanTriggerRequest,
   ScanTriggerResponse,
   SideScanJob,
+  ViewScope,
 } from './types'
 
 // FastAPI's Query(list[str]) expects repeated bare keys (?k=a&k=b), not axios's
@@ -58,10 +62,12 @@ export const apiClient = axios.create({
   paramsSerializer: serializeParams,
 })
 
-// DEV MODE: tenant injected from env var — Sprint 7 replaces with JWT extraction
+// DEV MODE: tenant/user injected from env vars — Epic 06 replaces with JWT extraction
 apiClient.interceptors.request.use((config) => {
   const tenantId = process.env.NEXT_PUBLIC_TENANT_ID ?? 'dev-tenant'
+  const userId = process.env.NEXT_PUBLIC_USER_ID ?? 'dev-user'
   config.headers['X-Tenant-ID'] = tenantId
+  config.headers['X-User-Id'] = userId
   return config
 })
 
@@ -270,4 +276,18 @@ export const sideScanApi = {
     apiClient.post<{ job_id: string; status: string; resource_key: string }>('/api/v1/side-scans/trigger', {
       resource_key: resourceKey,
     }),
+}
+
+export const viewsApi = {
+  list: (scope?: ViewScope) =>
+    apiClient.get<ApiResponse<SavedView[]>>('/api/v1/views', { params: scope ? { scope } : undefined }),
+
+  create: (data: SavedViewCreateRequest) =>
+    apiClient.post<ApiResponse<SavedView>>('/api/v1/views', data),
+
+  update: (viewKey: string, data: SavedViewUpdateRequest) =>
+    apiClient.patch<ApiResponse<SavedView>>(`/api/v1/views/${viewKey}`, data),
+
+  delete: (viewKey: string) =>
+    apiClient.delete<ApiResponse<{ deleted: boolean }>>(`/api/v1/views/${viewKey}`),
 }
