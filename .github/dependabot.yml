@@ -1,0 +1,26 @@
+version: 2
+
+# Scoped to the actual product dependencies. `infra/terraform/awsgoat/` and
+# `infra/terraform/test-fixtures/` vendor deliberately vulnerable applications
+# used to validate Ogum's own detection modules end-to-end — version-update
+# PRs against them would be noise, not remediation.
+updates:
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    directory: "/agent"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
