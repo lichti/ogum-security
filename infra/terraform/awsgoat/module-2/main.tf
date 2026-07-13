@@ -477,10 +477,16 @@ EOF
 
 resource "null_resource" "rds_endpoint" {
   provisioner "local-exec" {
+    # NOTE: two portability fixes on top of upstream here (see ../README.md#updating before
+    # re-vendoring): `$${RDS_URL::-5}` is bash 4.2+ negative-length substring syntax, unsupported
+    # by macOS's /bin/bash (still bash 3.2 for licensing reasons) — replaced with the
+    # bash-3.2-safe `%:*` suffix trim, which is also more correct (works for any port length, not
+    # just a hardcoded 5 chars). `sed -i.bak ... && rm -f *.bak` is the BSD/GNU-portable in-place
+    # edit idiom, same reasoning as module-1.
     command     = <<EOF
 RDS_URL="${aws_db_instance.database-instance.endpoint}"
-RDS_URL=$${RDS_URL::-5}
-sed -i "s,RDS_ENDPOINT_VALUE,$RDS_URL,g" ${path.module}/resources/ecs/task_definition.json
+RDS_URL=$${RDS_URL%:*}
+sed -i.bak "s,RDS_ENDPOINT_VALUE,$RDS_URL,g" ${path.module}/resources/ecs/task_definition.json && rm -f ${path.module}/resources/ecs/task_definition.json.bak
 EOF
     interpreter = ["/bin/bash", "-c"]
   }
@@ -494,8 +500,8 @@ resource "null_resource" "cleanup" {
   provisioner "local-exec" {
     command     = <<EOF
 RDS_URL="${aws_db_instance.database-instance.endpoint}"
-RDS_URL=$${RDS_URL::-5}
-sed -i "s,$RDS_URL,RDS_ENDPOINT_VALUE,g" ${path.module}/resources/ecs/task_definition.json
+RDS_URL=$${RDS_URL%:*}
+sed -i.bak "s,$RDS_URL,RDS_ENDPOINT_VALUE,g" ${path.module}/resources/ecs/task_definition.json && rm -f ${path.module}/resources/ecs/task_definition.json.bak
 EOF
     interpreter = ["/bin/bash", "-c"]
   }

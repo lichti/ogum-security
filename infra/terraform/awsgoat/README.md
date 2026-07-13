@@ -61,6 +61,18 @@ which required three kinds of changes — reapply the same three if re-vendoring
    *identical* literal name (`do-not-delete-awsgoat-state-files-<account_id>`), which is unused by
    either module but collides if both run in the same account. Now
    `do-not-delete-awsgoat-module1-state-files-...` / `...-module2-...`.
+4. **Made every `local-exec` provisioner portable to macOS**, discovered by actually running
+   `terraform apply` locally (not caught by `validate`/`plan`, which don't execute provisioners):
+   - `sed -i 'script' file` → `sed -i.bak 'script' file && rm -f file.bak` everywhere. Upstream's
+     `sed -i` (no attached suffix) is GNU-only; BSD sed (macOS's default `/usr/bin/sed`) requires
+     an in-place suffix argument and otherwise fails with `sed: -I or -i may not be used with
+     stdin`. The `-i.bak && rm -f *.bak` form is accepted identically by both.
+   - `module-2`'s `RDS_URL=$${RDS_URL::-5}` → `RDS_URL=$${RDS_URL%:*}`. The `${var::-N}`
+     negative-length substring syntax needs bash ≥ 4.2; macOS ships bash 3.2 (frozen there for
+     GPLv2/GPLv3 licensing reasons) and errors with `substring expression < 0`. `%:*` (strip
+     everything from the last `:` onward) is bash-3.2-safe and also more correct than upstream's
+     hardcoded "last 5 chars" assumption, which only happens to work because MySQL's default port
+     (`3306`) is exactly 4 digits.
 
 Everything else (resources, IAM policies, app source under `src/`, vulnerable logic) is untouched.
 
@@ -69,6 +81,15 @@ checked-out resource files in place (bucket names, IPs, URLs get written directl
 `resources/dynamodb/blog-posts.json` and the pre-built React bundle) as part of deploying —
 expect `git status` to show those files as modified after `terraform apply`/`destroy`. Discard
 those changes (`git checkout -- module-1/resources`) rather than committing them.
+
+## Prerequisites
+
+- Everything `../test-fixtures/README.md` requires (AWS CLI, Terraform >= 1.6).
+- `module-1`'s `populate_table` provisioner runs `python3 resources/dynamodb/populate-table.py`,
+  which needs **boto3** on whatever `python3` resolves to on your `PATH`: `pip3 install boto3`
+  (or `pip3 install --break-system-packages boto3` if your `python3` is an externally-managed
+  Homebrew install). Not vendored/auto-installed — see "Local patches" above for what is and
+  isn't touched.
 
 ## Usage
 

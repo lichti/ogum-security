@@ -3639,8 +3639,12 @@ resource "aws_dynamodb_table" "posts_table" {
 
 resource "null_resource" "populate_table" {
   provisioner "local-exec" {
+    # NOTE: `sed -i.bak ... && rm -f *.bak` (instead of upstream's `sed -i ...`) is a portable
+    # in-place-edit idiom that works with both BSD sed (macOS) and GNU sed (Linux) — bare `-i`
+    # takes a mandatory attached suffix argument on BSD sed and errors ("-I or -i may not be
+    # used with stdin") without one. See ../README.md#updating before re-vendoring.
     command     = <<EOF
-sed -i 's/replace-bucket-name/${aws_s3_bucket.bucket_upload.bucket}/g' resources/dynamodb/blog-posts.json
+sed -i.bak 's/replace-bucket-name/${aws_s3_bucket.bucket_upload.bucket}/g' resources/dynamodb/blog-posts.json && rm -f resources/dynamodb/blog-posts.json.bak
 python3 resources/dynamodb/populate-table.py
 EOF
     interpreter = ["/bin/bash", "-c"]
@@ -3653,7 +3657,7 @@ EOF
 # To replace with IP Address of EC2-Instance in .ssh/config
 resource "null_resource" "file_replacement_ec2_ip" {
   provisioner "local-exec" {
-    command     = "sed -i 's/EC2_IP_ADDR/${aws_instance.goat_instance.public_ip}/g' resources/s3/shared/shared/files/.ssh/config.txt"
+    command     = "sed -i.bak 's/EC2_IP_ADDR/${aws_instance.goat_instance.public_ip}/g' resources/s3/shared/shared/files/.ssh/config.txt && rm -f resources/s3/shared/shared/files/.ssh/config.txt.bak"
     interpreter = ["/bin/bash", "-c"]
     working_dir = path.module
   }
@@ -3663,7 +3667,7 @@ resource "null_resource" "file_replacement_ec2_ip" {
 
 resource "null_resource" "file_replacement_lambda_react" {
   provisioner "local-exec" {
-    command     = "sed -i 's/replace-bucket-name/${aws_s3_bucket.bucket_upload.bucket}/g' resources/lambda/react/index.js"
+    command     = "sed -i.bak 's/replace-bucket-name/${aws_s3_bucket.bucket_upload.bucket}/g' resources/lambda/react/index.js && rm -f resources/lambda/react/index.js.bak"
     interpreter = ["/bin/bash", "-c"]
     working_dir = path.module
   }
@@ -3674,7 +3678,7 @@ resource "null_resource" "file_replacement_lambda_react" {
 
 resource "null_resource" "file_replacement_lambda_data" {
   provisioner "local-exec" {
-    command     = "sed -i 's/replace-bucket-name/${aws_s3_bucket.bucket_upload.bucket}/g' resources/lambda/data/lambda_function.py"
+    command     = "sed -i.bak 's/replace-bucket-name/${aws_s3_bucket.bucket_upload.bucket}/g' resources/lambda/data/lambda_function.py && rm -f resources/lambda/data/lambda_function.py.bak"
     interpreter = ["/bin/bash", "-c"]
     working_dir = path.module
   }
@@ -3687,10 +3691,11 @@ resource "null_resource" "file_replacement_lambda_data" {
 resource "null_resource" "file_replacement_api_gw" {
   provisioner "local-exec" {
     command     = <<EOF
-sed -i "s,API_GATEWAY_URL,${aws_api_gateway_deployment.apideploy_ba.invoke_url},g" resources/s3/webfiles/build/static/js/main.e5839717.js
-sed -i "s,API_GATEWAY_URL,${aws_api_gateway_deployment.apideploy_ba.invoke_url},g" resources/s3/webfiles/build/static/js/main.e5839717.js.map
-sed -i 's/"\/static/"https:\/\/${aws_s3_bucket.bucket_upload.bucket}\.s3\.amazonaws\.com\/build\/static/g' resources/s3/webfiles/build/static/js/main.e5839717.js
-sed -i 's/n.p+"static/"https:\/\/${aws_s3_bucket.bucket_upload.bucket}\.s3\.amazonaws\.com\/build\/static/g' resources/s3/webfiles/build/static/js/main.e5839717.js
+sed -i.bak "s,API_GATEWAY_URL,${aws_api_gateway_deployment.apideploy_ba.invoke_url},g" resources/s3/webfiles/build/static/js/main.e5839717.js
+sed -i.bak "s,API_GATEWAY_URL,${aws_api_gateway_deployment.apideploy_ba.invoke_url},g" resources/s3/webfiles/build/static/js/main.e5839717.js.map
+sed -i.bak 's/"\/static/"https:\/\/${aws_s3_bucket.bucket_upload.bucket}\.s3\.amazonaws\.com\/build\/static/g' resources/s3/webfiles/build/static/js/main.e5839717.js
+sed -i.bak 's/n.p+"static/"https:\/\/${aws_s3_bucket.bucket_upload.bucket}\.s3\.amazonaws\.com\/build\/static/g' resources/s3/webfiles/build/static/js/main.e5839717.js
+rm -f resources/s3/webfiles/build/static/js/main.e5839717.js.bak resources/s3/webfiles/build/static/js/main.e5839717.js.map.bak
 EOF
     interpreter = ["/bin/bash", "-c"]
     working_dir = path.module
@@ -3704,9 +3709,10 @@ EOF
 resource "null_resource" "file_replacement_api_gw_cleanup" {
   provisioner "local-exec" {
     command     = <<EOF
-sed -i "s,${aws_api_gateway_deployment.apideploy_ba.invoke_url},API_GATEWAY_URL,g" resources/s3/webfiles/build/static/js/main.e5839717.js
-sed -i "s,${aws_api_gateway_deployment.apideploy_ba.invoke_url},API_GATEWAY_URL,g" resources/s3/webfiles/build/static/js/main.e5839717.js.map
-sed -i 's/${aws_instance.goat_instance.public_ip}/EC2_IP_ADDR/g' resources/s3/shared/shared/files/.ssh/config.txt
+sed -i.bak "s,${aws_api_gateway_deployment.apideploy_ba.invoke_url},API_GATEWAY_URL,g" resources/s3/webfiles/build/static/js/main.e5839717.js
+sed -i.bak "s,${aws_api_gateway_deployment.apideploy_ba.invoke_url},API_GATEWAY_URL,g" resources/s3/webfiles/build/static/js/main.e5839717.js.map
+sed -i.bak 's/${aws_instance.goat_instance.public_ip}/EC2_IP_ADDR/g' resources/s3/shared/shared/files/.ssh/config.txt
+rm -f resources/s3/webfiles/build/static/js/main.e5839717.js.bak resources/s3/webfiles/build/static/js/main.e5839717.js.map.bak resources/s3/shared/shared/files/.ssh/config.txt.bak
 EOF
     interpreter = ["/bin/bash", "-c"]
     working_dir = path.module
