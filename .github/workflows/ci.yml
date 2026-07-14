@@ -2,9 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, dev]
   pull_request:
     branches: [main]
+
+# Fast jobs (lint, unit tests, frontend, agent) run on every push to `dev` and `main`,
+# and on every PR into `main`. Heavy jobs (Docker build, integration/security tests
+# against real ArangoDB+Redis, OpenAPI drift, dependency audit) carry
+# `if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'` so a
+# push to `dev` (local feature branches merging in) skips them — the full matrix still
+# runs once per batched dev → main PR. See ADR-014 in specs/architecture.md.
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -14,6 +21,7 @@ jobs:
   docker-build:
     name: Docker — Compose Build
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
@@ -128,6 +136,7 @@ jobs:
     name: Backend — Integration & Security Tests
     runs-on: ubuntu-latest
     needs: backend-lint
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
 
     services:
       arangodb:
@@ -205,6 +214,7 @@ jobs:
   backend-openapi-drift:
     name: Backend — OpenAPI Schema Drift
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
@@ -241,6 +251,7 @@ jobs:
   backend-security:
     name: Backend — Security Audit
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
