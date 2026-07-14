@@ -27,6 +27,7 @@ import logging
 import os
 import shutil
 import subprocess
+import time
 import uuid
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -310,32 +311,59 @@ def cleanup_orphan_snapshots(
 # ─── Sprint 2 helpers ─────────────────────────────────────────────────────────
 
 
-def _generate_sbom(snapshot_id: str, trivy_server_url: str, job_id: str) -> dict[str, Any]:
-    """Generate CycloneDX SBOM via trivy vm. Returns empty dict on failure."""
-    result = subprocess.run(
-        [
-            "trivy",
-            "vm",
-            "--server",
-            trivy_server_url,
-            f"ebs:{snapshot_id}",
-            "--format",
-            "cyclonedx",
-            "--quiet",
-            "--no-progress",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
-    if result.returncode not in (0, 1) or not result.stdout.strip():
-        logger.warning("SBOM generation returned %d for snapshot=%s job=%s", result.returncode, snapshot_id, job_id)
-        return {}
-    try:
-        return json.loads(result.stdout)  # type: ignore[no-any-return]
-    except Exception:
-        logger.exception("Failed to parse SBOM JSON for snapshot=%s", snapshot_id)
-        return {}
+def _generate_sbom(
+    snapshot_id: str,
+    trivy_server_url: str,
+    job_id: str,
+    max_attempts: int = 3,
+    backoff_seconds: float = 5.0,
+) -> dict[str, Any]:
+    """
+    Generate CycloneDX SBOM via trivy vm. Returns empty dict on failure.
+
+    This runs right after run_trivy_ebs() has already read the same snapshot's
+    blocks through the same trivy-server sidecar (see scan_ec2_instance_v2) — a
+    second, immediate ebs:GetSnapshotBlock/ListSnapshotBlocks pass over the same
+    snapshot is prone to EBS Direct API throttling, which surfaces as exit 1
+    with empty stdout rather than a distinguishable rate-limit error. Retrying
+    with backoff resolves it; a single attempt (the original behavior) does not.
+    """
+    for attempt in range(1, max_attempts + 1):
+        result = subprocess.run(
+            [
+                "trivy",
+                "vm",
+                "--server",
+                trivy_server_url,
+                f"ebs:{snapshot_id}",
+                "--format",
+                "cyclonedx",
+                "--quiet",
+                "--no-progress",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+        if result.returncode in (0, 1) and result.stdout.strip():
+            try:
+                return json.loads(result.stdout)  # type: ignore[no-any-return]
+            except Exception:
+                logger.exception("Failed to parse SBOM JSON for snapshot=%s job=%s", snapshot_id, job_id)
+                return {}
+
+        logger.warning(
+            "SBOM generation returned %d for snapshot=%s job=%s (attempt %d/%d)",
+            result.returncode,
+            snapshot_id,
+            job_id,
+            attempt,
+            max_attempts,
+        )
+        if attempt < max_attempts:
+            time.sleep(backoff_seconds * attempt)
+
+    return {}
 
 
 def _persist_sbom(
