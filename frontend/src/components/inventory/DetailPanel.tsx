@@ -9,6 +9,8 @@ import { DETAIL_PANEL_TABS, defaultSubtab, findTab } from './detailPanelTabs'
 import { ResourceNarrative } from './ResourceNarrative'
 import { RelationshipGroups } from './RelationshipGroups'
 import { BlastRadiusGraph } from './BlastRadiusGraph'
+import { SoftwareInventoryPanel } from './SoftwareInventoryPanel'
+import { ResourceCompliance } from './ResourceCompliance'
 
 interface DetailPanelProps {
   resource: ResourceDetail | null
@@ -36,6 +38,7 @@ export function DetailPanel({ resource, onClose }: DetailPanelProps) {
 
   const [scanError, setScanError] = useState<string | null>(null)
   const [kebabOpen, setKebabOpen] = useState(false)
+  const [complianceFramework, setComplianceFramework] = useState<string | undefined>(undefined)
   const kebabRef = useRef<HTMLDivElement>(null)
 
   const initialTab = searchParams.get('tab') ?? DETAIL_PANEL_TABS[0].key
@@ -291,8 +294,26 @@ export function DetailPanel({ resource, onClose }: DetailPanelProps) {
           </section>
         )}
 
+        {activeTabKey === 'software' && activeSubtabKey && (
+          <section>
+            <SoftwareInventoryPanel resource={resource} subtabKey={activeSubtabKey} />
+          </section>
+        )}
+
+        {activeTabKey === 'compliance' && (
+          <section>
+            <ResourceCompliance
+              resource={resource}
+              framework={complianceFramework}
+              onFrameworkChange={setComplianceFramework}
+            />
+          </section>
+        )}
+
         {!(activeTabKey === 'info' && activeSubtabKey === 'overview') &&
-          !(activeTabKey === 'risk' && activeSubtabKey === 'blast_radius') && (
+          !(activeTabKey === 'risk' && activeSubtabKey === 'blast_radius') &&
+          activeTabKey !== 'software' &&
+          activeTabKey !== 'compliance' && (
             <p className="text-slate-600 text-sm">This section isn&apos;t available yet.</p>
           )}
       </div>

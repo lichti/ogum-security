@@ -20,9 +20,11 @@ from app.models.api_responses import (
     ResourceDetail,
     ResourceSummary,
 )
-from app.models.inventory_detail import BlastRadiusResponse, ResourceNarrativeSummary
-from app.services.inventory_detail_service import build_resource_summary, get_blast_radius
+from app.models.inventory_detail import BlastRadiusResponse, ResourceComplianceResponse, ResourceNarrativeSummary
+from app.models.software_inventory import SoftwareInventoryResponse
+from app.services.inventory_detail_service import build_resource_summary, get_blast_radius, get_resource_compliance
 from app.services.inventory_service import get_inventory_stats, get_resource, list_resources
+from app.services.software_inventory_service import get_software_inventory
 from app.workers.tasks.cspm_scan import run_cspm_scan
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["inventory"])
@@ -225,6 +227,31 @@ async def get_resource_blast_radius(
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
     return ApiResponse(data=get_blast_radius(db, x_tenant_id, resource_key))
+
+
+@router.get("/{resource_key}/software", response_model=ApiResponse[SoftwareInventoryResponse])
+async def get_resource_software(
+    resource_key: str,
+    db: StandardDatabase = Depends(get_tenant_db),
+    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+) -> ApiResponse[SoftwareInventoryResponse]:
+    resource = get_resource(db, x_tenant_id, resource_key)
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    return ApiResponse(data=get_software_inventory(db, x_tenant_id, resource))
+
+
+@router.get("/{resource_key}/compliance", response_model=ApiResponse[ResourceComplianceResponse])
+async def get_resource_compliance_endpoint(
+    resource_key: str,
+    framework: str | None = Query(None),
+    db: StandardDatabase = Depends(get_tenant_db),
+    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+) -> ApiResponse[ResourceComplianceResponse]:
+    resource = get_resource(db, x_tenant_id, resource_key)
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    return ApiResponse(data=get_resource_compliance(db, x_tenant_id, resource, framework))
 
 
 @router.post("/discover", response_model=ApiResponse[DiscoverJobResponse], status_code=202)

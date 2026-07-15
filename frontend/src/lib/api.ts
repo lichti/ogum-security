@@ -20,6 +20,8 @@ import type {
   ResourceDetail,
   ResourceNarrativeSummary,
   BlastRadiusResponse,
+  ResourceComplianceResponse,
+  SoftwareInventoryResponse,
   InventoryStats,
   InventoryFilters,
   ProviderConfig,
@@ -37,6 +39,8 @@ import type {
   ScanTriggerRequest,
   ScanTriggerResponse,
   SideScanJob,
+  SLASettings,
+  SLASummary,
   ViewScope,
 } from './types'
 
@@ -99,6 +103,14 @@ export const inventoryApi = {
 
   blastRadius: (key: string) =>
     apiClient.get<ApiResponse<BlastRadiusResponse>>(`/api/v1/inventory/${key}/blast-radius`),
+
+  software: (key: string) =>
+    apiClient.get<ApiResponse<SoftwareInventoryResponse>>(`/api/v1/inventory/${key}/software`),
+
+  compliance: (key: string, framework?: string) =>
+    apiClient.get<ApiResponse<ResourceComplianceResponse>>(`/api/v1/inventory/${key}/compliance`, {
+      params: framework ? { framework } : undefined,
+    }),
 
   triggerDiscovery: (provider: string, regions: string[]) =>
     apiClient.post('/api/v1/inventory/discover', null, {
@@ -176,6 +188,20 @@ export const findingsApi = {
       status: 'ACCEPTED',
       reason,
     }),
+
+  slaSummary: () =>
+    apiClient.get<ApiResponse<SLASummary>>('/api/v1/findings/sla-summary'),
+
+  exposurePath: (findingKey: string) =>
+    apiClient.get<ApiResponse<BlastRadiusResponse>>(`/api/v1/findings/${findingKey}/exposure-path`),
+}
+
+export const settingsApi = {
+  getSla: () =>
+    apiClient.get<ApiResponse<SLASettings>>('/api/v1/settings/sla'),
+
+  updateSla: (data: Partial<SLASettings>) =>
+    apiClient.put<ApiResponse<SLASettings>>('/api/v1/settings/sla', data),
 }
 
 export const scansApi = {

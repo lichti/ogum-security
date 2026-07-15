@@ -61,7 +61,7 @@ from app.workers.tasks._job_tracking import (
     complete_discovery_job,
     update_job_to_running,
 )
-from app.workers.tasks.cloud_utils import _get_aws_session, _get_tenant_db, _upsert
+from app.workers.tasks.cloud_utils import _get_aws_session, _get_tenant_db, _upsert, upsert_finding
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,7 @@ def _trivy_severity(trivy_sev: str, cvss_score: float) -> SeverityLevel:
 
 def _upsert_finding(db: Any, finding: Finding) -> None:
     """Upsert a side-scanning finding and create HAS_FINDING edge from resource."""
-    _upsert(db, "findings", finding.to_arango_doc(), finding.to_arango_update())
+    upsert_finding(db, finding)
     finding_key = finding.arango_key()
     raw_edge_key = f"{finding.resource_id}__{finding_key}"
     edge_key = raw_edge_key.replace("/", "_").replace(":", "_")[:240]

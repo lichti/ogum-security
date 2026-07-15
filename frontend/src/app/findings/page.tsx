@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { FindingsTable } from '@/components/findings/FindingsTable'
 import { FindingFilters } from '@/components/findings/FindingFilters'
 import { FindingsSummary } from '@/components/findings/FindingsSummary'
+import { SLASummaryPanel } from '@/components/findings/SLASummaryPanel'
 import { ExportButton } from '@/components/findings/ExportButton'
 import { FindingDetailPanel } from '@/components/findings/FindingDetailPanel'
 import { findingsApi } from '@/lib/api'
@@ -38,7 +39,9 @@ function FindingsPageContent() {
     return framework ? { ...DEFAULT_FILTERS, framework: [framework] } : DEFAULT_FILTERS
   })
   const [prevCursors, setPrevCursors] = useState<string[]>([])
-  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  // ?finding=<key> deep-link (e.g. from the Inventory resource Compliance tab)
+  // opens that finding's detail panel on first load — same one-time-URL-read pattern as `framework` above.
+  const [selectedKey, setSelectedKey] = useState<string | null>(() => searchParams.get('finding'))
 
   const { data: statsData } = useQuery({
     queryKey: ['findings-stats'],
@@ -104,6 +107,11 @@ function FindingsPageContent() {
             <p className="text-slate-500 text-sm mt-1">CSPM and IaC security findings across all providers</p>
           </div>
           <ExportButton filters={filters} />
+        </div>
+
+        {/* SLA Summary */}
+        <div className="mb-6">
+          <SLASummaryPanel />
         </div>
 
         {/* Summary */}

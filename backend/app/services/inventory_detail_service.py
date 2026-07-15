@@ -10,8 +10,12 @@ from app.models.inventory_detail import (
     BlastRadiusNode,
     BlastRadiusResponse,
     NarrativeDeepLink,
+    ResourceComplianceControl,
+    ResourceComplianceFrameworkOption,
+    ResourceComplianceResponse,
     ResourceNarrativeSummary,
 )
+from app.services.compliance_frameworks import derive_section, resolve_family
 
 _TRAVERSAL_EDGE_COLLECTIONS = [
     "BELONGS_TO",
@@ -158,4 +162,60 @@ def get_blast_radius(db: StandardDatabase, tenant_id: str, resource_key: str) ->
         nodes=list(nodes.values()),
         edges=edges,
         grouped_counts=grouped_counts,
+    )
+
+
+def get_resource_compliance(
+    db: StandardDatabase, tenant_id: str, resource: ResourceDetail, framework: str | None = None
+) -> ResourceComplianceResponse:
+    """Per-resource compliance view (US-14.07): available framework prefixes for this
+    resource's findings, plus the control table for one selected framework (defaults
+    to the first available one, mirroring the global Compliance page's version switcher).
+    """
+    if not db.has_collection("findings"):
+        return ResourceComplianceResponse(resource_key=resource.key)
+
+    rows = list(
+        db.aql.execute(
+            "FOR f IN findings "
+            "FILTER f.tenant_id == @tenant_id AND f.resource_id == @resource_id "
+            'FILTER f.status IN ["FAIL", "PASS"] '
+            "FOR fw IN f.framework_mapping "
+            'LET parts = SPLIT(fw, "/", 2) '
+            "RETURN {prefix: parts[0], control: (LENGTH(parts) > 1 ? parts[1] : null), "
+            "finding_key: f._key, status: f.status, title: f.title, severity: f.severity}",
+            bind_vars={"tenant_id": tenant_id, "resource_id": resource.resource_id},
+        )
+    )
+
+    prefixes = sorted({row["prefix"] for row in rows})
+    available = [
+        ResourceComplianceFrameworkOption(id=prefix, label=f"{resolve_family(prefix)[1]} {resolve_family(prefix)[2]}")
+        for prefix in prefixes
+    ]
+
+    selected = framework if framework in prefixes else (prefixes[0] if prefixes else None)
+    controls: list[ResourceComplianceControl] = []
+    if selected:
+        family_key = resolve_family(selected)[0]
+        for row in rows:
+            if row["prefix"] != selected:
+                continue
+            _, category = derive_section(row["control"], family_key)
+            controls.append(
+                ResourceComplianceControl(
+                    control_id=row["control"],
+                    status=row["status"],
+                    title=row["title"],
+                    category=category,
+                    severity=row["severity"],
+                    finding_key=row["finding_key"],
+                )
+            )
+
+    return ResourceComplianceResponse(
+        resource_key=resource.key,
+        available_frameworks=available,
+        selected_framework=selected,
+        controls=controls,
     )

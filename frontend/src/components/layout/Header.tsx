@@ -9,6 +9,7 @@ const ROUTE_LABELS: Record<string, string> = {
   '/compliance': 'Compliance',
   '/providers': 'Cloud Providers',
   '/providers/new': 'Cloud Providers / Connect',
+  '/settings/sla': 'SLA Settings',
 }
 
 export function Header() {

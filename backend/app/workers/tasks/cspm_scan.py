@@ -29,7 +29,7 @@ from app.services.side_scanning.trigger import (
     has_prior_side_scan,
 )
 from app.workers.celery_app import celery_app
-from app.workers.tasks.cloud_utils import _get_tenant_db, _upsert
+from app.workers.tasks.cloud_utils import _get_tenant_db, _upsert, upsert_finding
 from app.workers.tasks.job_logging import JobLogHandler
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ def _update_job(db: Any, job_id: str, **fields: Any) -> None:
 
 def _upsert_finding(db: Any, finding: Finding) -> None:
     """Upsert finding and create HAS_FINDING edge from resource → finding."""
-    _upsert(db, "findings", finding.to_arango_doc(), finding.to_arango_update())
+    upsert_finding(db, finding)
 
     finding_key = finding.arango_key()
     edge_key = f"{finding.resource_id}__{finding_key}".replace("/", "_").replace(":", "_")

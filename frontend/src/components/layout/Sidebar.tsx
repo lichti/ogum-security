@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  Clock,
   Cloud,
   Database,
   GitBranch,
@@ -65,6 +66,7 @@ export function Sidebar() {
           <NavItem icon={Cloud} label="Cloud Providers" href="/providers" />
           <NavItem icon={Plug} label="Integrations" disabled badge="Soon" />
           <NavItem icon={Terminal} label="Agent" disabled badge="Soon" />
+          <NavItem icon={Clock} label="SLA Settings" href="/settings/sla" />
         </NavSection>
 
         <NavSection label="Platform">

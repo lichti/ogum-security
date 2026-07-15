@@ -3,7 +3,9 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Badge, type BadgeVariant } from '@/components/ui/Badge'
 import { RiskBadge } from '@/components/ui/RiskBadge'
 import { SeverityBadge } from '@/components/ui/SeverityBadge'
+import { SLABadge } from '@/components/ui/SLABadge'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { useSlaSettings } from '@/hooks/useSlaSettings'
 import type { Finding } from '@/lib/types'
 
 interface FindingsTableProps {
@@ -41,6 +43,8 @@ export function FindingsTable({
   onPrev,
   onRowClick,
 }: FindingsTableProps) {
+  const { classify } = useSlaSettings()
+
   if (loading) {
     return (
       <div className="space-y-2" data-testid="findings-skeleton">
@@ -72,6 +76,7 @@ export function FindingsTable({
             <th className="pb-3 pr-4 font-medium">Region</th>
             <th className="pb-3 pr-4 font-medium">Status</th>
             <th className="pb-3 pr-4 font-medium">Risk</th>
+            <th className="pb-3 pr-4 font-medium">SLA</th>
             <th className="pb-3 font-medium">Detected</th>
           </tr>
         </thead>
@@ -110,6 +115,13 @@ export function FindingsTable({
               </td>
               <td className="py-3 pr-4">
                 <RiskBadge score={(f as Finding & { risk_score?: number | null }).risk_score} />
+              </td>
+              <td className="py-3 pr-4">
+                {f.status === 'FAIL' &&
+                  (() => {
+                    const status = classify(f.detected_at, f.severity)
+                    return status ? <SLABadge status={status} /> : <span className="text-slate-600">—</span>
+                  })()}
               </td>
               <td className="py-3 text-slate-500 text-xs">
                 {new Date(f.detected_at).toLocaleDateString()}
