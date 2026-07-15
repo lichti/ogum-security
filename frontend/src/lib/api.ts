@@ -232,6 +232,8 @@ export const attackPathsApi = {
         severity: filters.severity || undefined,
         is_toxic_combination: filters.is_toxic_combination ?? undefined,
         provider: filters.provider || undefined,
+        target_asset_category: filters.target_asset_category || undefined,
+        target_crown_jewel_reason: filters.target_crown_jewel_reason || undefined,
         limit: filters.limit,
         cursor: filters.cursor || undefined,
       },
@@ -242,6 +244,9 @@ export const attackPathsApi = {
 
   getMitre: (pathKey: string) =>
     apiClient.get<ApiResponse<import('./types').MitreIntelligence>>(`/api/v1/attack-paths/${pathKey}/mitre`),
+
+  getNarrative: (pathKey: string) =>
+    apiClient.get<ApiResponse<import('./types').PathNarrativeSummary>>(`/api/v1/attack-paths/${pathKey}/narrative`),
 }
 
 export const identitiesApi = {
