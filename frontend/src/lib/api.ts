@@ -5,6 +5,9 @@ import type {
   AttackPathFilters,
   AttackPathStats,
   AqlResult,
+  CompliancePeriod,
+  ComplianceFrameworkDetail,
+  ComplianceScoreTrendPoint,
   ComplianceSummary,
   ExposureSummary,
   FindingDetail,
@@ -220,6 +223,17 @@ export const complianceApi = {
     apiClient.get<ApiResponse<ComplianceSummary>>('/api/v1/compliance/summary', {
       params: framework ? { framework } : undefined,
     }),
+
+  frameworkDetail: (frameworkId: string) =>
+    apiClient.get<ApiResponse<ComplianceFrameworkDetail>>(
+      `/api/v1/compliance/frameworks/${encodeURIComponent(frameworkId)}`,
+    ),
+
+  trend: (frameworkId: string, period: CompliancePeriod) =>
+    apiClient.get<ApiResponse<ComplianceScoreTrendPoint[]>>(
+      `/api/v1/compliance/frameworks/${encodeURIComponent(frameworkId)}/trend`,
+      { params: { period } },
+    ),
 }
 
 export const attackPathsApi = {

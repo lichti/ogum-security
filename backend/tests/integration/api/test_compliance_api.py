@@ -1,6 +1,8 @@
-"""Integration tests for GET /api/v1/compliance/summary."""
+"""Integration tests for GET /api/v1/compliance/summary and /frameworks/{id}[/trend]."""
 
 from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -197,3 +199,125 @@ def test_compliance_summary_tenant_isolation(api_client_b, db_tenant_a) -> None:
     resp = api_client_b.get("/api/v1/compliance/summary", headers=HEADERS_B)
     assert resp.status_code == 200
     assert resp.json()["data"]["families"] == []
+
+
+@pytest.mark.integration
+def test_framework_detail_score_by_control_diverges_from_score_by_asset(api_client_a, db_tenant_a) -> None:
+    """One control with 2 PASS + 1 FAIL: by-asset it's 2/3 = 66.7%, but by-control the
+    control counts as a single Fail (any asset failing it fails the control) = 0%."""
+    _seed(db_tenant_a, TEST_TENANT_A, "check_1", "Check 1", "HIGH", "PASS", ["CIS-7.0/2.1.1"])
+    _seed(db_tenant_a, TEST_TENANT_A, "check_2", "Check 2", "HIGH", "PASS", ["CIS-7.0/2.1.1"])
+    _seed(db_tenant_a, TEST_TENANT_A, "check_3", "Check 3", "HIGH", "FAIL", ["CIS-7.0/2.1.1"])
+
+    resp = api_client_a.get("/api/v1/compliance/frameworks/CIS-7.0", headers=HEADERS_A)
+    assert resp.status_code == 200
+    body = resp.json()["data"]
+
+    assert body["id"] == "CIS-7.0"
+    assert body["score_by_asset"] == 66.7
+    assert body["score_by_control"] == 0.0
+    assert body["pass_count"] == 0
+    assert body["fail_count"] == 1
+    assert body["catalog_available"] is True
+    assert body["unscored_count"] > 0  # every other CIS-7.0 catalog control has no finding yet
+
+
+@pytest.mark.integration
+def test_framework_detail_unscored_controls_from_real_catalog(api_client_a, db_tenant_a) -> None:
+    """GDPR has exactly 3 catalog controls (article_25/30/32) — seed 2, leave 1 untouched."""
+    _seed(db_tenant_a, TEST_TENANT_A, "gdpr_pass", "Article 25 check", "MEDIUM", "PASS", ["GDPR/article_25"])
+    _seed(db_tenant_a, TEST_TENANT_A, "gdpr_fail", "Article 30 check", "HIGH", "FAIL", ["GDPR/article_30"])
+
+    resp = api_client_a.get("/api/v1/compliance/frameworks/GDPR", headers=HEADERS_A)
+    assert resp.status_code == 200
+    body = resp.json()["data"]
+
+    assert body["total_controls"] == 3
+    assert body["pass_count"] == 1
+    assert body["fail_count"] == 1
+    assert body["unscored_count"] == 1
+    assert body["score_by_control"] == 50.0
+
+    all_requirements = [
+        r
+        for s in body["sections"]
+        for r in (s["requirements"] + [rr for sub in s["subsections"] for rr in sub["requirements"]])
+    ]
+    unscored = next(r for r in all_requirements if r["control_id"] == "article_32")
+    assert unscored["status"] == "UNSCORED"
+    assert unscored["finding_key"] is None
+
+    passing = next(r for r in all_requirements if r["control_id"] == "article_25")
+    assert passing["status"] == "PASS"
+    assert passing["finding_key"] is not None
+
+
+@pytest.mark.integration
+def test_framework_detail_unknown_slug_is_404(api_client_a) -> None:
+    resp = api_client_a.get("/api/v1/compliance/frameworks/NOT-A-REAL-FRAMEWORK-999", headers=HEADERS_A)
+    assert resp.status_code == 404
+
+
+@pytest.mark.integration
+def test_framework_detail_known_framework_with_no_findings_is_not_404(api_client_a) -> None:
+    """A real framework nobody has scanned against yet is a full Unscored tree, not a 404."""
+    resp = api_client_a.get("/api/v1/compliance/frameworks/GDPR", headers=HEADERS_A)
+    assert resp.status_code == 200
+    body = resp.json()["data"]
+    assert body["total_controls"] == 3
+    assert body["unscored_count"] == 3
+
+
+@pytest.mark.integration
+def test_framework_trend_invalid_period_is_422(api_client_a) -> None:
+    resp = api_client_a.get("/api/v1/compliance/frameworks/CIS-7.0/trend?period=bogus", headers=HEADERS_A)
+    assert resp.status_code == 422
+
+
+@pytest.mark.integration
+def test_framework_detail_tenant_isolation(api_client_a, api_client_b, db_tenant_a) -> None:
+    init_tenant_schema(db_tenant_a)
+    _seed(db_tenant_a, TEST_TENANT_A, "gdpr_pass", "Article 25 check", "MEDIUM", "PASS", ["GDPR/article_25"])
+
+    resp_b = api_client_b.get("/api/v1/compliance/frameworks/GDPR", headers=HEADERS_B)
+    assert resp_b.status_code == 200
+    body_b = resp_b.json()["data"]
+    assert body_b["pass_count"] == 0
+    assert body_b["unscored_count"] == 3
+
+
+@pytest.mark.integration
+def test_framework_trend_filters_by_period(api_client_a, db_tenant_a) -> None:
+    init_tenant_schema(db_tenant_a)
+    today = datetime.now(UTC).date()
+    old_date = today - timedelta(days=20)
+
+    def _snapshot(snapshot_date, score):
+        db_tenant_a.collection("compliance_score_snapshots").insert(
+            {
+                "_key": f"snap-{snapshot_date.isoformat()}",
+                "tenant_id": TEST_TENANT_A,
+                "framework_id": "CIS-7.0",
+                "snapshot_date": snapshot_date.isoformat(),
+                "score_by_control": score,
+                "score_by_asset": score,
+                "pass_count": 1,
+                "fail_count": 0,
+                "unscored_count": 0,
+                "created_at": datetime.now(UTC).isoformat(),
+            },
+            overwrite=True,
+        )
+
+    _snapshot(old_date, 40.0)
+    _snapshot(today, 90.0)
+
+    resp = api_client_a.get("/api/v1/compliance/frameworks/CIS-7.0/trend?period=7d", headers=HEADERS_A)
+    assert resp.status_code == 200
+    points = resp.json()["data"]
+    assert len(points) == 1
+    assert points[0]["date"] == today.isoformat()
+    assert points[0]["score_by_control"] == 90.0
+
+    resp_1m = api_client_a.get("/api/v1/compliance/frameworks/CIS-7.0/trend?period=1m", headers=HEADERS_A)
+    assert len(resp_1m.json()["data"]) == 2

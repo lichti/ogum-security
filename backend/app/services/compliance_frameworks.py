@@ -99,6 +99,16 @@ def resolve_family(prefix: str) -> tuple[str, str, str]:
     return prefix, label, ""
 
 
+def is_known_framework_slug(prefix: str) -> bool:
+    """Whether `prefix` is a slug this module has an explicit label for.
+
+    Used to distinguish "a real framework with zero findings so far" (still worth a
+    200 with an all-Unscored tree) from "not a framework at all" (404) when neither
+    findings nor the AWS catalog have anything to say about the slug.
+    """
+    return prefix in FRAMEWORK_FAMILIES or prefix in _SINGLE_VERSION_LABELS
+
+
 # NIST 800-53 control family codes (standard, both Rev 4 and Rev 5)
 _NIST_800_53_FAMILIES: dict[str, str] = {
     "ac": "Access Control",

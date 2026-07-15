@@ -2,7 +2,13 @@
 import Link from 'next/link'
 import { ExternalLink } from 'lucide-react'
 import { clsx } from 'clsx'
+import { useQuery } from '@tanstack/react-query'
 import { ScoreGauge, scoreColor } from './ScoreGauge'
+import { ScoreDuality } from './ScoreDuality'
+import { SectionHeatmap } from './SectionHeatmap'
+import { RequirementAccordion } from './RequirementAccordion'
+import { ScoreTrendChart } from './ScoreTrendChart'
+import { complianceApi } from '@/lib/api'
 import type { ComplianceFamily, ComplianceVersion } from '@/lib/types'
 
 interface FrameworkDetailProps {
@@ -45,6 +51,13 @@ function VersionTabs({
 
 export function FrameworkDetail({ family, selectedVersionId, onVersionChange }: FrameworkDetailProps) {
   const version = family.versions.find((v) => v.id === selectedVersionId) ?? family.versions[0]
+
+  const { data: detail, isLoading: detailLoading } = useQuery({
+    queryKey: ['compliance-framework-detail', version?.id],
+    queryFn: () => complianceApi.frameworkDetail(version!.id).then((r) => r.data.data),
+    enabled: !!version,
+  })
+
   if (!version) return null
 
   return (
@@ -81,27 +94,30 @@ export function FrameworkDetail({ family, selectedVersionId, onVersionChange }: 
         </Link>
       </div>
 
-      {version.sections.length > 0 && (
-        <div className="mt-5 pt-4 border-t border-slate-800 space-y-2">
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-            Sections ({version.sections.length})
-          </h3>
-          {version.sections.map((sec) => (
-            <div key={sec.key} className="flex items-center gap-3">
-              <span className="text-slate-400 text-sm w-48 truncate flex-shrink-0" title={sec.label}>
-                {sec.label}
-              </span>
-              <div className="flex-1">
-                <ScoreGauge score={sec.score} />
-              </div>
-              <span className={`text-xs font-mono w-12 text-right flex-shrink-0 ${scoreColor(sec.score)}`}>
-                {sec.score}%
-              </span>
-              <span className="text-slate-600 text-xs font-mono w-16 text-right flex-shrink-0">
-                {sec.pass}/{sec.total}
-              </span>
-            </div>
-          ))}
+      {detailLoading && <p className="text-slate-600 text-sm mt-5 pt-4 border-t border-slate-800">Loading detail…</p>}
+
+      {detail && (
+        <div className="mt-5 pt-4 border-t border-slate-800 space-y-6">
+          <ScoreDuality
+            scoreByControl={detail.score_by_control}
+            scoreByAsset={detail.score_by_asset}
+            unscoredCount={detail.unscored_count}
+            catalogAvailable={detail.catalog_available}
+          />
+
+          <div>
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              Sections ({detail.sections.length})
+            </h3>
+            <SectionHeatmap sections={detail.sections} />
+          </div>
+
+          <ScoreTrendChart frameworkId={version.id} />
+
+          <div>
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Requirements</h3>
+            <RequirementAccordion sections={detail.sections} />
+          </div>
         </div>
       )}
     </section>
