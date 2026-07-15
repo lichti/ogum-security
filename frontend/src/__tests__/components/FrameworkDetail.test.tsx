@@ -33,10 +33,14 @@ function mockDetail(overrides: Partial<ComplianceFrameworkDetail> = {}): Complia
     version_label: 'Revision 5',
     score_by_control: 66.7,
     score_by_asset: 66.7,
-    pass_count: 10,
-    fail_count: 5,
-    unscored_count: 0,
-    total_controls: 15,
+    control_pass_count: 10,
+    control_fail_count: 5,
+    control_unscored_count: 0,
+    control_total: 15,
+    finding_pass_count: 10,
+    finding_fail_count: 5,
+    finding_accepted_count: 0,
+    finding_muted_count: 0,
     catalog_available: false,
     sections: [],
     ...overrides,
@@ -128,17 +132,22 @@ describe('FrameworkDetail', () => {
         data: mockDetail({
           score_by_control: 40,
           score_by_asset: 66.7,
-          unscored_count: 3,
+          control_unscored_count: 3,
           catalog_available: true,
           sections: [
             {
               key: 'ac',
               label: 'AC — Access Control',
-              pass_count: 6,
-              fail_count: 1,
-              unscored_count: 0,
-              total: 7,
+              control_pass_count: 6,
+              control_fail_count: 1,
+              control_unscored_count: 0,
+              control_total: 7,
               score_by_control: 85.7,
+              finding_pass_count: 6,
+              finding_fail_count: 1,
+              finding_accepted_count: 0,
+              finding_muted_count: 0,
+              score_by_asset: 85.7,
               subsections: [],
               requirements: [
                 {
@@ -149,6 +158,8 @@ describe('FrameworkDetail', () => {
                   finding_key: 'find-1',
                   pass_count: 0,
                   fail_count: 1,
+                  accepted_count: 0,
+                  muted_count: 0,
                 },
               ],
             },
@@ -169,7 +180,8 @@ describe('FrameworkDetail', () => {
     expect(await screen.findByText('40%')).toBeInTheDocument()
     expect(screen.getByText('By control')).toBeInTheDocument()
     expect(screen.getByText('By asset')).toBeInTheDocument()
-    expect(screen.getByText('3')).toBeInTheDocument() // unscored count
+    // Unscored count (3) appears twice: ScoreDuality's stat and the summary row's Unscored bucket.
+    expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(2)
 
     // "AC — Access Control" appears twice: once in the heatmap cell, once as the
     // accordion's section header button.
@@ -182,5 +194,42 @@ describe('FrameworkDetail', () => {
     const accordionHeader = sectionLabels.find((el) => el.closest('button'))
     fireEvent.click(accordionHeader!.closest('button')!)
     expect(await screen.findByText('Account Management')).toBeInTheDocument()
+  })
+
+  it('toggles the summary row between the Control and Findings breakdowns', async () => {
+    mockFrameworkDetail.mockResolvedValue({
+      data: {
+        data: mockDetail({
+          control_pass_count: 8,
+          control_fail_count: 2,
+          control_unscored_count: 5,
+          control_total: 15,
+          finding_pass_count: 20,
+          finding_fail_count: 4,
+          finding_accepted_count: 3,
+          finding_muted_count: 1,
+        }),
+      },
+    })
+
+    renderWithClient(
+      <FrameworkDetail family={family} selectedVersionId="NIST-800-53-Revision-5" onVersionChange={onVersionChange} />,
+    )
+
+    // Control view (default): Pass/Fail/Unscored/Total, no Accepted/Muted.
+    expect(await screen.findByText('By Control')).toBeInTheDocument()
+    expect(screen.getByText('8')).toBeInTheDocument()
+    expect(screen.getByText('15')).toBeInTheDocument()
+    expect(screen.queryByText('Accepted')).not.toBeInTheDocument()
+    expect(screen.queryByText('Muted')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('By Findings'))
+
+    expect(screen.getByText('Accepted')).toBeInTheDocument()
+    expect(screen.getByText('Muted')).toBeInTheDocument()
+    expect(screen.getByText('20')).toBeInTheDocument() // finding_pass_count
+    expect(screen.getByText('3')).toBeInTheDocument() // finding_accepted_count
+    // Total = 20+4+3+1+5 (control_unscored_count reused as context) = 33
+    expect(screen.getByText('33')).toBeInTheDocument()
   })
 })

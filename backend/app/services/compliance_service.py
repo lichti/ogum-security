@@ -28,10 +28,16 @@ def _build_families(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     "framework", producing thousands of near-duplicate entries instead of a few dozen
     real frameworks. This resolves each raw slug to its framework family + version, and
     each control id to a section within that version, before aggregating counts.
+
+    `rows` may include MUTED/ACCEPTED entries (shared fetch with the control-level
+    scoring path) — this asset-level tree only ever counted PASS/FAIL, so anything
+    else is ignored here rather than silently corrupting `pass`/`fail`/`total`.
     """
     # raw[prefix][control_or_None] = {"PASS": n, "FAIL": n}
     raw: dict[str, dict[str | None, dict[str, int]]] = {}
     for row in rows:
+        if row["status"] not in ("PASS", "FAIL"):
+            continue
         prefix = row["prefix"]
         control = row["control"]
         counts = raw.setdefault(prefix, {}).setdefault(control, {"PASS": 0, "FAIL": 0})
@@ -87,14 +93,16 @@ def _build_families(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _raw_prefix_control_status_rows(db: StandardDatabase, tenant_id: str) -> list[dict[str, Any]]:
     """(prefix, control, status) -> count, across every framework the tenant has findings for.
 
-    Shared by `get_compliance_summary` (asset-level family/version/section tree) and
-    `get_all_framework_control_scores` (control-level score, used by the snapshot
-    writer) so both read the same single AQL pass over `findings`.
+    Covers all 4 real finding statuses (PASS/FAIL/MUTED/ACCEPTED) — `_build_families`
+    (asset-level family/version/section tree, `/summary`) only aggregates PASS/FAIL rows
+    and ignores the rest, while `get_all_framework_control_scores` (control-level score,
+    used by the snapshot writer) folds MUTED/ACCEPTED into UNSCORED/PASS. Both share this
+    single AQL pass over `findings` rather than querying twice.
     """
     aql = """
     FOR f IN findings
         FILTER f.tenant_id == @tenant_id
-        FILTER f.status IN ["FAIL", "PASS"]
+        FILTER f.status IN ["FAIL", "PASS", "MUTED", "ACCEPTED"]
         FOR fw IN f.framework_mapping
             LET parts = SPLIT(fw, "/", 2)
             COLLECT prefix = parts[0], control = (LENGTH(parts) > 1 ? parts[1] : null), status = f.status
@@ -157,27 +165,40 @@ def get_compliance_summary(db: StandardDatabase, tenant_id: str, framework: str 
     }
 
 
+# Index into the 4-tuples used throughout this module for per-control/per-finding
+# status counts: (pass, fail, accepted, muted).
+_PASS, _FAIL, _ACCEPTED, _MUTED = 0, 1, 2, 3
+_STATUS_INDEX = {"PASS": _PASS, "FAIL": _FAIL, "ACCEPTED": _ACCEPTED, "MUTED": _MUTED}
+
+
 def _score_by_control(
-    control_status: dict[str, tuple[int, int]],
+    control_status: dict[str, tuple[int, int, int, int]],
     catalog_control_ids: set[str] | None,
 ) -> tuple[float, int, int, int]:
-    """Control-level score: a control is Fail if any asset fails it, Pass if only
-    passing assets touched it, Unscored if the catalog knows about it but no asset
-    has evaluated it yet. Unlike `_score()` (asset/finding-count based), Unscored
-    controls are excluded from the denominator — they're neither a pass nor a fail.
+    """Control-level score, folding ACCEPTED/MUTED into the binary Pass/Fail/Unscored
+    view (confirmed design — see Epic 14 Sprint 4 Grupo D follow-up):
 
-    `catalog_control_ids=None` means the catalog is unavailable for this framework
-    (non-AWS) — every control is judged solely by whether it has findings.
+    - Any FAIL finding on the control -> the control is Fail. FAIL always wins.
+    - No FAIL, but any PASS or ACCEPTED finding -> the control is Pass. An explicit
+      risk acceptance is treated as satisfying the control for this view.
+    - Otherwise (only MUTED findings, or no findings at all) -> Unscored. A muted
+      finding is suppressed noise, not a decision about the control's status — it
+      collapses into the same "not really evaluated" bucket as a control the
+      catalog knows about but that has never produced a finding.
+
+    Unscored is excluded from the denominator, same as before. `catalog_control_ids
+    =None` means the catalog is unavailable for this framework (non-AWS) — every
+    control is judged solely by whether it has findings.
 
     Returns (score_by_control, pass_count, fail_count, unscored_count).
     """
     all_ids = set(control_status) | (catalog_control_ids or set())
     pass_count = fail_count = 0
     for control_id in all_ids:
-        p, f = control_status.get(control_id, (0, 0))
+        p, f, a, _m = control_status.get(control_id, (0, 0, 0, 0))
         if f > 0:
             fail_count += 1
-        elif p > 0:
+        elif p > 0 or a > 0:
             pass_count += 1
     unscored_count = len(all_ids) - pass_count - fail_count
     denom = pass_count + fail_count
@@ -199,12 +220,12 @@ def get_all_framework_control_scores(db: StandardDatabase, tenant_id: str) -> di
         control = row["control"]
         if control is None:
             continue  # bare framework findings (e.g. Checkov/IaC) have no control granularity
-        counts = by_prefix.setdefault(row["prefix"], {}).setdefault(control, [0, 0])
-        counts[0 if row["status"] == "PASS" else 1] += row["cnt"]
+        counts = by_prefix.setdefault(row["prefix"], {}).setdefault(control, [0, 0, 0, 0])
+        counts[_STATUS_INDEX[row["status"]]] += row["cnt"]
 
     result: dict[str, dict[str, Any]] = {}
     for prefix, control_counts in by_prefix.items():
-        control_status = {cid: (c[0], c[1]) for cid, c in control_counts.items()}
+        control_status = {cid: (c[0], c[1], c[2], c[3]) for cid, c in control_counts.items()}
         catalog = get_catalog_for_framework(prefix)
         catalog_ids = {r.control_id for r in catalog} if catalog is not None else None
         score, pass_count, fail_count, unscored_count = _score_by_control(control_status, catalog_ids)
@@ -219,8 +240,11 @@ def get_all_framework_control_scores(db: StandardDatabase, tenant_id: str) -> di
 
 
 def get_framework_detail(db: StandardDatabase, tenant_id: str, raw_slug: str) -> dict[str, Any] | None:
-    """Full detail for one framework version: score duality, Unscored count, and the
-    section -> sub-section -> requirement tree (US-14.14/US-14.15/US-14.16).
+    """Full detail for one framework version: score duality, the Control view
+    (Pass/Fail/Unscored — ACCEPTED folds into Pass, MUTED folds into Unscored) and
+    the Findings view (raw Pass/Fail/Accepted/Muted finding counts), plus the
+    section -> sub-section -> requirement tree that backs both (US-14.14/15/16 +
+    the ACCEPTED/MUTED follow-up).
 
     Returns None only when `raw_slug` is a genuinely unknown slug — no findings, no
     AWS catalog entry, and no curated label. A real framework with zero findings so
@@ -230,7 +254,7 @@ def get_framework_detail(db: StandardDatabase, tenant_id: str, raw_slug: str) ->
     aql = """
     FOR f IN findings
         FILTER f.tenant_id == @tenant_id
-        FILTER f.status IN ["FAIL", "PASS"]
+        FILTER f.status IN ["FAIL", "PASS", "MUTED", "ACCEPTED"]
         FOR fw IN f.framework_mapping
             FILTER fw == @raw_slug OR STARTS_WITH(fw, CONCAT(@raw_slug, "/"))
             LET parts = SPLIT(fw, "/", 2)
@@ -251,42 +275,68 @@ def get_framework_detail(db: StandardDatabase, tenant_id: str, raw_slug: str) ->
     family_key, family_label, version_label = resolve_family(raw_slug)
 
     per_control: dict[str, dict[str, Any]] = {}
-    bare_pass = bare_fail = 0
+    bare = {"PASS": 0, "FAIL": 0, "ACCEPTED": 0, "MUTED": 0}
     for row in rows:
         control = row["control"]
+        status = row["status"]
         if control is None:
-            if row["status"] == "PASS":
-                bare_pass += 1
-            else:
-                bare_fail += 1
+            bare[status] += 1
             continue
         entry = per_control.setdefault(
-            control, {"pass": 0, "fail": 0, "fail_key": None, "fail_weight": -1, "pass_key": None}
+            control,
+            {
+                "pass": 0,
+                "fail": 0,
+                "accepted": 0,
+                "muted": 0,
+                "fail_key": None,
+                "fail_weight": -1,
+                "pass_key": None,
+                "accepted_key": None,
+                "muted_key": None,
+            },
         )
-        if row["status"] == "FAIL":
+        if status == "FAIL":
             entry["fail"] += 1
             weight = _SEVERITY_WEIGHT.get(row["severity"], 0)
             if weight > entry["fail_weight"]:
                 entry["fail_weight"] = weight
                 entry["fail_key"] = row["finding_key"]
-        else:
+        elif status == "PASS":
             entry["pass"] += 1
             if entry["pass_key"] is None:
                 entry["pass_key"] = row["finding_key"]
+        elif status == "ACCEPTED":
+            entry["accepted"] += 1
+            if entry["accepted_key"] is None:
+                entry["accepted_key"] = row["finding_key"]
+        else:  # MUTED
+            entry["muted"] += 1
+            if entry["muted_key"] is None:
+                entry["muted_key"] = row["finding_key"]
 
     catalog_by_id = {r.control_id: r for r in (catalog or [])}
     all_control_ids = set(per_control) | set(catalog_by_id)
 
     control_status = {
-        cid: (per_control.get(cid, {}).get("pass", 0), per_control.get(cid, {}).get("fail", 0))
+        cid: (
+            per_control.get(cid, {}).get("pass", 0),
+            per_control.get(cid, {}).get("fail", 0),
+            per_control.get(cid, {}).get("accepted", 0),
+            per_control.get(cid, {}).get("muted", 0),
+        )
         for cid in all_control_ids
     }
     catalog_ids = set(catalog_by_id) if catalog_available else None
-    score_by_control, pass_count, fail_count, unscored_count = _score_by_control(control_status, catalog_ids)
+    score_by_control, control_pass_count, control_fail_count, control_unscored_count = _score_by_control(
+        control_status, catalog_ids
+    )
 
-    asset_pass = sum(e["pass"] for e in per_control.values()) + bare_pass
-    asset_fail = sum(e["fail"] for e in per_control.values()) + bare_fail
-    score_by_asset = _score(asset_pass, asset_fail)
+    finding_pass_count = sum(e["pass"] for e in per_control.values()) + bare["PASS"]
+    finding_fail_count = sum(e["fail"] for e in per_control.values()) + bare["FAIL"]
+    finding_accepted_count = sum(e["accepted"] for e in per_control.values()) + bare["ACCEPTED"]
+    finding_muted_count = sum(e["muted"] for e in per_control.values()) + bare["MUTED"]
+    score_by_asset = _score(finding_pass_count, finding_fail_count)
 
     # section_key -> {label, requirements: [...], subsections: {sub_key -> {label, requirements: [...]}}}
     sections: dict[str, dict[str, Any]] = {}
@@ -302,12 +352,19 @@ def get_framework_detail(db: StandardDatabase, tenant_id: str, raw_slug: str) ->
             sub_key, sub_label = None, None
             name, description = control_id, None
 
+        # Status (Control view): FAIL always wins; PASS covers real passes and
+        # accepted risk; everything else (muted-only or never evaluated) is
+        # Unscored — same fold rule as `_score_by_control`.
         if found and found["fail"] > 0:
             status, finding_key = "FAIL", found["fail_key"]
-        elif found and found["pass"] > 0:
-            status, finding_key = "PASS", found["pass_key"]
+        elif found and (found["pass"] > 0 or found["accepted"] > 0):
+            status = "PASS"
+            finding_key = found["pass_key"] or found["accepted_key"]
         else:
-            status, finding_key = "UNSCORED", None
+            status = "UNSCORED"
+            # Still link to a muted finding if one exists — excluded from scoring,
+            # not from the drill-down.
+            finding_key = found["muted_key"] if found else None
 
         requirement = {
             "control_id": control_id,
@@ -317,6 +374,8 @@ def get_framework_detail(db: StandardDatabase, tenant_id: str, raw_slug: str) ->
             "finding_key": finding_key,
             "pass_count": found["pass"] if found else 0,
             "fail_count": found["fail"] if found else 0,
+            "accepted_count": found["accepted"] if found else 0,
+            "muted_count": found["muted"] if found else 0,
         }
 
         section = sections.setdefault(sec_key, {"label": sec_label, "requirements": [], "subsections": {}})
@@ -326,43 +385,49 @@ def get_framework_detail(db: StandardDatabase, tenant_id: str, raw_slug: str) ->
         else:
             section["requirements"].append(requirement)
 
-    def _rollup(requirements: list[dict[str, Any]]) -> tuple[int, int, int, int, float]:
-        p = sum(1 for r in requirements if r["status"] == "PASS")
-        f = sum(1 for r in requirements if r["status"] == "FAIL")
-        u = sum(1 for r in requirements if r["status"] == "UNSCORED")
-        total = len(requirements)
-        return p, f, u, total, _score(p, f)
+    def _rollup(requirements: list[dict[str, Any]]) -> dict[str, Any]:
+        control_pass = sum(1 for r in requirements if r["status"] == "PASS")
+        control_fail = sum(1 for r in requirements if r["status"] == "FAIL")
+        control_unscored = sum(1 for r in requirements if r["status"] == "UNSCORED")
+        finding_pass = sum(r["pass_count"] for r in requirements)
+        finding_fail = sum(r["fail_count"] for r in requirements)
+        finding_accepted = sum(r["accepted_count"] for r in requirements)
+        finding_muted = sum(r["muted_count"] for r in requirements)
+        return {
+            "control_pass_count": control_pass,
+            "control_fail_count": control_fail,
+            "control_unscored_count": control_unscored,
+            "control_total": len(requirements),
+            "score_by_control": _score(control_pass, control_fail),
+            "finding_pass_count": finding_pass,
+            "finding_fail_count": finding_fail,
+            "finding_accepted_count": finding_accepted,
+            "finding_muted_count": finding_muted,
+            "score_by_asset": _score(finding_pass, finding_fail),
+        }
 
     section_list = []
     for sec_key, sec in sorted(sections.items()):
         subsection_list = []
         all_requirements = list(sec["requirements"])
         for sub_key, sub in sorted(sec["subsections"].items()):
-            p, f, u, total, score = _rollup(sub["requirements"])
+            rollup = _rollup(sub["requirements"])
             subsection_list.append(
                 {
                     "key": sub_key,
                     "label": sub["label"],
-                    "pass_count": p,
-                    "fail_count": f,
-                    "unscored_count": u,
-                    "total": total,
-                    "score_by_control": score,
+                    **rollup,
                     "subsections": [],
                     "requirements": sub["requirements"],
                 }
             )
             all_requirements.extend(sub["requirements"])
-        p, f, u, total, score = _rollup(all_requirements)
+        rollup = _rollup(all_requirements)
         section_list.append(
             {
                 "key": sec_key,
                 "label": sec["label"],
-                "pass_count": p,
-                "fail_count": f,
-                "unscored_count": u,
-                "total": total,
-                "score_by_control": score,
+                **rollup,
                 "subsections": subsection_list,
                 "requirements": sec["requirements"],
             }
@@ -375,10 +440,14 @@ def get_framework_detail(db: StandardDatabase, tenant_id: str, raw_slug: str) ->
         "version_label": version_label,
         "score_by_control": score_by_control,
         "score_by_asset": score_by_asset,
-        "pass_count": pass_count,
-        "fail_count": fail_count,
-        "unscored_count": unscored_count,
-        "total_controls": len(all_control_ids),
+        "control_pass_count": control_pass_count,
+        "control_fail_count": control_fail_count,
+        "control_unscored_count": control_unscored_count,
+        "control_total": len(all_control_ids),
+        "finding_pass_count": finding_pass_count,
+        "finding_fail_count": finding_fail_count,
+        "finding_accepted_count": finding_accepted_count,
+        "finding_muted_count": finding_muted_count,
         "catalog_available": catalog_available,
         "sections": section_list,
     }

@@ -48,7 +48,7 @@ function SectionNode({ section, depth }: { section: ComplianceSectionNode; depth
         <span className="text-sm text-slate-300 truncate">{section.label}</span>
         <span className="flex items-center gap-3 text-xs font-mono flex-shrink-0 ml-2">
           <span className="text-slate-500">
-            {section.pass_count}/{section.total}
+            {section.control_pass_count}/{section.control_total}
           </span>
           {hasChildren && <span className="text-slate-500">{expanded ? '▾' : '▸'}</span>}
         </span>

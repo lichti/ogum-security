@@ -216,10 +216,10 @@ def test_framework_detail_score_by_control_diverges_from_score_by_asset(api_clie
     assert body["id"] == "CIS-7.0"
     assert body["score_by_asset"] == 66.7
     assert body["score_by_control"] == 0.0
-    assert body["pass_count"] == 0
-    assert body["fail_count"] == 1
+    assert body["control_pass_count"] == 0
+    assert body["control_fail_count"] == 1
     assert body["catalog_available"] is True
-    assert body["unscored_count"] > 0  # every other CIS-7.0 catalog control has no finding yet
+    assert body["control_unscored_count"] > 0  # every other CIS-7.0 catalog control has no finding yet
 
 
 @pytest.mark.integration
@@ -232,10 +232,10 @@ def test_framework_detail_unscored_controls_from_real_catalog(api_client_a, db_t
     assert resp.status_code == 200
     body = resp.json()["data"]
 
-    assert body["total_controls"] == 3
-    assert body["pass_count"] == 1
-    assert body["fail_count"] == 1
-    assert body["unscored_count"] == 1
+    assert body["control_total"] == 3
+    assert body["control_pass_count"] == 1
+    assert body["control_fail_count"] == 1
+    assert body["control_unscored_count"] == 1
     assert body["score_by_control"] == 50.0
 
     all_requirements = [
@@ -253,6 +253,56 @@ def test_framework_detail_unscored_controls_from_real_catalog(api_client_a, db_t
 
 
 @pytest.mark.integration
+def test_framework_detail_accepted_finding_folds_into_pass_for_control_view(api_client_a, db_tenant_a) -> None:
+    """An ACCEPTED-risk finding (no real PASS/FAIL) satisfies the control in the
+    Control view, but still shows up distinctly in the Findings view breakdown."""
+    _seed(
+        db_tenant_a,
+        TEST_TENANT_A,
+        "gdpr_accepted",
+        "Article 25 risk accepted",
+        "MEDIUM",
+        "ACCEPTED",
+        ["GDPR/article_25"],
+    )
+
+    resp = api_client_a.get("/api/v1/compliance/frameworks/GDPR", headers=HEADERS_A)
+    body = resp.json()["data"]
+
+    assert body["control_pass_count"] == 1
+    assert body["control_fail_count"] == 0
+    assert body["control_unscored_count"] == 2  # article_30, article_32 — no findings at all
+    assert body["finding_accepted_count"] == 1
+    assert body["finding_pass_count"] == 0  # no real PASS finding — score_by_asset denominator unaffected
+
+    all_requirements = [r for s in body["sections"] for r in s["requirements"]]
+    accepted = next(r for r in all_requirements if r["control_id"] == "article_25")
+    assert accepted["status"] == "PASS"
+    assert accepted["accepted_count"] == 1
+    assert accepted["finding_key"] is not None
+
+
+@pytest.mark.integration
+def test_framework_detail_muted_finding_folds_into_unscored_for_control_view(api_client_a, db_tenant_a) -> None:
+    """A MUTED finding (no real PASS/FAIL/ACCEPTED) leaves the control Unscored, but
+    the drill-down link still points at the muted finding — excluded from scoring,
+    not from investigation."""
+    _seed(db_tenant_a, TEST_TENANT_A, "gdpr_muted", "Article 25 muted check", "LOW", "MUTED", ["GDPR/article_25"])
+
+    resp = api_client_a.get("/api/v1/compliance/frameworks/GDPR", headers=HEADERS_A)
+    body = resp.json()["data"]
+
+    assert body["control_unscored_count"] == 3  # muted-only counts as unscored, same bucket as the other 2
+    assert body["finding_muted_count"] == 1
+
+    all_requirements = [r for s in body["sections"] for r in s["requirements"]]
+    muted = next(r for r in all_requirements if r["control_id"] == "article_25")
+    assert muted["status"] == "UNSCORED"
+    assert muted["muted_count"] == 1
+    assert muted["finding_key"] is not None  # still linkable, just not scored
+
+
+@pytest.mark.integration
 def test_framework_detail_unknown_slug_is_404(api_client_a) -> None:
     resp = api_client_a.get("/api/v1/compliance/frameworks/NOT-A-REAL-FRAMEWORK-999", headers=HEADERS_A)
     assert resp.status_code == 404
@@ -264,8 +314,8 @@ def test_framework_detail_known_framework_with_no_findings_is_not_404(api_client
     resp = api_client_a.get("/api/v1/compliance/frameworks/GDPR", headers=HEADERS_A)
     assert resp.status_code == 200
     body = resp.json()["data"]
-    assert body["total_controls"] == 3
-    assert body["unscored_count"] == 3
+    assert body["control_total"] == 3
+    assert body["control_unscored_count"] == 3
 
 
 @pytest.mark.integration
@@ -282,8 +332,8 @@ def test_framework_detail_tenant_isolation(api_client_a, api_client_b, db_tenant
     resp_b = api_client_b.get("/api/v1/compliance/frameworks/GDPR", headers=HEADERS_B)
     assert resp_b.status_code == 200
     body_b = resp_b.json()["data"]
-    assert body_b["pass_count"] == 0
-    assert body_b["unscored_count"] == 3
+    assert body_b["control_pass_count"] == 0
+    assert body_b["control_unscored_count"] == 3
 
 
 @pytest.mark.integration

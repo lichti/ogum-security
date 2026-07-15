@@ -267,6 +267,11 @@ export interface ComplianceSummary {
 
 export type ComplianceControlStatus = 'PASS' | 'FAIL' | 'UNSCORED'
 
+// Control counts controls (ACCEPTED folds into Pass, MUTED folds into Unscored).
+// Findings counts raw findings by real status — MUTED/ACCEPTED shown, but excluded
+// from the score_by_asset ratio, same as Unscored is excluded from score_by_control.
+export type ComplianceView = 'control' | 'findings'
+
 export interface ComplianceRequirementNode {
   control_id: string
   name: string
@@ -275,16 +280,23 @@ export interface ComplianceRequirementNode {
   finding_key: string | null
   pass_count: number
   fail_count: number
+  accepted_count: number
+  muted_count: number
 }
 
 export interface ComplianceSectionNode {
   key: string
   label: string
-  pass_count: number
-  fail_count: number
-  unscored_count: number
-  total: number
+  control_pass_count: number
+  control_fail_count: number
+  control_unscored_count: number
+  control_total: number
   score_by_control: number
+  finding_pass_count: number
+  finding_fail_count: number
+  finding_accepted_count: number
+  finding_muted_count: number
+  score_by_asset: number
   subsections: ComplianceSectionNode[]
   requirements: ComplianceRequirementNode[]
 }
@@ -296,10 +308,14 @@ export interface ComplianceFrameworkDetail {
   version_label: string
   score_by_control: number
   score_by_asset: number
-  pass_count: number
-  fail_count: number
-  unscored_count: number
-  total_controls: number
+  control_pass_count: number
+  control_fail_count: number
+  control_unscored_count: number
+  control_total: number
+  finding_pass_count: number
+  finding_fail_count: number
+  finding_accepted_count: number
+  finding_muted_count: number
   catalog_available: boolean
   sections: ComplianceSectionNode[]
 }
