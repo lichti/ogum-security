@@ -66,6 +66,52 @@ export interface BlastRadiusResponse {
   grouped_counts: Record<string, number>
 }
 
+export interface SoftwarePackage {
+  name: string
+  version: string
+  cve_ids: string[]
+  filesystem_path: string | null
+}
+
+export type LicenseCategory = 'permissive' | 'copyleft' | 'weak_copyleft' | 'unknown'
+
+export interface SoftwareLicense {
+  license_id: string
+  category: LicenseCategory
+  deprecated: boolean
+  package_count: number
+}
+
+export interface SoftwareInventoryResponse {
+  resource_key: string
+  sbom_generated_at: string | null
+  installed_packages: SoftwarePackage[]
+  licenses: SoftwareLicense[]
+  applications_available: boolean
+  running_services_available: boolean
+}
+
+export interface ResourceComplianceFrameworkOption {
+  id: string
+  label: string
+}
+
+export interface ResourceComplianceControl {
+  control_id: string | null
+  status: string
+  title: string
+  category: string
+  severity: string
+  finding_key: string
+}
+
+export interface ResourceComplianceResponse {
+  resource_key: string
+  available_frameworks: ResourceComplianceFrameworkOption[]
+  selected_framework: string | null
+  controls: ResourceComplianceControl[]
+}
+
 export interface InventoryStats {
   by_provider: Record<string, number>
   by_resource_type: Record<string, number>
@@ -136,6 +182,22 @@ export interface Finding {
   updated_at: string
   mute_reason: string | null
   scan_job_id: string | null
+  first_seen_scan_id: string | null
+  last_seen_scan_id: string | null
+  scan_count: number
+}
+
+export interface SLASettings {
+  critical_days: number
+  high_days: number
+  medium_days: number
+  low_days: number
+}
+
+export interface SLASummary {
+  within_sla: number
+  at_risk: number
+  overdue: number
 }
 
 export interface FindingDetail extends Finding {

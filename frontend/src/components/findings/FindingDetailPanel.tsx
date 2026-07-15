@@ -3,7 +3,10 @@ import { Check, Copy, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Badge, type BadgeVariant } from '@/components/ui/Badge'
 import { SeverityBadge } from '@/components/ui/SeverityBadge'
+import { SLABadge } from '@/components/ui/SLABadge'
 import { MuteModal } from '@/components/findings/MuteModal'
+import { FindingExposurePathGraph } from '@/components/findings/FindingExposurePathGraph'
+import { useSlaSettings } from '@/hooks/useSlaSettings'
 import { findingsApi } from '@/lib/api'
 import type { FindingDetail } from '@/lib/types'
 
@@ -36,6 +39,7 @@ export function FindingDetailPanel({ findingKey, onClose, onMuted }: FindingDeta
   const [loading, setLoading] = useState(false)
   const [showMuteModal, setShowMuteModal] = useState(false)
   const [mutingLoading, setMutingLoading] = useState(false)
+  const { classify } = useSlaSettings()
 
   useEffect(() => {
     if (!findingKey) { setFinding(null); return }
@@ -120,6 +124,11 @@ export function FindingDetailPanel({ findingKey, onClose, onMuted }: FindingDeta
               {finding.source === 'iac' && <Badge variant="default">IaC</Badge>}
               {finding.status === 'MUTED' && <Badge variant="status-deleted">MUTED</Badge>}
               {finding.status === 'ACCEPTED' && <Badge variant="default">ACCEPTED</Badge>}
+              {finding.status === 'FAIL' &&
+                (() => {
+                  const slaStatus = classify(finding.detected_at, finding.severity)
+                  return slaStatus ? <SLABadge status={slaStatus} /> : null
+                })()}
             </div>
 
             {/* Resource */}
@@ -174,12 +183,27 @@ export function FindingDetailPanel({ findingKey, onClose, onMuted }: FindingDeta
               </section>
             )}
 
-            {/* Attack Paths */}
+            {/* Timeline */}
             <section>
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-                Attack Paths
-              </h3>
-              <p className="text-slate-600 text-sm">No attack paths detected — Ogum.Graph coming in Epic 02.</p>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Timeline</h3>
+              <dl className="space-y-2">
+                <div className="flex gap-2">
+                  <dt className="text-slate-500 text-sm w-32 flex-shrink-0">First detected</dt>
+                  <dd className="text-slate-300 text-sm">{new Date(finding.detected_at).toLocaleString()}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="text-slate-500 text-sm w-32 flex-shrink-0">Persists across</dt>
+                  <dd className="text-slate-300 text-sm">
+                    {finding.scan_count} scan{finding.scan_count !== 1 ? 's' : ''}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+
+            {/* Exposure Path */}
+            <section>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Exposure Path</h3>
+              <FindingExposurePathGraph finding={finding} />
             </section>
 
             {/* Actions */}

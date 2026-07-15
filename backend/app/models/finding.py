@@ -62,6 +62,9 @@ class Finding(BaseModel):
     updated_at: datetime = Field(default_factory=_utcnow)
     mute_reason: str | None = None
     scan_job_id: str | None = None
+    first_seen_scan_id: str | None = None
+    last_seen_scan_id: str | None = None
+    scan_count: int = 1
     raw_output: dict[str, Any] = Field(default_factory=dict)
 
     def arango_key(self) -> str:
