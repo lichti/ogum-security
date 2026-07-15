@@ -20,7 +20,8 @@ import { EntryPointNode } from './nodes/EntryPointNode'
 import { TargetNode } from './nodes/TargetNode'
 import { IdentityNode } from './nodes/IdentityNode'
 import { CenterNode } from './nodes/CenterNode'
-import { buildFlowGraph } from '@/lib/graph-layout'
+import { RiskInsightNode } from './nodes/RiskInsightNode'
+import { attachRiskInsightNodes, buildFlowGraph } from '@/lib/graph-layout'
 import type { AttackPathDetail } from '@/lib/types'
 
 const NODE_TYPES: NodeTypes = {
@@ -29,6 +30,7 @@ const NODE_TYPES: NodeTypes = {
   target: TargetNode,
   identity: IdentityNode,
   center: CenterNode,
+  riskInsight: RiskInsightNode,
 }
 
 interface AttackPathCanvasProps {
@@ -71,7 +73,8 @@ export function AttackPathCanvas({
       setEdges([])
       return
     }
-    const { nodes: n, edges: e } = buildFlowGraph(detail.nodes, detail.path)
+    const base = buildFlowGraph(detail.nodes, detail.path)
+    const { nodes: n, edges: e } = attachRiskInsightNodes(base, detail.findings)
     setNodes(n)
     setEdges(e)
   }, [isMini, miniGraph, detail, setNodes, setEdges])
@@ -144,6 +147,7 @@ export function AttackPathCanvas({
               if (node.type === 'entryPoint') return '#ef4444'
               if (node.type === 'target') return '#eab308'
               if (node.type === 'identity') return '#a855f7'
+              if (node.type === 'riskInsight') return '#f59e0b'
               return '#475569'
             }}
             maskColor="rgba(2, 6, 23, 0.7)"

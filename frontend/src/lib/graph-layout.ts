@@ -6,7 +6,7 @@ const NODE_WIDTH = 180
 const NODE_HEIGHT = 72
 
 export type PathNode = Record<string, unknown>
-export type GraphNodeType = 'entryPoint' | 'target' | 'identity' | 'resource'
+export type GraphNodeType = 'entryPoint' | 'target' | 'identity' | 'resource' | 'riskInsight'
 
 export function getNodeType(node: PathNode, path: AttackPath): GraphNodeType {
   const id = node['_id'] as string | undefined
@@ -73,6 +73,50 @@ export function buildFlowGraph(
   })
 
   return { nodes: flowNodes, edges: flowEdges }
+}
+
+/**
+ * Attaches synthetic "risk insight" nodes (US-14.12) below the resource node each
+ * finding explains, connected by a dotted edge. One insight per resource (the first
+ * finding returned for it — findings are already severity-sorted server-side) to
+ * keep the canvas legible instead of one node per finding.
+ */
+export function attachRiskInsightNodes(
+  baseGraph: { nodes: Node[]; edges: Edge[] },
+  findings: Record<string, unknown>[],
+): { nodes: Node[]; edges: Edge[] } {
+  const nodeById = new Map(baseGraph.nodes.map((n) => [n.id, n]))
+  const seenResource = new Set<string>()
+  const insightNodes: Node[] = []
+  const insightEdges: Edge[] = []
+
+  findings.forEach((finding) => {
+    const resourceId = finding['resource_id'] as string | undefined
+    if (!resourceId || seenResource.has(resourceId)) return
+    const parent = nodeById.get(resourceId)
+    if (!parent) return
+    seenResource.add(resourceId)
+
+    const insightId = `risk-insight-${resourceId}`
+    insightNodes.push({
+      id: insightId,
+      type: 'riskInsight',
+      data: { finding },
+      position: { x: parent.position.x, y: parent.position.y + NODE_HEIGHT + 32 },
+    })
+    insightEdges.push({
+      id: `risk-insight-edge-${insightId}`,
+      source: parent.id,
+      target: insightId,
+      type: 'straight',
+      style: { stroke: '#f59e0b', strokeDasharray: '4 4' },
+    })
+  })
+
+  return {
+    nodes: [...baseGraph.nodes, ...insightNodes],
+    edges: [...baseGraph.edges, ...insightEdges],
+  }
 }
 
 /** Builds a small, non-linear graph (a resource and its reachable neighbors) for the mini blast-radius canvas. */

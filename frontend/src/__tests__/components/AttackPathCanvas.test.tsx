@@ -73,6 +73,22 @@ describe('AttackPathCanvas', () => {
     expect(container.querySelector('.react-flow')).toBeTruthy()
   })
 
+  it('attaches a risk-insight node for a finding linked to a path resource', () => {
+    const { container } = render(
+      <AttackPathCanvas
+        detail={makeDetail({
+          findings: [{ resource_id: 'resources/ep-1', title: 'Public EC2', severity: 'CRITICAL', status: 'FAIL' }],
+        })}
+      />,
+    )
+    expect(container.querySelector('.react-flow__node-riskInsight')).toBeTruthy()
+  })
+
+  it('does not attach a risk-insight node when there are no findings', () => {
+    const { container } = render(<AttackPathCanvas detail={makeDetail({ findings: [] })} />)
+    expect(container.querySelector('.react-flow__node-riskInsight')).toBeFalsy()
+  })
+
   describe('mode="mini"', () => {
     it('shows an empty state when the mini graph has no nodes', () => {
       render(<AttackPathCanvas mode="mini" miniGraph={{ nodes: [], edges: [] }} emptyLabel="No exposure edges" />)

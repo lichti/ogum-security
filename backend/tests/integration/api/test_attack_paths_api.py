@@ -143,6 +143,96 @@ class TestListAttackPaths:
         resp = client_a.get("/api/v1/attack-paths?severity=INVALID", headers=HEADERS_A)
         assert resp.status_code == 422
 
+    def test_invalid_crown_jewel_reason_returns_422(self, client_a):
+        resp = client_a.get("/api/v1/attack-paths?target_crown_jewel_reason=bogus", headers=HEADERS_A)
+        assert resp.status_code == 422
+
+    def test_list_includes_target_asset_category(self, client_a, db_tenant_a):
+        db_tenant_a.collection("data_assets").insert(
+            {"_key": "cat-tgt", "tenant_id": TEST_TENANT_A, "resource_type": "rds_instance"},
+            overwrite=True,
+        )
+        _seed_path(db_tenant_a, "cat-path", target_id="data_assets/cat-tgt")
+
+        resp = client_a.get("/api/v1/attack-paths", headers=HEADERS_A)
+
+        assert resp.status_code == 200
+        item = resp.json()["data"]["items"][0]
+        assert item["target_asset_category"] == "database"
+
+    def test_list_includes_target_crown_jewel_reason(self, client_a, db_tenant_a):
+        db_tenant_a.collection("data_assets").insert(
+            {
+                "_key": "cj-tgt",
+                "tenant_id": TEST_TENANT_A,
+                "resource_type": "rds_instance",
+                "is_crown_jewel": True,
+                "is_public": True,
+            },
+            overwrite=True,
+        )
+        _seed_path(db_tenant_a, "cj-path", target_id="data_assets/cj-tgt")
+
+        resp = client_a.get("/api/v1/attack-paths", headers=HEADERS_A)
+
+        assert resp.status_code == 200
+        item = resp.json()["data"]["items"][0]
+        assert item["target_crown_jewel_reason"] == "internet_facing"
+
+    def test_target_crown_jewel_reason_null_when_not_crown_jewel(self, client_a, db_tenant_a):
+        db_tenant_a.collection("data_assets").insert(
+            {"_key": "not-cj-tgt", "tenant_id": TEST_TENANT_A, "resource_type": "rds_instance", "is_public": True},
+            overwrite=True,
+        )
+        _seed_path(db_tenant_a, "not-cj-path", target_id="data_assets/not-cj-tgt")
+
+        resp = client_a.get("/api/v1/attack-paths", headers=HEADERS_A)
+
+        assert resp.status_code == 200
+        item = resp.json()["data"]["items"][0]
+        assert item["target_crown_jewel_reason"] is None
+
+    def test_filter_by_target_asset_category(self, client_a, db_tenant_a):
+        db_tenant_a.collection("data_assets").insert(
+            {"_key": "db-tgt", "tenant_id": TEST_TENANT_A, "resource_type": "rds_instance"}, overwrite=True
+        )
+        db_tenant_a.collection("resources").insert(
+            {"_key": "compute-tgt", "tenant_id": TEST_TENANT_A, "resource_type": "ec2_instance"}, overwrite=True
+        )
+        _seed_path(db_tenant_a, "db-path", target_id="data_assets/db-tgt")
+        _seed_path(db_tenant_a, "compute-path", target_id="resources/compute-tgt", risk_score=50.0)
+
+        resp = client_a.get("/api/v1/attack-paths?target_asset_category=database", headers=HEADERS_A)
+
+        assert resp.status_code == 200
+        items = resp.json()["data"]["items"]
+        assert len(items) == 1
+        assert items[0]["_key"] == "db-path"
+
+    def test_filter_by_target_crown_jewel_reason(self, client_a, db_tenant_a):
+        db_tenant_a.collection("data_assets").insert(
+            {
+                "_key": "cj-filter-tgt",
+                "tenant_id": TEST_TENANT_A,
+                "resource_type": "rds_instance",
+                "is_crown_jewel": True,
+                "has_admin_policy": True,
+            },
+            overwrite=True,
+        )
+        db_tenant_a.collection("data_assets").insert(
+            {"_key": "no-cj-tgt", "tenant_id": TEST_TENANT_A, "resource_type": "rds_instance"}, overwrite=True
+        )
+        _seed_path(db_tenant_a, "cj-filter-path", target_id="data_assets/cj-filter-tgt")
+        _seed_path(db_tenant_a, "no-cj-path", target_id="data_assets/no-cj-tgt", risk_score=50.0)
+
+        resp = client_a.get("/api/v1/attack-paths?target_crown_jewel_reason=high_privilege_identity", headers=HEADERS_A)
+
+        assert resp.status_code == 200
+        items = resp.json()["data"]["items"]
+        assert len(items) == 1
+        assert items[0]["_key"] == "cj-filter-path"
+
     def test_list_empty_returns_empty(self, client_a):
         resp = client_a.get("/api/v1/attack-paths", headers=HEADERS_A)
         assert resp.status_code == 200
@@ -219,6 +309,45 @@ class TestAttackPathStats:
         assert data["total"] == 0
         assert data["new_24h"] == 0
         assert all(v == 0 for v in data["by_severity"].values())
+        assert data["by_target_asset_category"] == {}
+        assert data["by_target_crown_jewel_reason"] == {}
+
+    def test_stats_by_target_asset_category(self, client_a, db_tenant_a):
+        db_tenant_a.collection("data_assets").insert(
+            {"_key": "stat-db-tgt", "tenant_id": TEST_TENANT_A, "resource_type": "rds_instance"}, overwrite=True
+        )
+        db_tenant_a.collection("resources").insert(
+            {"_key": "stat-compute-tgt", "tenant_id": TEST_TENANT_A, "resource_type": "ec2_instance"},
+            overwrite=True,
+        )
+        _seed_path(db_tenant_a, "stat-db-path", target_id="data_assets/stat-db-tgt")
+        _seed_path(db_tenant_a, "stat-compute-path", target_id="resources/stat-compute-tgt", risk_score=50.0)
+
+        resp = client_a.get("/api/v1/attack-paths/stats", headers=HEADERS_A)
+
+        assert resp.status_code == 200
+        by_category = resp.json()["data"]["by_target_asset_category"]
+        assert by_category.get("database") == 1
+        assert by_category.get("compute") == 1
+
+    def test_stats_by_target_crown_jewel_reason(self, client_a, db_tenant_a):
+        db_tenant_a.collection("data_assets").insert(
+            {
+                "_key": "stat-cj-tgt",
+                "tenant_id": TEST_TENANT_A,
+                "resource_type": "rds_instance",
+                "is_crown_jewel": True,
+                "contains_secrets": True,
+            },
+            overwrite=True,
+        )
+        _seed_path(db_tenant_a, "stat-cj-path", target_id="data_assets/stat-cj-tgt")
+
+        resp = client_a.get("/api/v1/attack-paths/stats", headers=HEADERS_A)
+
+        assert resp.status_code == 200
+        by_reason = resp.json()["data"]["by_target_crown_jewel_reason"]
+        assert by_reason.get("stores_sensitive_data") == 1
 
 
 # ─── GET /api/v1/attack-paths/{path_id} ──────────────────────────────────────
@@ -289,6 +418,90 @@ class TestAttackPathDetail:
         detail = resp.json()["data"]
         assert len(detail["findings"]) == 1
         assert detail["findings"][0]["check_id"] == "ec2_public"
+
+    def test_detail_includes_persisted_exposure_fields(self, client_a, db_tenant_a):
+        doc = _seed_path(
+            db_tenant_a,
+            "exposure-path",
+            exposure="internet_facing",
+            is_cross_account=True,
+            is_cross_cloud_provider=False,
+            account_ids=["111111111111", "222222222222"],
+        )
+
+        resp = client_a.get(f"/api/v1/attack-paths/{doc['_key']}", headers=HEADERS_A)
+
+        assert resp.status_code == 200
+        path = resp.json()["data"]["path"]
+        assert path["exposure"] == "internet_facing"
+        assert path["is_cross_account"] is True
+        assert path["is_cross_cloud_provider"] is False
+        assert path["account_ids"] == ["111111111111", "222222222222"]
+
+    def test_detail_includes_target_asset_category(self, client_a, db_tenant_a):
+        db_tenant_a.collection("data_assets").insert(
+            {"_key": "detail-cat-tgt", "tenant_id": TEST_TENANT_A, "resource_type": "rds_instance"},
+            overwrite=True,
+        )
+        doc = _seed_path(db_tenant_a, "detail-cat-path", target_id="data_assets/detail-cat-tgt")
+
+        resp = client_a.get(f"/api/v1/attack-paths/{doc['_key']}", headers=HEADERS_A)
+
+        assert resp.status_code == 200
+        assert resp.json()["data"]["path"]["target_asset_category"] == "database"
+
+
+# ─── GET /api/v1/attack-paths/{path_id}/narrative ────────────────────────────
+
+
+@pytest.mark.integration
+class TestAttackPathNarrative:
+    def test_narrative_returns_four_steps(self, client_a, db_tenant_a):
+        doc = _seed_path(db_tenant_a, "narrative-001", exposure="internet_facing")
+
+        resp = client_a.get(f"/api/v1/attack-paths/{doc['_key']}/narrative", headers=HEADERS_A)
+
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["path_id"] == "narrative-001"
+        assert data["generated_by"] == "template"
+        assert len(data["steps"]) == 4
+        assert [s["index"] for s in data["steps"]] == [1, 2, 3, 4]
+
+    def test_narrative_not_found_returns_404(self, client_a):
+        resp = client_a.get("/api/v1/attack-paths/nonexistent-path/narrative", headers=HEADERS_A)
+        assert resp.status_code == 404
+
+    def test_narrative_reflects_findings(self, client_a, db_tenant_a):
+        init_tenant_schema(db_tenant_a)
+        db_tenant_a.collection("findings").insert(
+            {
+                "_key": "narrative-find-1",
+                "tenant_id": TEST_TENANT_A,
+                "resource_id": "resources/narrative-ep",
+                "check_id": "ec2_public",
+                "severity": "CRITICAL",
+            },
+            overwrite=True,
+        )
+        doc = _seed_path(
+            db_tenant_a,
+            "narrative-with-findings",
+            path_vertex_ids=["resources/narrative-ep"],
+        )
+
+        resp = client_a.get(f"/api/v1/attack-paths/{doc['_key']}/narrative", headers=HEADERS_A)
+
+        assert resp.status_code == 200
+        findings_step = resp.json()["data"]["steps"][3]
+        assert "1 open finding" in findings_step["text"]
+
+    def test_narrative_tenant_isolation(self, client_a, client_b, db_tenant_b):
+        doc = _seed_path(db_tenant_b, "b-narrative-path", tenant_id=TEST_TENANT_B)
+
+        resp = client_a.get(f"/api/v1/attack-paths/{doc['_key']}/narrative", headers=HEADERS_A)
+
+        assert resp.status_code == 404
 
 
 # ─── Security: tenant isolation ───────────────────────────────────────────────

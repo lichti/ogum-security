@@ -385,6 +385,21 @@ export interface ScanTriggerResponse {
 
 export type AttackPathSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 
+export type AttackPathTargetAssetCategory =
+  | 'compute'
+  | 'containers'
+  | 'storage'
+  | 'database'
+  | 'networking'
+  | 'security_identity'
+  | 'other'
+
+export type AttackPathCrownJewelReason =
+  | 'internet_facing'
+  | 'stores_sensitive_data'
+  | 'high_privilege_identity'
+  | 'manually_flagged'
+
 export interface AttackPath {
   _key: string
   path_id: string
@@ -407,6 +422,28 @@ export interface AttackPath {
   last_runtime_event_at?: string | null
   detected_at: string
   status: string
+  // US-14.11 — computed at read time, always present in list/detail responses
+  target_asset_category?: AttackPathTargetAssetCategory
+  target_crown_jewel_reason?: AttackPathCrownJewelReason | null
+  // US-14.13 — only present on paths detected after this sprint's merge;
+  // undefined (not fabricated) on paths detected before it
+  exposure?: 'internet_facing' | 'public_facing' | 'trusted_access' | 'none'
+  is_cross_account?: boolean
+  is_cross_cloud_provider?: boolean
+  account_ids?: string[]
+}
+
+export interface NarrativeStep {
+  index: number
+  total: number
+  title: string
+  text: string
+}
+
+export interface PathNarrativeSummary {
+  path_id: string
+  steps: NarrativeStep[]
+  generated_by: string
 }
 
 export interface MitreTechnique {
@@ -441,6 +478,8 @@ export interface AttackPathStats {
   total: number
   by_severity: Record<AttackPathSeverity, number>
   new_24h: number
+  by_target_asset_category: Partial<Record<AttackPathTargetAssetCategory, number>>
+  by_target_crown_jewel_reason: Partial<Record<AttackPathCrownJewelReason, number>>
 }
 
 export interface AttackPathDetail {
@@ -459,6 +498,8 @@ export interface AttackPathFilters {
   severity?: AttackPathSeverity
   is_toxic_combination?: boolean
   provider?: string
+  target_asset_category?: AttackPathTargetAssetCategory
+  target_crown_jewel_reason?: AttackPathCrownJewelReason
   limit: number
   cursor?: string
 }

@@ -19,6 +19,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from app.services.graph.exposure import classify_path_exposure
 from app.services.mitre_service import build_mitre_chain_for_tc
 from app.services.risk_score import calculate_path_risk_score, score_to_severity
 
@@ -322,21 +323,33 @@ def build_attack_path_docs(
 
         path_vertex_ids: list[str] = raw.get("path_vertex_ids", [entry_id, target_id])
 
-        # Load risk scores from vertex docs to compute path risk score
-        path_nodes: list[dict[str, Any]] = []
+        # Load vertex docs once — reused for risk score, exposure, and cross-account/cloud checks
+        vertex_docs: dict[str, dict[str, Any]] = {}
         for vid in path_vertex_ids:
-            doc = None
             try:
                 doc = db.document(vid)
             except Exception:
-                pass
-            path_nodes.append({"risk_score": (doc or {}).get("risk_score", 0)})
+                doc = None
+            vertex_docs[vid] = doc if isinstance(doc, dict) else {}
+
+        path_nodes: list[dict[str, Any]] = [
+            {
+                "risk_score": vertex_docs[vid].get("risk_score", 0),
+                "account_id": vertex_docs[vid].get("account_id"),
+                "provider": vertex_docs[vid].get("provider"),
+            }
+            for vid in path_vertex_ids
+        ]
 
         path_risk = calculate_path_risk_score(path_nodes, max(hops, 1))
         severity = score_to_severity(path_risk) if path_risk > 0 else default_severity
         pid = _path_id(tenant_id, entry_id, target_id, rule)
 
         mitre_chain = build_mitre_chain_for_tc(rule) if is_toxic_combination else []
+
+        account_ids = sorted({n["account_id"] for n in path_nodes if n["account_id"]})
+        providers = {n["provider"] for n in path_nodes if n["provider"]}
+        entry_doc = vertex_docs.get(entry_id) or {}
 
         docs.append(
             {
@@ -361,6 +374,10 @@ def build_attack_path_docs(
                 "last_runtime_event_at": None,
                 "detected_at": now,
                 "status": "active",
+                "exposure": classify_path_exposure(entry_doc, rule),
+                "is_cross_account": len(account_ids) > 1,
+                "is_cross_cloud_provider": len(providers) > 1,
+                "account_ids": account_ids,
             }
         )
 
