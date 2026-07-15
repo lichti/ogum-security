@@ -10,3 +10,7 @@ export function ScoreGauge({ score }: { score: number }) {
 export function scoreColor(score: number): string {
   return score >= 80 ? 'text-green-400' : score >= 50 ? 'text-yellow-400' : 'text-red-400'
 }
+
+export function scoreBgColor(score: number): string {
+  return score >= 80 ? 'bg-green-500/20' : score >= 50 ? 'bg-yellow-500/20' : 'bg-red-500/20'
+}

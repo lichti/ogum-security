@@ -1,7 +1,47 @@
 import '@testing-library/jest-dom'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { FrameworkDetail } from '@/components/compliance/FrameworkDetail'
-import type { ComplianceFamily } from '@/lib/types'
+import { complianceApi } from '@/lib/api'
+import type { ComplianceFamily, ComplianceFrameworkDetail } from '@/lib/types'
+
+jest.mock('@/lib/api', () => ({
+  complianceApi: { frameworkDetail: jest.fn(), trend: jest.fn() },
+}))
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn() }),
+}))
+
+const mockFrameworkDetail = complianceApi.frameworkDetail as jest.Mock
+const mockTrend = complianceApi.trend as jest.Mock
+
+function renderWithClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  function Wrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  }
+  return render(ui, { wrapper: Wrapper })
+}
+
+function mockDetail(overrides: Partial<ComplianceFrameworkDetail> = {}): ComplianceFrameworkDetail {
+  return {
+    id: 'NIST-800-53-Revision-5',
+    family: 'nist-800-53',
+    family_label: 'NIST 800-53',
+    version_label: 'Revision 5',
+    score_by_control: 66.7,
+    score_by_asset: 66.7,
+    pass_count: 10,
+    fail_count: 5,
+    unscored_count: 0,
+    total_controls: 15,
+    catalog_available: false,
+    sections: [],
+    ...overrides,
+  }
+}
 
 const family: ComplianceFamily = {
   family: 'nist-800-53',
@@ -14,10 +54,7 @@ const family: ComplianceFamily = {
       fail: 5,
       total: 15,
       score: 66.7,
-      sections: [
-        { key: 'ac', label: 'AC — Access Control', pass: 6, fail: 1, total: 7, score: 85.7 },
-        { key: 'cm', label: 'CM — Configuration Management', pass: 4, fail: 4, total: 8, score: 50 },
-      ],
+      sections: [],
     },
     {
       id: 'NIST-800-53-Revision-4',
@@ -32,11 +69,16 @@ const family: ComplianceFamily = {
 }
 
 const onVersionChange = jest.fn()
-beforeEach(() => jest.clearAllMocks())
+
+beforeEach(() => {
+  jest.clearAllMocks()
+  mockFrameworkDetail.mockResolvedValue({ data: { data: mockDetail() } })
+  mockTrend.mockResolvedValue({ data: { data: [] } })
+})
 
 describe('FrameworkDetail', () => {
   it('renders the family label and the selected version score', () => {
-    render(
+    renderWithClient(
       <FrameworkDetail family={family} selectedVersionId="NIST-800-53-Revision-5" onVersionChange={onVersionChange} />,
     )
     expect(screen.getByText('NIST 800-53')).toBeInTheDocument()
@@ -44,7 +86,7 @@ describe('FrameworkDetail', () => {
   })
 
   it('renders a tab per version when there is more than one', () => {
-    render(
+    renderWithClient(
       <FrameworkDetail family={family} selectedVersionId="NIST-800-53-Revision-5" onVersionChange={onVersionChange} />,
     )
     expect(screen.getByText('Revision 5')).toBeInTheDocument()
@@ -52,24 +94,15 @@ describe('FrameworkDetail', () => {
   })
 
   it('calls onVersionChange when a different version tab is clicked', () => {
-    render(
+    renderWithClient(
       <FrameworkDetail family={family} selectedVersionId="NIST-800-53-Revision-5" onVersionChange={onVersionChange} />,
     )
     fireEvent.click(screen.getByText('Revision 4'))
     expect(onVersionChange).toHaveBeenCalledWith('NIST-800-53-Revision-4')
   })
 
-  it('renders every section of the selected version with its own score', () => {
-    render(
-      <FrameworkDetail family={family} selectedVersionId="NIST-800-53-Revision-5" onVersionChange={onVersionChange} />,
-    )
-    expect(screen.getByText('AC — Access Control')).toBeInTheDocument()
-    expect(screen.getByText('CM — Configuration Management')).toBeInTheDocument()
-    expect(screen.getByText('85.7%')).toBeInTheDocument()
-  })
-
   it('links "View findings" to the Findings page scoped by the selected version id', () => {
-    render(
+    renderWithClient(
       <FrameworkDetail family={family} selectedVersionId="NIST-800-53-Revision-5" onVersionChange={onVersionChange} />,
     )
     const link = screen.getByText('View findings').closest('a')
@@ -82,7 +115,72 @@ describe('FrameworkDetail', () => {
       label: 'SOC 2',
       versions: [{ id: 'SOC2', version_label: '', pass: 1, fail: 1, total: 2, score: 50, sections: [] }],
     }
-    render(<FrameworkDetail family={single} selectedVersionId="SOC2" onVersionChange={onVersionChange} />)
+    renderWithClient(<FrameworkDetail family={single} selectedVersionId="SOC2" onVersionChange={onVersionChange} />)
+    // "tab" is reused by the version switcher and the trend period selector — neither
+    // renders here: a single-version family skips VersionTabs, and the detail query
+    // (mocked, unresolved at this point in the test) hasn't mounted ScoreTrendChart yet.
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+  })
+
+  it('fetches and renders the framework detail: score duality, heatmap, and accordion', async () => {
+    mockFrameworkDetail.mockResolvedValue({
+      data: {
+        data: mockDetail({
+          score_by_control: 40,
+          score_by_asset: 66.7,
+          unscored_count: 3,
+          catalog_available: true,
+          sections: [
+            {
+              key: 'ac',
+              label: 'AC — Access Control',
+              pass_count: 6,
+              fail_count: 1,
+              unscored_count: 0,
+              total: 7,
+              score_by_control: 85.7,
+              subsections: [],
+              requirements: [
+                {
+                  control_id: 'ac_2',
+                  name: 'Account Management',
+                  description: null,
+                  status: 'FAIL',
+                  finding_key: 'find-1',
+                  pass_count: 0,
+                  fail_count: 1,
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    })
+
+    renderWithClient(
+      <FrameworkDetail family={family} selectedVersionId="NIST-800-53-Revision-5" onVersionChange={onVersionChange} />,
+    )
+
+    await waitFor(() => {
+      expect(mockFrameworkDetail).toHaveBeenCalledWith('NIST-800-53-Revision-5')
+    })
+
+    // Score duality — both scores shown, distinct from each other.
+    expect(await screen.findByText('40%')).toBeInTheDocument()
+    expect(screen.getByText('By control')).toBeInTheDocument()
+    expect(screen.getByText('By asset')).toBeInTheDocument()
+    expect(screen.getByText('3')).toBeInTheDocument() // unscored count
+
+    // "AC — Access Control" appears twice: once in the heatmap cell, once as the
+    // accordion's section header button.
+    const sectionLabels = screen.getAllByText('AC — Access Control')
+    expect(sectionLabels).toHaveLength(2)
+    expect(screen.getByText('85.7%')).toBeInTheDocument()
+
+    // Accordion — collapsed by default, requirement hidden until expanded.
+    expect(screen.queryByText('Account Management')).not.toBeInTheDocument()
+    const accordionHeader = sectionLabels.find((el) => el.closest('button'))
+    fireEvent.click(accordionHeader!.closest('button')!)
+    expect(await screen.findByText('Account Management')).toBeInTheDocument()
   })
 })

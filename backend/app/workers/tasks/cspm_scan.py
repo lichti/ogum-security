@@ -17,6 +17,7 @@ from typing import Any
 
 from app.db.init import init_tenant_schema
 from app.models.finding import Finding, ScanJob, ScanJobStatus
+from app.services.compliance_service import snapshot_compliance_scores
 from app.services.graph.data_access_edges import build_data_access_edges
 from app.services.graph.exposure import compute_exposed_internet
 from app.services.graph.iam_edges import build_iam_edges
@@ -280,6 +281,16 @@ def run_cspm_scan(
 
         for finding in findings:
             _upsert_finding(db, finding)
+
+        # Score snapshot for the Compliance Score Trend chart — one row per framework,
+        # upserted by day (see snapshot_compliance_scores). Runs for every provider,
+        # not just AWS: score_by_asset is computable tenant-wide regardless of catalog
+        # availability, so Azure/GCP/K8s frameworks still get a trend even though their
+        # score_by_control/Unscored state can't be computed (no AWS catalog for them).
+        try:
+            snapshot_compliance_scores(db, tenant_id)
+        except Exception:
+            logger.warning("Failed to snapshot compliance scores for tenant=%s", tenant_id)
 
         # Refresh inventory from scan output — covers all providers
         inventory = extract_inventory_from_findings(

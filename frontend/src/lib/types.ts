@@ -265,6 +265,56 @@ export interface ComplianceSummary {
   top_failing: { check_id: string; title: string; severity: SeverityLevel; count: number }[]
 }
 
+export type ComplianceControlStatus = 'PASS' | 'FAIL' | 'UNSCORED'
+
+export interface ComplianceRequirementNode {
+  control_id: string
+  name: string
+  description: string | null
+  status: ComplianceControlStatus
+  finding_key: string | null
+  pass_count: number
+  fail_count: number
+}
+
+export interface ComplianceSectionNode {
+  key: string
+  label: string
+  pass_count: number
+  fail_count: number
+  unscored_count: number
+  total: number
+  score_by_control: number
+  subsections: ComplianceSectionNode[]
+  requirements: ComplianceRequirementNode[]
+}
+
+export interface ComplianceFrameworkDetail {
+  id: string
+  family: string
+  family_label: string
+  version_label: string
+  score_by_control: number
+  score_by_asset: number
+  pass_count: number
+  fail_count: number
+  unscored_count: number
+  total_controls: number
+  catalog_available: boolean
+  sections: ComplianceSectionNode[]
+}
+
+export type CompliancePeriod = '7d' | '14d' | '1m'
+
+export interface ComplianceScoreTrendPoint {
+  date: string
+  score_by_control: number
+  score_by_asset: number
+  pass_count: number
+  fail_count: number
+  unscored_count: number
+}
+
 // ─── Providers ────────────────────────────────────────────────────────────────
 
 export type ProviderType = 'aws' | 'azure' | 'gcp' | 'k8s'

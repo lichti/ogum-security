@@ -19,6 +19,7 @@ VERTEX_COLLECTIONS = [
     "saved_queries",  # Sprint 6: per-tenant AQL console saved queries
     "sboms",  # Sprint 2 (Epic 03): CycloneDX SBOMs generated per EC2 scan
     "sarif_reports",  # Sprint 4 (Epic 03): SARIF reports for registry image scans
+    "compliance_score_snapshots",  # Sprint 4 (Epic 14): daily score history for the Score Trend chart
 ]
 
 ADMIN_VERTEX_COLLECTIONS = [
@@ -93,6 +94,10 @@ PERSISTENT_INDEXES: list[tuple[str, list[str], bool]] = [
     ("sboms", ["tenant_id", "resource_id"], False),
     # SARIF reports (Sprint 4 Epic 03)
     ("sarif_reports", ["tenant_id", "image_digest"], False),
+    # Compliance score snapshots (Sprint 4 Epic 14) — one per tenant+framework+day;
+    # the unique index is also the idempotency guard for `snapshot_compliance_scores`
+    # and the covering index for the Score Trend range query.
+    ("compliance_score_snapshots", ["tenant_id", "framework_id", "snapshot_date"], True),
 ]
 
 ADMIN_PERSISTENT_INDEXES: list[tuple[str, list[str], bool]] = [

@@ -409,6 +409,48 @@ class TestCSPMScanTask:
         assert docs[uid_a] == "active"
         assert docs[uid_b] == "deleted"
 
+    def test_compliance_score_snapshot_written_and_idempotent(self, db_tenant_a, mocker):
+        """A completed scan writes one compliance_score_snapshots doc per framework
+        (Epic 14 Sprint 4, US-14.15); running the scan twice the same day upserts by
+        (tenant, framework, day) instead of duplicating."""
+        from app.models.finding import Finding, FindingSource
+
+        init_tenant_schema(db_tenant_a)
+        mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
+
+        finding = Finding(
+            finding_id="test-cis-2.1.1",
+            tenant_id=TEST_TENANT,
+            check_id="iam_root_mfa_enabled",
+            title="Test",
+            description="desc",
+            resource_id="arn:aws:iam::111111111111:root",
+            resource_type="iam_user",
+            severity=SeverityLevel.CRITICAL,
+            status=FindingStatus.FAIL,
+            provider="aws",
+            account_id=ACCOUNT_ID,
+            source=FindingSource.CSPM,
+            framework_mapping=["CIS-7.0/2.1.1"],
+        )
+        mock_prowler = MagicMock()
+        mock_prowler.run_aws_scan.return_value = _scan_result([finding])
+        mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
+
+        run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
+        run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
+
+        snapshots = list(
+            db_tenant_a.aql.execute(
+                "FOR s IN compliance_score_snapshots FILTER s.tenant_id == @t RETURN s",
+                bind_vars={"t": TEST_TENANT},
+            )
+        )
+        assert len(snapshots) == 1
+        assert snapshots[0]["framework_id"] == "CIS-7.0"
+        assert snapshots[0]["fail_count"] == 1
+        assert snapshots[0]["score_by_control"] == 0.0
+
 
 @pytest.mark.integration
 class TestAutoTriggerSideScans:
