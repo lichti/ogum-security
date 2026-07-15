@@ -1,5 +1,9 @@
-import { scoreBgColor, scoreColor } from './ScoreGauge'
+import { scoreColor } from './ScoreGauge'
 import type { ComplianceSectionNode } from '@/lib/types'
+
+function barColor(score: number): string {
+  return score >= 80 ? 'bg-green-500' : score >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+}
 
 export function SectionHeatmap({ sections }: { sections: ComplianceSectionNode[] }) {
   if (sections.length === 0) {
@@ -7,20 +11,26 @@ export function SectionHeatmap({ sections }: { sections: ComplianceSectionNode[]
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+    <div className="space-y-2">
       {sections.map((section) => (
         <div
           key={section.key}
+          className="flex items-center gap-3"
           title={`${section.label}: ${section.pass_count}/${section.total} controls passing (${section.score_by_control}%), ${section.unscored_count} unscored`}
-          className={`rounded-md p-3 border border-slate-800 ${scoreBgColor(section.score_by_control)}`}
         >
-          <div className="text-xs text-slate-300 truncate">{section.label}</div>
-          <div className={`text-lg font-bold font-mono ${scoreColor(section.score_by_control)}`}>
+          <span className="text-slate-400 text-sm w-48 truncate flex-shrink-0">{section.label}</span>
+          <div className="flex-1 bg-slate-800 rounded-full h-2">
+            <div
+              className={`${barColor(section.score_by_control)} h-2 rounded-full transition-all`}
+              style={{ width: `${section.score_by_control}%` }}
+            />
+          </div>
+          <span className={`text-xs font-mono w-12 text-right flex-shrink-0 ${scoreColor(section.score_by_control)}`}>
             {section.score_by_control}%
-          </div>
-          <div className="text-[11px] text-slate-500 font-mono">
+          </span>
+          <span className="text-slate-600 text-xs font-mono w-16 text-right flex-shrink-0">
             {section.pass_count}/{section.total}
-          </div>
+          </span>
         </div>
       ))}
     </div>
