@@ -29,8 +29,8 @@ export function InventorySummary({
   onCategoryClick,
 }: InventorySummaryProps) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 flex-wrap">
+    <div id="inventory-summary" className="space-y-2">
+      <div id="inventory-summary-by-provider" className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-medium text-slate-500 w-24 flex-shrink-0">By provider</span>
         {PROVIDERS.map((p) => {
           const count = byProvider[p] ?? 0
@@ -38,6 +38,7 @@ export function InventorySummary({
           return (
             <button
               key={p}
+              data-testid={`inventory-summary-provider-${p}`}
               type="button"
               onClick={() => onProviderClick(p)}
               aria-label={`Filter by ${p.toUpperCase()}`}
@@ -55,7 +56,7 @@ export function InventorySummary({
         })}
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
+      <div id="inventory-summary-by-category" className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-medium text-slate-500 w-24 flex-shrink-0">By category</span>
         {CATEGORY_ORDER.map((cat) => {
           const count = byCategory[cat] ?? 0
@@ -63,6 +64,7 @@ export function InventorySummary({
           return (
             <button
               key={cat}
+              data-testid={`inventory-summary-category-${cat}`}
               type="button"
               onClick={() => onCategoryClick(cat)}
               aria-label={`Filter by ${CATEGORY_LABELS[cat]}`}

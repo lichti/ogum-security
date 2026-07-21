@@ -23,9 +23,9 @@ export function RelationshipGroups({ edges, onViewInGraph }: RelationshipGroupsP
   const groups = groupByType(edges)
 
   return (
-    <div className="space-y-4">
+    <div id="relationship-groups" className="space-y-4">
       {groups.map(([edgeType, groupEdges]) => (
-        <div key={edgeType}>
+        <div key={edgeType} data-testid={`relationship-group-${edgeType}`}>
           <div className="flex items-center justify-between mb-1.5">
             <h4 className="text-xs font-semibold text-slate-400">
               {groupEdges.length} {edgeType.replace(/_/g, ' ')}
@@ -46,7 +46,11 @@ export function RelationshipGroups({ edges, onViewInGraph }: RelationshipGroupsP
             </thead>
             <tbody>
               {groupEdges.map((edge, i) => (
-                <tr key={i} className="border-b border-slate-800/50">
+                <tr
+                  key={i}
+                  data-testid={`relationship-edge-row-${edgeType}-${edge.peer_key}-${edge.direction}`}
+                  className="border-b border-slate-800/50"
+                >
                   <td className="py-1 text-slate-500">{edge.direction === 'outbound' ? '→' : '←'}</td>
                   <td className="py-1 text-slate-300 font-mono">{edge.peer_key}</td>
                   <td className="py-1 text-slate-500">{edge.peer_type ?? '—'}</td>

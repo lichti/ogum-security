@@ -87,7 +87,7 @@ export function FindingDetailPanel({ findingKey, onClose, onMuted }: FindingDeta
         className="fixed top-0 right-0 h-full w-[440px] bg-slate-900 border-l border-slate-700 shadow-2xl z-50 overflow-y-auto"
         data-testid="finding-detail-panel"
       >
-        <div className="flex items-start justify-between p-4 border-b border-slate-700 sticky top-0 bg-slate-900">
+        <div id="finding-detail-header" className="flex items-start justify-between p-4 border-b border-slate-700 sticky top-0 bg-slate-900">
           <div className="flex-1 min-w-0 pr-2">
             {loading ? (
               <div className="h-5 w-48 bg-slate-800 rounded animate-pulse" />
@@ -118,7 +118,7 @@ export function FindingDetailPanel({ findingKey, onClose, onMuted }: FindingDeta
         {!loading && finding && (
           <div className="p-4 space-y-6">
             {/* Badges row */}
-            <div className="flex flex-wrap gap-2">
+            <div id="finding-detail-badges" className="flex flex-wrap gap-2">
               <SeverityBadge severity={finding.severity} />
               <Badge variant={providerVariant}>{finding.provider.toUpperCase()}</Badge>
               {finding.source === 'iac' && <Badge variant="default">IaC</Badge>}
@@ -132,7 +132,7 @@ export function FindingDetailPanel({ findingKey, onClose, onMuted }: FindingDeta
             </div>
 
             {/* Resource */}
-            <section>
+            <section id="finding-detail-resource">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Resource</h3>
               <dl className="space-y-2">
                 {[
@@ -150,14 +150,14 @@ export function FindingDetailPanel({ findingKey, onClose, onMuted }: FindingDeta
             </section>
 
             {/* Risk */}
-            <section>
+            <section id="finding-detail-risk">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Risk</h3>
               <p className="text-slate-400 text-sm leading-relaxed">{finding.description}</p>
             </section>
 
             {/* Remediation */}
             {finding.remediation && (
-              <section>
+              <section id="finding-detail-remediation">
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Remediation</h3>
                 <p className="text-slate-400 text-sm leading-relaxed mb-3">{finding.remediation}</p>
                 {finding.cli_command && (
@@ -173,7 +173,7 @@ export function FindingDetailPanel({ findingKey, onClose, onMuted }: FindingDeta
 
             {/* Frameworks */}
             {finding.framework_mapping.length > 0 && (
-              <section>
+              <section id="finding-detail-frameworks">
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Frameworks</h3>
                 <div className="flex flex-wrap gap-1.5">
                   {finding.framework_mapping.map((fw) => (
@@ -184,7 +184,7 @@ export function FindingDetailPanel({ findingKey, onClose, onMuted }: FindingDeta
             )}
 
             {/* Timeline */}
-            <section>
+            <section id="finding-detail-timeline">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Timeline</h3>
               <dl className="space-y-2">
                 <div className="flex gap-2">
@@ -201,15 +201,16 @@ export function FindingDetailPanel({ findingKey, onClose, onMuted }: FindingDeta
             </section>
 
             {/* Exposure Path */}
-            <section>
+            <section id="finding-detail-exposure-path">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Exposure Path</h3>
               <FindingExposurePathGraph finding={finding} />
             </section>
 
             {/* Actions */}
-            <section className="border-t border-slate-800 pt-4 flex flex-wrap gap-2">
+            <section id="finding-detail-actions" className="border-t border-slate-800 pt-4 flex flex-wrap gap-2">
               {canMute && (
                 <button
+                  id="finding-detail-mute-button"
                   onClick={() => setShowMuteModal(true)}
                   className="px-3 py-1.5 text-sm border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 rounded transition-colors"
                 >
@@ -220,6 +221,7 @@ export function FindingDetailPanel({ findingKey, onClose, onMuted }: FindingDeta
                 <p className="text-xs text-slate-600 w-full">Muted: {finding.mute_reason}</p>
               )}
               <button
+                id="finding-detail-generate-pr-button"
                 disabled
                 className="px-3 py-1.5 text-sm border border-orange-500/30 text-orange-400/50 rounded cursor-not-allowed"
                 title="Coming in Epic 05 — Ogum.AI"

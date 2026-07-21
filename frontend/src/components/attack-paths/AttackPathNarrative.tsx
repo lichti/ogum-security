@@ -26,7 +26,7 @@ export function AttackPathNarrative({ pathKey }: AttackPathNarrativeProps) {
   const step = data.steps[Math.min(stepIndex, data.steps.length - 1)]
 
   return (
-    <div className="space-y-2">
+    <div id="attack-path-narrative" className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-slate-500 text-[11px] font-semibold uppercase tracking-wide">{step.title}</span>
         <span className="text-slate-600 text-[11px] tabular-nums">

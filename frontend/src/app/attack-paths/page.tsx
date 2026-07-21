@@ -95,16 +95,10 @@ export default function AttackPathsPage() {
   }, [])
 
   return (
-    <div className="h-screen flex flex-col bg-slate-950 text-slate-200 overflow-hidden">
+    <div id="attack-paths-page" className="h-screen flex flex-col bg-slate-950 text-slate-200 overflow-hidden">
       {/* Header + Stats */}
       <div className="shrink-0 px-6 pt-6 pb-4">
-        <div className="mb-4 flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-100">Attack Paths</h1>
-            <p className="text-slate-500 text-sm mt-0.5">
-              Contextual risk graph — paths from internet exposure to sensitive data
-            </p>
-          </div>
+        <div className="mb-4 flex items-start justify-end">
           <div className="flex items-center gap-2 shrink-0">
             <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-800 border border-slate-700">
               {VIEW_MODES.map((mode) => (
@@ -149,7 +143,7 @@ export default function AttackPathsPage() {
       </div>
 
       {/* Main split layout */}
-      <div className="flex-1 flex gap-4 px-6 pb-4 min-h-0">
+      <div id="attack-paths-split-layout" className="flex-1 flex gap-4 px-6 pb-4 min-h-0">
         {/* Left: path list */}
         <AttackPathList
           paths={paths}
@@ -160,7 +154,7 @@ export default function AttackPathsPage() {
         />
 
         {/* Right: canvas */}
-        <div className="flex-1 flex flex-col gap-3 min-w-0 overflow-y-auto">
+        <div id="attack-paths-canvas-column" className="flex-1 flex flex-col gap-3 min-w-0 overflow-y-auto">
           <AttackPathCanvas
             detail={detailData ?? null}
             loading={!!selectedPath && detailLoading}

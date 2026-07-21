@@ -51,9 +51,10 @@ export function Filters({
 
   return (
     <div className="flex gap-3 items-center flex-wrap">
-      <div className="relative flex-1 min-w-[220px] max-w-sm">
+      <div id="inventory-filters-search" className="relative flex-1 min-w-[220px] max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
         <input
+          id="inventory-filters-search-input"
           type="text"
           value={search}
           placeholder="Search by name, ARN, or ID..."
@@ -62,33 +63,42 @@ export function Filters({
         />
       </div>
 
-      <MultiSelectFilter
-        label="Providers"
-        options={providerOptions}
-        selected={selectedProviders}
-        onChange={onProvidersChange}
-      />
-      <MultiSelectFilter
-        label="Categories"
-        options={categoryOptions}
-        selected={selectedCategories}
-        onChange={onCategoriesChange}
-      />
-      <MultiSelectFilter
-        label="Regions"
-        options={regionOptions}
-        selected={selectedRegions}
-        onChange={onRegionsChange}
-      />
-      <MultiSelectFilter
-        label="Accounts"
-        options={accountOptions}
-        selected={selectedAccounts}
-        onChange={onAccountsChange}
-      />
+      <div id="inventory-filters-providers">
+        <MultiSelectFilter
+          label="Providers"
+          options={providerOptions}
+          selected={selectedProviders}
+          onChange={onProvidersChange}
+        />
+      </div>
+      <div id="inventory-filters-categories">
+        <MultiSelectFilter
+          label="Categories"
+          options={categoryOptions}
+          selected={selectedCategories}
+          onChange={onCategoriesChange}
+        />
+      </div>
+      <div id="inventory-filters-regions">
+        <MultiSelectFilter
+          label="Regions"
+          options={regionOptions}
+          selected={selectedRegions}
+          onChange={onRegionsChange}
+        />
+      </div>
+      <div id="inventory-filters-accounts">
+        <MultiSelectFilter
+          label="Accounts"
+          options={accountOptions}
+          selected={selectedAccounts}
+          onChange={onAccountsChange}
+        />
+      </div>
 
       {hasActiveFilters && (
         <button
+          id="inventory-filters-clear"
           onClick={onClear}
           className="flex items-center gap-1 text-slate-500 hover:text-slate-300 text-sm transition-colors"
         >

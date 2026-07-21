@@ -6,6 +6,9 @@ import type {
   AttackPathStats,
   AqlResult,
   CompliancePeriod,
+  ComplianceControlAsset,
+  ComplianceFamilySettingsUpdateRequest,
+  ComplianceFamilySettingsView,
   ComplianceFrameworkDetail,
   ComplianceScoreTrendPoint,
   ComplianceSummary,
@@ -38,7 +41,10 @@ import type {
   SavedViewCreateRequest,
   SavedViewUpdateRequest,
   ShortestPathResult,
+  PagedScanJobs,
   ScanJob,
+  ScanJobFilter,
+  ScanJobLogs,
   ScanTriggerRequest,
   ScanTriggerResponse,
   SideScanJob,
@@ -170,6 +176,8 @@ export const findingsApi = {
         region: filters.region || undefined,
         account_id: filters.account_id || undefined,
         resource_type: filters.resource_type || undefined,
+        resource_id: filters.resource_id || undefined,
+        check_id: filters.check_id || undefined,
         source: filters.source || undefined,
         q: filters.q || undefined,
         limit: filters.limit,
@@ -205,6 +213,15 @@ export const settingsApi = {
 
   updateSla: (data: Partial<SLASettings>) =>
     apiClient.put<ApiResponse<SLASettings>>('/api/v1/settings/sla', data),
+
+  listCompliance: () =>
+    apiClient.get<ApiResponse<ComplianceFamilySettingsView[]>>('/api/v1/settings/compliance'),
+
+  updateCompliance: (familyKey: string, data: ComplianceFamilySettingsUpdateRequest) =>
+    apiClient.put<ApiResponse<ComplianceFamilySettingsView>>(
+      `/api/v1/settings/compliance/${encodeURIComponent(familyKey)}`,
+      data,
+    ),
 }
 
 export const scansApi = {
@@ -214,14 +231,24 @@ export const scansApi = {
   get: (jobId: string) =>
     apiClient.get<ApiResponse<ScanJob>>(`/api/v1/scans/${jobId}`),
 
-  list: () =>
-    apiClient.get<ApiResponse<ScanJob[]>>('/api/v1/scans'),
+  list: (filters: ScanJobFilter = {}) =>
+    apiClient.get<ApiResponse<PagedScanJobs>>('/api/v1/scans', {
+      params: {
+        status: filters.status || undefined,
+        provider_id: filters.provider_id || undefined,
+        limit: filters.limit,
+        cursor: filters.cursor || undefined,
+      },
+    }),
+
+  logs: (jobId: string) =>
+    apiClient.get<ApiResponse<ScanJobLogs>>(`/api/v1/scans/${jobId}/logs`),
 }
 
 export const complianceApi = {
-  summary: (framework?: string) =>
+  summary: (framework?: string, severity?: string[]) =>
     apiClient.get<ApiResponse<ComplianceSummary>>('/api/v1/compliance/summary', {
-      params: framework ? { framework } : undefined,
+      params: { framework: framework || undefined, severity },
     }),
 
   frameworkDetail: (frameworkId: string) =>
@@ -233,6 +260,12 @@ export const complianceApi = {
     apiClient.get<ApiResponse<ComplianceScoreTrendPoint[]>>(
       `/api/v1/compliance/frameworks/${encodeURIComponent(frameworkId)}/trend`,
       { params: { period } },
+    ),
+
+  controlAssets: (frameworkId: string, controlId: string) =>
+    apiClient.get<ApiResponse<ComplianceControlAsset[]>>(
+      `/api/v1/compliance/frameworks/${encodeURIComponent(frameworkId)}/control-assets`,
+      { params: { control_id: controlId } },
     ),
 }
 

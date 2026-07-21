@@ -120,6 +120,28 @@ class TestListFindings:
         assert len(items) == 1
         assert "PCI_DSS" in items[0]["framework_mapping"]
 
+    def test_filter_by_resource_id_exact_match(self, api_client, db_tenant_a):
+        # The Compliance page's "findings of this asset" drill-down (US-14.22).
+        _seed_finding(db_tenant_a, "match", resource_id="i-0abc123")
+        _seed_finding(db_tenant_a, "no-match", resource_id="i-0abc123-decoy")
+
+        resp = api_client.get("/api/v1/findings?resource_id=i-0abc123", headers=HEADERS)
+
+        items = resp.json()["data"]["items"]
+        assert len(items) == 1
+        assert items[0]["resource_id"] == "i-0abc123"
+
+    def test_filter_by_check_id_exact_match(self, api_client, db_tenant_a):
+        # The Compliance page's "assets affected by this finding" drill-down (US-14.22).
+        _seed_finding(db_tenant_a, "match", check_id="s3_bucket_public_access")
+        _seed_finding(db_tenant_a, "no-match", check_id="s3_bucket_public_access_decoy")
+
+        resp = api_client.get("/api/v1/findings?check_id=s3_bucket_public_access", headers=HEADERS)
+
+        items = resp.json()["data"]["items"]
+        assert len(items) == 1
+        assert items[0]["check_id"] == "s3_bucket_public_access"
+
     def test_text_search_by_title(self, api_client, db_tenant_a):
         _seed_finding(db_tenant_a, "s3-001", title="Public S3 Bucket")
         # Override check_id and resource_arn so they don't contain "s3" and pollute the search

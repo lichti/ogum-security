@@ -20,7 +20,7 @@ export function FrameworkSidebar({ families, selectedFamily, onSelect }: Framewo
   }, [families, query])
 
   return (
-    <div className="space-y-3">
+    <div id="compliance-framework-sidebar" className="space-y-3">
       <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
         Frameworks
         <span className="ml-1.5 normal-case font-normal text-slate-600">({families.length})</span>
@@ -29,6 +29,7 @@ export function FrameworkSidebar({ families, selectedFamily, onSelect }: Framewo
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
         <input
+          id="framework-sidebar-search-input"
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -38,14 +39,16 @@ export function FrameworkSidebar({ families, selectedFamily, onSelect }: Framewo
         />
       </div>
 
-      <div className="space-y-2 max-h-[calc(100vh-260px)] overflow-y-auto pr-1">
+      <div id="framework-sidebar-list" className="space-y-2 max-h-[calc(100vh-260px)] overflow-y-auto pr-1">
         {filtered.length === 0 && <p className="text-slate-600 text-sm px-1">No frameworks match your search.</p>}
         {filtered.map((fw) => {
           const headline = fw.versions[0]
           if (!headline) return null
+          const target = fw.target_by_control
           return (
             <button
               key={fw.family}
+              data-testid={`framework-card-${fw.family}`}
               onClick={() => onSelect(fw.family)}
               className={`w-full text-left p-3 rounded border transition-colors ${
                 selectedFamily === fw.family
@@ -63,9 +66,19 @@ export function FrameworkSidebar({ families, selectedFamily, onSelect }: Framewo
                 <div className="text-slate-600 text-xs mt-0.5">{fw.versions.length} versions</div>
               )}
               <ScoreGauge score={headline.score} />
-              <div className="flex gap-3 mt-2 text-xs text-slate-500">
-                <span className="text-green-400">{headline.pass} pass</span>
-                <span className="text-red-400">{headline.fail} fail</span>
+              <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
+                <div className="flex gap-3">
+                  <span className="text-green-400">{headline.pass} pass</span>
+                  <span className="text-red-400">{headline.fail} fail</span>
+                </div>
+                {target !== null && (
+                  <span
+                    className={`font-mono ${headline.score >= target ? 'text-green-500' : 'text-orange-400'}`}
+                    title={headline.score >= target ? `Meets the ${target}% goal` : `Below the ${target}% goal`}
+                  >
+                    {headline.score >= target ? '✓' : '▾'} {target}%
+                  </span>
+                )}
               </div>
             </button>
           )

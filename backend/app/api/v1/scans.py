@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from arango.database import StandardDatabase
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.v1.inventory import get_tenant_db
 from app.models.api_responses import ApiResponse
 from app.models.finding import ScanJob
 from app.services.provider_service import get_provider, get_provider_credentials
-from app.services.scan_service import get_scan_job, list_scan_jobs
+from app.services.scan_service import get_scan_job, get_scan_job_logs, list_scan_jobs
 from app.workers.tasks.cspm_scan import run_cspm_scan
 
 router = APIRouter(prefix="/api/v1/scans", tags=["scans"])
@@ -24,6 +24,16 @@ class ScanRequest(BaseModel):
 class ScanResponse(BaseModel):
     job_id: str
     status: str
+
+
+class PagedScanJobs(BaseModel):
+    items: list[ScanJob]
+    next_cursor: str | None = None
+
+
+class ScanJobLogs(BaseModel):
+    job_id: str
+    logs: list[str]
 
 
 @router.post("", response_model=ApiResponse[ScanResponse], status_code=202)
@@ -85,11 +95,33 @@ async def get_scan_status(
     return ApiResponse(data=job)
 
 
-@router.get("", response_model=ApiResponse[list[ScanJob]])
+@router.get("", response_model=ApiResponse[PagedScanJobs])
 async def list_scans(
     x_tenant_id: str = Header(..., alias="X-Tenant-Id"),
     db: StandardDatabase = Depends(get_tenant_db),
-) -> ApiResponse[list[ScanJob]]:
-    """List recent scan jobs for a tenant."""
-    jobs = list_scan_jobs(db, x_tenant_id)
-    return ApiResponse(data=jobs)
+    status: list[str] | None = Query(default=None),
+    provider_id: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    cursor: str | None = Query(default=None),
+) -> ApiResponse[PagedScanJobs]:
+    """List scan jobs for a tenant — the Scans page registry (US-14.23)."""
+    jobs, next_cursor = list_scan_jobs(
+        db, x_tenant_id, status=status, provider_id=provider_id, limit=limit, cursor=cursor
+    )
+    return ApiResponse(data=PagedScanJobs(items=jobs, next_cursor=next_cursor))
+
+
+@router.get("/{job_id}/logs", response_model=ApiResponse[ScanJobLogs])
+async def get_scan_logs(
+    job_id: str,
+    x_tenant_id: str = Header(..., alias="X-Tenant-Id"),
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> ApiResponse[ScanJobLogs]:
+    """Execution log lines captured during the scan (US-14.23)."""
+    job = get_scan_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Scan job not found")
+    if job.tenant_id != x_tenant_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    logs = get_scan_job_logs(db, job_id) or []
+    return ApiResponse(data=ScanJobLogs(job_id=job_id, logs=logs))

@@ -29,7 +29,7 @@ export function NodeDetailPanel({ nodeId, onClose }: NodeDetailPanelProps) {
       <div className="fixed inset-0 z-40" onClick={onClose} />
 
       {/* Panel */}
-      <div className="fixed top-0 right-0 h-full w-96 z-50 bg-slate-900 border-l border-slate-800 flex flex-col shadow-2xl">
+      <div id="node-detail-panel" className="fixed top-0 right-0 h-full w-96 z-50 bg-slate-900 border-l border-slate-800 flex flex-col shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
           <h2 className="text-slate-200 font-semibold text-sm">Node Details</h2>
@@ -50,7 +50,7 @@ export function NodeDetailPanel({ nodeId, onClose }: NodeDetailPanelProps) {
           </div>
 
           {!isResource && (
-            <div className="rounded-lg bg-slate-800/60 border border-slate-700 px-4 py-3 text-slate-400 text-xs">
+            <div id="node-detail-unsupported" className="rounded-lg bg-slate-800/60 border border-slate-700 px-4 py-3 text-slate-400 text-xs">
               Detail view for <span className="text-slate-300 font-medium">{collection}</span> nodes
               is not yet available. Select a resource or data asset node.
             </div>
@@ -67,7 +67,7 @@ export function NodeDetailPanel({ nodeId, onClose }: NodeDetailPanelProps) {
           {resource && (
             <div className="flex flex-col gap-5">
               {/* Resource overview */}
-              <div className="rounded-lg bg-slate-800/60 border border-slate-700 px-4 py-3 flex flex-col gap-2">
+              <div id="node-detail-resource-overview" className="rounded-lg bg-slate-800/60 border border-slate-700 px-4 py-3 flex flex-col gap-2">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-slate-200 text-sm font-semibold">{resource.name}</p>
@@ -86,7 +86,7 @@ export function NodeDetailPanel({ nodeId, onClose }: NodeDetailPanelProps) {
               </div>
 
               {/* Metadata grid */}
-              <div>
+              <div id="node-detail-metadata">
                 <p className="text-slate-500 text-[11px] uppercase tracking-wide mb-2">Metadata</p>
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
                   {[
@@ -113,7 +113,7 @@ export function NodeDetailPanel({ nodeId, onClose }: NodeDetailPanelProps) {
 
               {/* Relationships */}
               {resource.edges && resource.edges.length > 0 && (
-                <div>
+                <div id="node-detail-relationships">
                   <p className="text-slate-500 text-[11px] uppercase tracking-wide mb-2">
                     Relationships ({resource.edges.length})
                   </p>
@@ -121,6 +121,7 @@ export function NodeDetailPanel({ nodeId, onClose }: NodeDetailPanelProps) {
                     {resource.edges.slice(0, 8).map((edge, i) => (
                       <div
                         key={i}
+                        data-testid={`node-detail-edge-${edge.direction}-${edge.edge_type}-${edge.peer_collection}-${edge.peer_key}`}
                         className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/60 border border-slate-700/60 rounded px-3 py-1.5"
                       >
                         <span className="text-slate-600 text-[10px] font-mono shrink-0">

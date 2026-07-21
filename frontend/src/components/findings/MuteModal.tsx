@@ -14,14 +14,14 @@ export function MuteModal({ findingTitle, onConfirm, onCancel, loading }: MuteMo
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60" data-testid="mute-modal">
-      <div className="bg-slate-900 border border-slate-700 rounded-lg w-[480px] shadow-2xl">
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+      <div id="mute-modal-content" className="bg-slate-900 border border-slate-700 rounded-lg w-[480px] shadow-2xl">
+        <div id="mute-modal-header" className="flex items-center justify-between p-4 border-b border-slate-700">
           <h3 className="text-slate-200 font-semibold">Mute Finding</h3>
           <button onClick={onCancel} className="text-slate-500 hover:text-slate-300">
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-4 space-y-4">
+        <div id="mute-modal-body" className="p-4 space-y-4">
           <p className="text-sm text-slate-400">
             Muting: <span className="text-slate-200 font-medium">{findingTitle}</span>
           </p>
@@ -30,6 +30,7 @@ export function MuteModal({ findingTitle, onConfirm, onCancel, loading }: MuteMo
               Reason <span className="text-red-400">*</span>
             </label>
             <textarea
+              id="mute-modal-reason-input"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. Accepted by security team — compensating control in place"
@@ -39,14 +40,16 @@ export function MuteModal({ findingTitle, onConfirm, onCancel, loading }: MuteMo
             />
           </div>
         </div>
-        <div className="flex justify-end gap-2 p-4 border-t border-slate-700">
+        <div id="mute-modal-footer" className="flex justify-end gap-2 p-4 border-t border-slate-700">
           <button
+            id="mute-modal-cancel-button"
             onClick={onCancel}
             className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 rounded hover:bg-slate-800"
           >
             Cancel
           </button>
           <button
+            id="mute-modal-confirm-button"
             onClick={() => reason.trim() && onConfirm(reason.trim())}
             disabled={!reason.trim() || loading}
             className="px-4 py-2 text-sm bg-orange-600 hover:bg-orange-500 text-white rounded disabled:opacity-40 disabled:cursor-not-allowed"

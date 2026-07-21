@@ -39,7 +39,7 @@ export function DataTable({
 
   if (loading) {
     return (
-      <div className="space-y-2">
+      <div id="inventory-table-loading" className="space-y-2">
         {Array.from({ length: 8 }).map((_, i) => (
           <Skeleton key={i} className="h-12 w-full" />
         ))}
@@ -49,7 +49,7 @@ export function DataTable({
 
   if (resources.length === 0) {
     return (
-      <div className="text-center py-16 text-slate-500">
+      <div id="inventory-table-empty" className="text-center py-16 text-slate-500">
         <p className="text-lg">No resources found</p>
         <p className="text-sm mt-1">Try adjusting your filters or connect a cloud account.</p>
       </div>
@@ -58,7 +58,7 @@ export function DataTable({
 
   return (
     <div>
-      <table className="w-full text-sm">
+      <table id="inventory-table" className="w-full text-sm">
         <thead>
           <tr className="text-left text-slate-500 border-b border-slate-800">
             <th className="pb-3 pr-4 font-medium">Provider</th>
@@ -74,6 +74,7 @@ export function DataTable({
           {resources.map((r) => (
             <tr
               key={r.key}
+              data-testid={`inventory-table-row-${r.key}`}
               onClick={() => onRowClick(r)}
               className="border-b border-slate-800/50 hover:bg-slate-800/50 cursor-pointer transition-colors"
             >
@@ -112,7 +113,7 @@ export function DataTable({
       </table>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-slate-400">
+        <div id="inventory-table-pagination" className="flex items-center justify-between mt-4 text-sm text-slate-400">
           <span>
             Showing {offset + 1}–{Math.min(offset + limit, total)} of {total} resources
           </span>

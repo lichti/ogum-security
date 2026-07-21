@@ -45,7 +45,7 @@ function ResultTable({ result }: { result: AqlResult }) {
           Results truncated to 200 rows.
         </p>
       )}
-      <table className="w-full text-xs">
+      <table id="query-console-result-table" className="w-full text-xs">
         <thead>
           <tr className="border-b border-slate-700">
             {columns.map((col) => (
@@ -123,7 +123,7 @@ export function QueryConsole({ onClose }: QueryConsoleProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-4xl mx-4 flex flex-col max-h-[85vh]">
+      <div id="query-console-panel" className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-4xl mx-4 flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 shrink-0">
           <div>
@@ -137,12 +137,13 @@ export function QueryConsole({ onClose }: QueryConsoleProps) {
 
         <div className="flex-1 flex flex-col gap-0 overflow-hidden">
           {/* Starter + Saved query bar */}
-          <div className="shrink-0 flex items-center gap-2 px-5 py-3 border-b border-slate-800 flex-wrap">
+          <div id="query-console-templates" className="shrink-0 flex items-center gap-2 px-5 py-3 border-b border-slate-800 flex-wrap">
             <span className="text-slate-500 text-[11px]">Templates:</span>
             {STARTER_QUERIES.map((sq) => (
               <button
                 key={sq.label}
                 onClick={() => setQuery(sq.query)}
+                data-testid={`query-console-template-${sq.label.toLowerCase().replace(/\s+/g, '-')}`}
                 className="text-[11px] px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
               >
                 {sq.label}
@@ -161,9 +162,9 @@ export function QueryConsole({ onClose }: QueryConsoleProps) {
 
           {/* Saved queries dropdown */}
           {showSaved && savedQueries.length > 0 && (
-            <div className="shrink-0 px-5 py-2 border-b border-slate-800 flex flex-wrap gap-2">
+            <div id="query-console-saved-list" className="shrink-0 px-5 py-2 border-b border-slate-800 flex flex-wrap gap-2">
               {savedQueries.map((sq) => (
-                <div key={sq.key} className="flex items-center gap-1">
+                <div key={sq.key} data-testid={`query-console-saved-query-${sq.key}`} className="flex items-center gap-1">
                   <button
                     onClick={() => { setQuery(sq.query); setShowSaved(false) }}
                     className="text-[11px] px-2.5 py-1 rounded bg-orange-900/30 hover:bg-orange-900/50 text-orange-300 border border-orange-800/50 transition-colors"
@@ -183,7 +184,7 @@ export function QueryConsole({ onClose }: QueryConsoleProps) {
           )}
 
           {/* Query editor */}
-          <div className="shrink-0 px-5 py-3 border-b border-slate-800">
+          <div id="query-console-editor" className="shrink-0 px-5 py-3 border-b border-slate-800">
             <textarea
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -213,7 +214,7 @@ export function QueryConsole({ onClose }: QueryConsoleProps) {
 
           {/* Save dialog */}
           {saveDialogOpen && (
-            <div className="shrink-0 px-5 py-3 border-b border-slate-800 bg-slate-800/40">
+            <div id="query-console-save-dialog" className="shrink-0 px-5 py-3 border-b border-slate-800 bg-slate-800/40">
               <div className="flex items-center gap-2">
                 <input
                   autoFocus
@@ -244,7 +245,7 @@ export function QueryConsole({ onClose }: QueryConsoleProps) {
           )}
 
           {/* Results */}
-          <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div id="query-console-results" className="flex-1 overflow-y-auto px-5 py-4">
             {error && (
               <div className="bg-red-900/20 border border-red-800/50 rounded-lg px-4 py-3 text-red-400 text-xs font-mono whitespace-pre-wrap">
                 {error}

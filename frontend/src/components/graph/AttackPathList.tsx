@@ -82,7 +82,7 @@ export function AttackPathList({ paths, selectedKey, loading, viewMode = 'paths'
 
   if (loading) {
     return (
-      <div className="w-64 shrink-0 flex flex-col gap-2 p-1">
+      <div id="attack-path-list-loading" className="w-64 shrink-0 flex flex-col gap-2 p-1">
         {[...Array(6)].map((_, i) => (
           <div key={i} className="h-16 bg-slate-800/70 rounded-lg animate-pulse" />
         ))}
@@ -92,7 +92,7 @@ export function AttackPathList({ paths, selectedKey, loading, viewMode = 'paths'
 
   if (paths.length === 0) {
     return (
-      <div className="w-64 shrink-0 flex flex-col items-center justify-center text-center gap-2 p-6">
+      <div id="attack-path-list-empty" className="w-64 shrink-0 flex flex-col items-center justify-center text-center gap-2 p-6">
         <p className="text-slate-400 text-sm font-medium">No attack paths</p>
         <p className="text-slate-600 text-xs">Run a CSPM scan to detect paths</p>
       </div>
@@ -100,13 +100,13 @@ export function AttackPathList({ paths, selectedKey, loading, viewMode = 'paths'
   }
 
   return (
-    <div className="w-64 shrink-0 overflow-y-auto flex flex-col gap-5 pr-1">
+    <div id="attack-path-list" className="w-64 shrink-0 overflow-y-auto flex flex-col gap-5 pr-1">
       {tree.map(({ severity, total, subgroups }) => {
         if (total === 0) return null
         const styles = SEVERITY_STYLES[severity]
         const sevCollapsed = collapsed.has(severity)
         return (
-          <div key={severity}>
+          <div key={severity} data-testid={`attack-path-list-severity-group-${severity}`}>
             <button
               type="button"
               onClick={() => toggle(severity)}
@@ -131,7 +131,7 @@ export function AttackPathList({ paths, selectedKey, loading, viewMode = 'paths'
                 const subgroupKey = `${severity}::${subKey}`
                 const subCollapsed = collapsed.has(subgroupKey)
                 return (
-                  <div key={subgroupKey} className="mb-2 pl-3.5">
+                  <div key={subgroupKey} data-testid={`attack-path-list-subgroup-${subgroupKey}`} className="mb-2 pl-3.5">
                     <button
                       type="button"
                       onClick={() => toggle(subgroupKey)}
@@ -154,6 +154,7 @@ export function AttackPathList({ paths, selectedKey, loading, viewMode = 'paths'
                           <button
                             key={path._key}
                             onClick={() => onSelect(path)}
+                            data-testid={`attack-path-row-${path._key}`}
                             className={`w-full text-left rounded-lg px-3 py-2.5 border transition-all ${
                               selectedKey === path._key
                                 ? 'bg-orange-500/10 border-orange-500/50 shadow-sm shadow-orange-900/20'

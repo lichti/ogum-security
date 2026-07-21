@@ -36,8 +36,9 @@ export function ResourceCompliance({ resource, framework, onFrameworkChange }: R
   }
 
   return (
-    <div className="space-y-3">
+    <div id="resource-compliance" className="space-y-3">
       <select
+        id="resource-compliance-framework-select"
         value={data.selected_framework ?? ''}
         onChange={(e) => onFrameworkChange(e.target.value)}
         className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
@@ -52,7 +53,7 @@ export function ResourceCompliance({ resource, framework, onFrameworkChange }: R
       {data.controls.length === 0 ? (
         <p className="text-slate-600 text-sm">No controls found for this framework.</p>
       ) : (
-        <table className="w-full text-xs">
+        <table id="resource-compliance-table" className="w-full text-xs">
           <thead>
             <tr className="text-slate-500 text-left border-b border-slate-800">
               <th className="font-normal py-1">Status</th>
@@ -64,7 +65,11 @@ export function ResourceCompliance({ resource, framework, onFrameworkChange }: R
           </thead>
           <tbody>
             {data.controls.map((control) => (
-              <tr key={`${control.control_id}-${control.finding_key}`} className="border-b border-slate-800/50">
+              <tr
+                key={`${control.control_id}-${control.finding_key}`}
+                data-testid={`resource-compliance-row-${control.control_id}-${control.finding_key}`}
+                className="border-b border-slate-800/50"
+              >
                 <td className="py-1.5">
                   <Badge variant={control.status === 'PASS' ? 'status-active' : 'severity-high'}>
                     {control.status}

@@ -97,14 +97,8 @@ export default function SideScanning() {
   )
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200">
+    <div id="side-scanning-page" className="min-h-screen bg-slate-950 text-slate-200">
       <div className="max-w-screen-xl mx-auto px-6 py-8">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-100">Side Scanning</h1>
-          <p className="text-slate-500 text-sm mt-1">Agentless deep scanning of EC2, Lambda, containers and registry images</p>
-        </div>
-
         {/* KPI cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           {(
@@ -115,7 +109,11 @@ export default function SideScanning() {
               { label: 'Registry Jobs', value: kpi.ecr, sub: 'images scanned' },
             ] as const
           ).map(({ label, value, sub }) => (
-            <div key={label} className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+            <div
+              key={label}
+              data-testid={`side-scanning-kpi-${label.toLowerCase().replace(/\s+/g, '-')}`}
+              className="bg-slate-900 border border-slate-800 rounded-lg p-4"
+            >
               <p className="text-slate-500 text-xs">{label}</p>
               <p className="text-2xl font-bold text-slate-100 mt-1">{value}</p>
               <p className="text-slate-600 text-xs mt-0.5">{sub}</p>
@@ -124,7 +122,7 @@ export default function SideScanning() {
         </div>
 
         {/* Filters */}
-        <div className="flex gap-3 mb-4 flex-wrap">
+        <div id="side-scanning-filters" className="flex gap-3 mb-4 flex-wrap">
           <select
             className="bg-slate-900 border border-slate-700 text-slate-300 text-sm rounded px-3 py-1.5"
             value={statusFilter}
@@ -154,7 +152,7 @@ export default function SideScanning() {
         </div>
 
         {/* Jobs table */}
-        <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+        <div id="side-scanning-jobs-table" className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
           {isLoading ? (
             <div className="py-12 text-center text-slate-500 text-sm">Loading scan jobs…</div>
           ) : jobs.length === 0 ? (
@@ -177,7 +175,11 @@ export default function SideScanning() {
               </thead>
               <tbody>
                 {jobs.map((job) => (
-                  <tr key={job._key} className="border-b border-slate-800 hover:bg-slate-800/40 transition-colors">
+                  <tr
+                    key={job._key}
+                    data-testid={`side-scanning-job-row-${job._key}`}
+                    className="border-b border-slate-800 hover:bg-slate-800/40 transition-colors"
+                  >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 text-slate-400">
                         <TypeIcon type={job.type} />

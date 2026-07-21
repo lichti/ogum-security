@@ -26,6 +26,14 @@ const OPERATOR_LABELS: Record<PillFilterOperator, string> = {
   contains: 'contains',
 }
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
+
 export function PillFilter({
   label,
   options,
@@ -76,7 +84,7 @@ export function PillFilter({
   const allSelected = draftSelected.length === options.length && options.length > 0
 
   return (
-    <div className="relative inline-block" ref={containerRef}>
+    <div className="relative inline-block" ref={containerRef} data-testid={`pill-filter-${slugify(label)}`}>
       <button
         type="button"
         onClick={() => (open ? setOpen(false) : openPopover())}
@@ -144,6 +152,7 @@ export function PillFilter({
             {filteredOptions.map((opt) => (
               <label
                 key={opt.value}
+                data-testid={`pill-filter-option-${opt.value}`}
                 className="flex items-center justify-between gap-2 px-3 py-1.5 hover:bg-slate-800/50 cursor-pointer text-sm"
               >
                 <span className="flex items-center gap-2 min-w-0">

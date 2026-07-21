@@ -24,7 +24,7 @@ export function TakeActionMenu({ detail }: TakeActionMenuProps) {
   const resourceNodes = detail.nodes.filter((n) => typeof n['_id'] === 'string' && typeof n['_key'] === 'string')
 
   return (
-    <div className="relative">
+    <div id="take-action-menu" className="relative">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -42,7 +42,10 @@ export function TakeActionMenu({ detail }: TakeActionMenuProps) {
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-10 cursor-default"
           />
-          <div className="absolute bottom-full right-0 mb-2 z-20 w-64 rounded-lg border border-slate-700 bg-slate-900 shadow-xl py-1">
+          <div
+            id="take-action-menu-dropdown"
+            className="absolute bottom-full right-0 mb-2 z-20 w-64 rounded-lg border border-slate-700 bg-slate-900 shadow-xl py-1"
+          >
             <button
               type="button"
               onClick={() => {
@@ -68,6 +71,7 @@ export function TakeActionMenu({ detail }: TakeActionMenuProps) {
                       key={key}
                       href="/inventory"
                       title={`Search for "${name}" in Inventory`}
+                      data-testid={`take-action-resource-${key}`}
                       className="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 truncate"
                     >
                       <ExternalLink size={12} className="shrink-0" />
