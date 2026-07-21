@@ -98,24 +98,20 @@ function FindingsPageContent() {
   const handleRowClick = (f: Finding) => setSelectedKey(f._key)
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200">
+    <div id="findings-page" className="min-h-screen bg-slate-950 text-slate-200">
       <div className="max-w-screen-xl mx-auto px-6 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-100">Findings</h1>
-            <p className="text-slate-500 text-sm mt-1">CSPM and IaC security findings across all providers</p>
-          </div>
+        <div className="flex items-center justify-end mb-4">
           <ExportButton filters={filters} />
         </div>
 
         {/* SLA Summary */}
-        <div className="mb-6">
+        <div id="findings-sla-summary" className="mb-6">
           <SLASummaryPanel />
         </div>
 
         {/* Summary */}
-        <div className="mb-6">
+        <div id="findings-summary" className="mb-6">
           <FindingsSummary
             bySeverity={stats?.by_severity ?? {}}
             byProvider={stats?.by_provider ?? {}}
@@ -127,20 +123,22 @@ function FindingsPageContent() {
         </div>
 
         {/* Filters */}
-        <div className="mb-6">
+        <div id="findings-filters" className="mb-6">
           <FindingFilters filters={filters} onChange={handleFiltersChange} />
         </div>
 
         {/* Table */}
-        <FindingsTable
-          findings={findings}
-          loading={isLoading}
-          nextCursor={nextCursor}
-          prevCursors={prevCursors}
-          onNext={handleNext}
-          onPrev={handlePrev}
-          onRowClick={handleRowClick}
-        />
+        <div id="findings-table">
+          <FindingsTable
+            findings={findings}
+            loading={isLoading}
+            nextCursor={nextCursor}
+            prevCursors={prevCursors}
+            onNext={handleNext}
+            onPrev={handlePrev}
+            onRowClick={handleRowClick}
+          />
+        </div>
       </div>
 
       {/* Detail panel */}

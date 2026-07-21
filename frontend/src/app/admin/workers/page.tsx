@@ -45,9 +45,8 @@ export default function AdminWorkersPage() {
   }, []);
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-slate-100">Admin — Workers</h1>
+    <div id="admin-workers-page" className="p-6">
+      <div className="flex items-center justify-end mb-6">
         <button
           onClick={fetchWorkers}
           className="flex items-center gap-2 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors"
@@ -69,9 +68,9 @@ export default function AdminWorkersPage() {
         </div>
       )}
 
-      <div className="grid gap-4">
+      <div id="admin-workers-list" className="grid gap-4">
         {workers.map((w) => (
-          <div key={w.hostname} className="rounded-lg border border-slate-800 bg-slate-900 p-5">
+          <div key={w.hostname} data-testid={`admin-worker-card-${w.hostname}`} className="rounded-lg border border-slate-800 bg-slate-900 p-5">
             <div className="flex items-center gap-2 mb-3">
               <Circle size={8} className="text-green-400 fill-green-400" />
               <span className="text-slate-100 font-medium">{w.hostname}</span>

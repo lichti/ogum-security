@@ -30,7 +30,7 @@ export function SoftwareInventoryPanel({ resource, subtabKey }: SoftwareInventor
 
   if (isLoading) {
     return (
-      <div className="space-y-2">
+      <div id="software-inventory-loading" className="space-y-2">
         {Array.from({ length: 4 }).map((_, i) => (
           <Skeleton key={i} className="h-8 w-full" />
         ))}
@@ -51,7 +51,7 @@ export function SoftwareInventoryPanel({ resource, subtabKey }: SoftwareInventor
       return <p className="text-slate-600 text-sm">No packages detected in the SBOM.</p>
     }
     return (
-      <table className="w-full text-xs">
+      <table id="software-inventory-packages-table" className="w-full text-xs">
         <thead>
           <tr className="text-slate-500 text-left border-b border-slate-800">
             <th className="font-normal py-1">Name</th>
@@ -62,7 +62,11 @@ export function SoftwareInventoryPanel({ resource, subtabKey }: SoftwareInventor
         </thead>
         <tbody>
           {data.installed_packages.map((pkg) => (
-            <tr key={`${pkg.name}@${pkg.version}`} className="border-b border-slate-800/50">
+            <tr
+              key={`${pkg.name}@${pkg.version}`}
+              data-testid={`software-package-row-${pkg.name}-${pkg.version}`}
+              className="border-b border-slate-800/50"
+            >
               <td className="py-1.5 text-slate-300 font-mono">{pkg.name}</td>
               <td className="py-1.5 text-slate-400 font-mono">{pkg.version}</td>
               <td className="py-1.5">
@@ -89,7 +93,7 @@ export function SoftwareInventoryPanel({ resource, subtabKey }: SoftwareInventor
       return <p className="text-slate-600 text-sm">No license information detected in the SBOM.</p>
     }
     return (
-      <table className="w-full text-xs">
+      <table id="software-inventory-licenses-table" className="w-full text-xs">
         <thead>
           <tr className="text-slate-500 text-left border-b border-slate-800">
             <th className="font-normal py-1">License</th>
@@ -100,7 +104,11 @@ export function SoftwareInventoryPanel({ resource, subtabKey }: SoftwareInventor
         </thead>
         <tbody>
           {data.licenses.map((lic) => (
-            <tr key={lic.license_id} className="border-b border-slate-800/50">
+            <tr
+              key={lic.license_id}
+              data-testid={`software-license-row-${lic.license_id}`}
+              className="border-b border-slate-800/50"
+            >
               <td className="py-1.5 text-slate-300 font-mono">{lic.license_id}</td>
               <td className="py-1.5">
                 <Badge variant="default">{CATEGORY_LABEL[lic.category]}</Badge>

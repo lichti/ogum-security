@@ -90,7 +90,10 @@ export function AttackPathCanvas({
 
   if (!isMini && !detail && !loading) {
     return (
-      <div className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}>
+      <div
+        id="attack-path-canvas-placeholder"
+        className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}
+      >
         <div className="text-center">
           <p className="text-slate-400 text-sm font-medium">Select a path to visualize</p>
           <p className="text-slate-600 text-xs mt-1">Click any item in the list on the left</p>
@@ -101,7 +104,10 @@ export function AttackPathCanvas({
 
   if (loading) {
     return (
-      <div className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}>
+      <div
+        id="attack-path-canvas-loading"
+        className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}
+      >
         <div className="flex flex-col items-center gap-2">
           <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-slate-500 text-xs">Loading graph...</p>
@@ -112,14 +118,17 @@ export function AttackPathCanvas({
 
   if (isEmpty) {
     return (
-      <div className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}>
+      <div
+        id="attack-path-canvas-empty"
+        className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}
+      >
         <p className="text-slate-500 text-sm">{emptyLabel ?? 'No graph data available for this path'}</p>
       </div>
     )
   }
 
   return (
-    <div className={`${sizeClasses} rounded-lg overflow-hidden border border-slate-800 relative`}>
+    <div id="attack-path-canvas" className={`${sizeClasses} rounded-lg overflow-hidden border border-slate-800 relative`}>
       <ReactFlow
         nodes={nodes}
         edges={edges}

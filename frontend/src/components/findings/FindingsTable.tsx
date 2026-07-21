@@ -84,6 +84,7 @@ export function FindingsTable({
           {findings.map((f) => (
             <tr
               key={f._key}
+              data-testid={`finding-row-${f._key}`}
               onClick={() => onRowClick(f)}
               className="border-b border-slate-800/50 hover:bg-slate-800/50 cursor-pointer transition-colors"
             >
@@ -131,8 +132,9 @@ export function FindingsTable({
         </tbody>
       </table>
 
-      <div className="flex items-center justify-end mt-4 gap-2">
+      <div id="findings-table-pagination" className="flex items-center justify-end mt-4 gap-2">
         <button
+          id="findings-table-prev-button"
           onClick={onPrev}
           disabled={prevCursors.length === 0}
           className="p-1.5 rounded hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-400"
@@ -141,6 +143,7 @@ export function FindingsTable({
           <ChevronLeft className="w-4 h-4" />
         </button>
         <button
+          id="findings-table-next-button"
           onClick={onNext}
           disabled={!nextCursor}
           className="p-1.5 rounded hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-400"

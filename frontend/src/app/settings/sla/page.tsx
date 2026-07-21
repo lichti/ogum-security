@@ -35,14 +35,10 @@ export default function SlaSettingsPage() {
   if (!form) return null
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200">
+    <div id="settings-sla-page" className="min-h-screen bg-slate-950 text-slate-200">
       <div className="max-w-screen-md mx-auto px-6 py-8">
-        <h1 className="text-2xl font-bold text-slate-100">SLA Settings</h1>
-        <p className="text-slate-500 text-sm mt-1 mb-6">
-          Remediation deadline per finding severity, used across Findings for SLA tracking.
-        </p>
-
         <form
+          id="sla-settings-form"
           onSubmit={(e) => {
             e.preventDefault()
             mutation.mutate(form)

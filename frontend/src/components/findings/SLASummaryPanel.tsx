@@ -26,7 +26,11 @@ export function SLASummaryPanel() {
         const count = summary[tile.key]
         const pct = total > 0 ? Math.round((count / total) * 100) : 0
         return (
-          <div key={tile.key} className={clsx('rounded-lg border px-4 py-3', tile.classes)}>
+          <div
+            key={tile.key}
+            data-testid={`sla-summary-tile-${tile.key}`}
+            className={clsx('rounded-lg border px-4 py-3', tile.classes)}
+          >
             <p className="text-xs font-medium uppercase tracking-wider opacity-80">{tile.label}</p>
             <p className="text-2xl font-bold mt-1">
               {count} <span className="text-sm font-normal opacity-70">({pct}%)</span>

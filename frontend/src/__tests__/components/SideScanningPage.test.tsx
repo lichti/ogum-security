@@ -28,9 +28,11 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe('SideScanning page', () => {
-  it('renders page title', () => {
-    render(<SideScanning />, { wrapper })
-    expect(screen.getByText('Side Scanning')).toBeInTheDocument()
+  it('renders the page root', () => {
+    // Page title/subtitle live in the shared top-bar Header (not rendered by
+    // this page in isolation) — see the "Page header" convention in CLAUDE.md.
+    const { container } = render(<SideScanning />, { wrapper })
+    expect(container.querySelector('#side-scanning-page')).toBeInTheDocument()
   })
 
   it('renders KPI cards', () => {

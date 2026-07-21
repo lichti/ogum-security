@@ -109,7 +109,7 @@ export function DetailPanel({ resource, onClose }: DetailPanelProps) {
       className="fixed top-0 right-0 h-full w-full lg:w-[58%] bg-slate-900 border-l border-slate-700 shadow-2xl z-50 overflow-y-auto"
       data-testid="detail-panel"
     >
-      <div className="border-b border-slate-700 sticky top-0 bg-slate-900 z-10">
+      <div id="detail-panel-header" className="border-b border-slate-700 sticky top-0 bg-slate-900 z-10">
         <div className="flex items-center justify-between px-4 pt-3">
           <p className="text-slate-500 text-xs truncate">
             {resource.account_id ?? '—'} <span className="mx-1">›</span> {resource.region ?? '—'}{' '}
@@ -168,7 +168,7 @@ export function DetailPanel({ resource, onClose }: DetailPanelProps) {
                 <MoreVertical className="w-4 h-4" />
               </button>
               {kebabOpen && (
-                <div className="absolute right-0 mt-1 w-44 bg-slate-800 border border-slate-700 rounded-md shadow-lg py-1 z-20">
+                <div id="detail-panel-kebab-menu" className="absolute right-0 mt-1 w-44 bg-slate-800 border border-slate-700 rounded-md shadow-lg py-1 z-20">
                   <button
                     type="button"
                     onClick={() => {
@@ -196,7 +196,7 @@ export function DetailPanel({ resource, onClose }: DetailPanelProps) {
         </div>
 
         {(scanSuccessJobId || scanError) && (
-          <div className="px-4 pb-3">
+          <div id="detail-panel-scan-status" className="px-4 pb-3">
             {scanSuccessJobId && (
               <div className="p-2 bg-green-950 border border-green-800 rounded text-green-400 text-xs flex items-center gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
@@ -209,10 +209,11 @@ export function DetailPanel({ resource, onClose }: DetailPanelProps) {
           </div>
         )}
 
-        <div role="tablist" aria-label="Resource detail tabs" onKeyDown={handleTabKeyDown} className="flex px-4 gap-4 border-t border-slate-800">
+        <div id="detail-panel-tabs" role="tablist" aria-label="Resource detail tabs" onKeyDown={handleTabKeyDown} className="flex px-4 gap-4 border-t border-slate-800">
           {DETAIL_PANEL_TABS.map((tab) => (
             <button
               key={tab.key}
+              data-testid={`detail-panel-tab-${tab.key}`}
               ref={(el) => {
                 tabButtonRefs.current[tab.key] = el
               }}
@@ -232,10 +233,11 @@ export function DetailPanel({ resource, onClose }: DetailPanelProps) {
         </div>
 
         {activeTab.subtabs.length > 0 && (
-          <div role="tablist" aria-label="Resource detail sub-tabs" className="flex px-4 gap-4 pb-2 pt-1">
+          <div id="detail-panel-subtabs" role="tablist" aria-label="Resource detail sub-tabs" className="flex px-4 gap-4 pb-2 pt-1">
             {activeTab.subtabs.map((sub) => (
               <button
                 key={sub.key}
+                data-testid={`detail-panel-subtab-${sub.key}`}
                 role="tab"
                 aria-selected={sub.key === activeSubtabKey}
                 onClick={() => navigateTo(activeTabKey, sub.key)}
@@ -250,18 +252,19 @@ export function DetailPanel({ resource, onClose }: DetailPanelProps) {
         )}
       </div>
 
-      <div className="p-4 space-y-6">
+      <div id="detail-panel-content" className="p-4 space-y-6">
         {activeTabKey === 'info' && activeSubtabKey === 'overview' && (
           <>
             <ResourceNarrative resourceKey={resource.key} onNavigate={navigateTo} />
 
             {Object.keys(resource.tags).length > 0 && (
-              <section>
+              <section id="detail-panel-tags">
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Tags</h3>
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries(resource.tags).map(([k, v]) => (
                     <span
                       key={k}
+                      data-testid={`detail-panel-tag-${k}`}
                       className="px-2 py-0.5 bg-slate-800 border border-slate-700 rounded text-xs text-slate-300"
                     >
                       {k}: {v}
@@ -271,14 +274,14 @@ export function DetailPanel({ resource, onClose }: DetailPanelProps) {
               </section>
             )}
 
-            <section>
+            <section id="detail-panel-relationships">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
                 Relationships ({resource.edges.length})
               </h3>
               <RelationshipGroups edges={resource.edges} onViewInGraph={() => navigateTo('risk', 'blast_radius')} />
             </section>
 
-            <section>
+            <section id="detail-panel-blast-radius">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Blast Radius</h3>
               <BlastRadiusGraph resource={resource} onViewFull={() => navigateTo('risk', 'blast_radius')} />
             </section>
@@ -286,7 +289,7 @@ export function DetailPanel({ resource, onClose }: DetailPanelProps) {
         )}
 
         {activeTabKey === 'risk' && activeSubtabKey === 'blast_radius' && (
-          <section>
+          <section id="detail-panel-risk-blast-radius">
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
               Blast Radius — Reachable Assets
             </h3>
@@ -295,13 +298,13 @@ export function DetailPanel({ resource, onClose }: DetailPanelProps) {
         )}
 
         {activeTabKey === 'software' && activeSubtabKey && (
-          <section>
+          <section id="detail-panel-software">
             <SoftwareInventoryPanel resource={resource} subtabKey={activeSubtabKey} />
           </section>
         )}
 
         {activeTabKey === 'compliance' && (
-          <section>
+          <section id="detail-panel-compliance">
             <ResourceCompliance
               resource={resource}
               framework={complianceFramework}

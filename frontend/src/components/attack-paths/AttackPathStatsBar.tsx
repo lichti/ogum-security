@@ -34,9 +34,9 @@ export function AttackPathStatsBar({ stats, onSeverityClick, onAssetCategoryClic
   ][]
 
   return (
-    <div className="flex flex-col gap-2">
+    <div id="attack-path-stats-bar" className="flex flex-col gap-2">
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="bg-slate-800 rounded-lg px-4 py-2.5 flex items-center gap-2">
+        <div id="attack-path-stats-total" className="bg-slate-800 rounded-lg px-4 py-2.5 flex items-center gap-2">
           <span className="text-slate-400 text-xs">Total</span>
           <span className="text-slate-100 font-bold text-lg">{stats.total}</span>
         </div>
@@ -45,6 +45,7 @@ export function AttackPathStatsBar({ stats, onSeverityClick, onAssetCategoryClic
           <button
             key={sev}
             onClick={() => onSeverityClick(sev)}
+            data-testid={`attack-path-stat-severity-${sev}`}
             className={`rounded-lg px-3 py-2.5 flex items-center gap-2 transition-colors cursor-pointer ${SEVERITY_COLORS[sev]}`}
             aria-label={`Filter by ${sev}`}
           >
@@ -54,7 +55,7 @@ export function AttackPathStatsBar({ stats, onSeverityClick, onAssetCategoryClic
         ))}
 
         {stats.new_24h > 0 && (
-          <div className="bg-slate-800 rounded-lg px-3 py-2.5 flex items-center gap-2">
+          <div id="attack-path-stats-new-24h" className="bg-slate-800 rounded-lg px-3 py-2.5 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
             <span className="text-slate-400 text-xs">New (24h)</span>
             <span className="text-orange-400 font-bold text-sm">{stats.new_24h}</span>
@@ -72,6 +73,7 @@ export function AttackPathStatsBar({ stats, onSeverityClick, onAssetCategoryClic
                   key={category}
                   onClick={() => onAssetCategoryClick?.(category)}
                   aria-label={`Filter by target asset category ${category}`}
+                  data-testid={`attack-path-stat-category-${category}`}
                   className="rounded px-2 py-1 bg-slate-800 border border-slate-700 text-slate-400 hover:border-orange-500 hover:text-orange-400 transition-colors"
                 >
                   {CATEGORY_LABELS[category] ?? category} <span className="font-semibold">{count}</span>
@@ -88,6 +90,7 @@ export function AttackPathStatsBar({ stats, onSeverityClick, onAssetCategoryClic
                   key={reason}
                   onClick={() => onCrownJewelReasonClick?.(reason)}
                   aria-label={`Filter by target crown jewel reason ${reason}`}
+                  data-testid={`attack-path-stat-crown-jewel-reason-${reason}`}
                   className="rounded px-2 py-1 bg-slate-800 border border-slate-700 text-slate-400 hover:border-orange-500 hover:text-orange-400 transition-colors"
                 >
                   {CROWN_JEWEL_REASON_LABELS[reason] ?? reason} <span className="font-semibold">{count}</span>

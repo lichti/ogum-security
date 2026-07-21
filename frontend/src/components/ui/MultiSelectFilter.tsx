@@ -16,6 +16,14 @@ interface MultiSelectFilterProps {
   onChange: (values: string[]) => void
 }
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
+
 export function MultiSelectFilter({ label, options, selected, onChange }: MultiSelectFilterProps) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -42,7 +50,7 @@ export function MultiSelectFilter({ label, options, selected, onChange }: MultiS
   }
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className="relative" ref={containerRef} data-testid={`multi-select-filter-${slugify(label)}`}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -80,6 +88,7 @@ export function MultiSelectFilter({ label, options, selected, onChange }: MultiS
           {options.map((opt) => (
             <label
               key={opt.value}
+              data-testid={`multi-select-filter-option-${opt.value}`}
               className="flex items-center justify-between gap-2 px-3 py-1.5 hover:bg-slate-700/50 cursor-pointer text-sm"
             >
               <span className="flex items-center gap-2 min-w-0">

@@ -37,6 +37,7 @@ function MethodSelector<T extends string>({
       {options.map((opt, i) => (
         <button
           key={opt.value}
+          data-testid={`method-selector-option-${opt.value}`}
           type="button"
           onClick={() => onChange(opt.value)}
           className={[
@@ -162,20 +163,21 @@ export function ConnectWizard({ onComplete, onCancel }: ConnectWizardProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 pb-4">
+    <div id="connect-wizard" className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div id="connect-wizard-content" className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div id="connect-wizard-header" className="flex items-center justify-between p-6 pb-4">
           <h2 className="text-lg font-semibold text-slate-100">Connect Cloud Account</h2>
           <button onClick={onCancel} className="text-slate-500 hover:text-slate-300 text-xl leading-none">×</button>
         </div>
 
         <div className="px-6 pb-6">
           {step === 'select' && (
-            <div className="space-y-3">
+            <div id="connect-wizard-select-step" className="space-y-3">
               <p className="text-slate-400 text-sm mb-4">Select the cloud provider to connect:</p>
               {PROVIDERS.map((p) => (
                 <button
                   key={p.id}
+                  data-testid={`connect-wizard-provider-option-${p.id}`}
                   onClick={() => { setSelectedProvider(p.id); setStep('configure') }}
                   className="w-full text-left p-4 rounded-lg border border-slate-700 hover:border-orange-500 hover:bg-slate-800 transition-colors group"
                 >
@@ -192,8 +194,9 @@ export function ConnectWizard({ onComplete, onCancel }: ConnectWizardProps) {
           )}
 
           {step === 'configure' && (
-            <div className="space-y-4">
+            <div id="connect-wizard-configure-step" className="space-y-4">
               <button
+                id="connect-wizard-back-button"
                 onClick={() => setStep('select')}
                 className="text-slate-500 hover:text-slate-300 text-sm flex items-center gap-1"
               >
@@ -254,7 +257,7 @@ export function ConnectWizard({ onComplete, onCancel }: ConnectWizardProps) {
                         </p>
                       </div>
 
-                      <div className="border border-slate-700 rounded-lg overflow-hidden">
+                      <div id="connect-wizard-iam-guide" className="border border-slate-700 rounded-lg overflow-hidden">
                         <button
                           type="button"
                           onClick={() => setShowSetupGuide((v) => !v)}
@@ -552,12 +555,13 @@ aws iam attach-role-policy \\
               )}
 
               {error && (
-                <div className="text-red-400 text-sm bg-red-950 border border-red-800 rounded-lg p-3">
+                <div id="connect-wizard-error" className="text-red-400 text-sm bg-red-950 border border-red-800 rounded-lg p-3">
                   {error}
                 </div>
               )}
 
               <button
+                id="connect-wizard-connect-button"
                 onClick={handleConnect}
                 className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-colors"
               >
@@ -567,7 +571,7 @@ aws iam attach-role-policy \\
           )}
 
           {step === 'connecting' && (
-            <div className="text-center py-8">
+            <div id="connect-wizard-connecting-step" className="text-center py-8">
               <Loader2 className="w-8 h-8 text-orange-400 animate-spin mx-auto mb-4" />
               <p className="text-slate-300">Connecting and starting discovery...</p>
               <p className="text-slate-500 text-sm mt-1">
@@ -577,7 +581,7 @@ aws iam attach-role-policy \\
           )}
 
           {step === 'done' && (
-            <div className="text-center py-8">
+            <div id="connect-wizard-done-step" className="text-center py-8">
               <CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-4" />
               <h3 className="text-slate-200 font-semibold mb-2">Account Connected!</h3>
               <p className="text-slate-400 text-sm mb-1">Discovery is running in the background.</p>
@@ -586,6 +590,7 @@ aws iam attach-role-policy \\
               </p>
               {jobId && <p className="text-slate-600 text-xs font-mono mt-2">Job: {jobId}</p>}
               <button
+                id="connect-wizard-done-button"
                 onClick={onComplete}
                 className="mt-6 px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors"
               >
