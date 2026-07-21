@@ -194,6 +194,22 @@ export interface SLASettings {
   low_days: number
 }
 
+export interface ComplianceFamilySettings {
+  enabled: boolean
+  target_by_control: number | null
+}
+
+export interface ComplianceFamilySettingsView extends ComplianceFamilySettings {
+  family_key: string
+  family_label: string
+}
+
+export interface ComplianceFamilySettingsUpdateRequest {
+  enabled?: boolean
+  target_by_control?: number
+  clear_target_by_control?: boolean
+}
+
 export interface SLASummary {
   within_sla: number
   at_risk: number
@@ -226,6 +242,8 @@ export interface FindingsFilter {
   region?: string
   account_id?: string
   resource_type?: string
+  resource_id?: string
+  check_id?: string
   source?: FindingSource[]
   q?: string
   limit: number
@@ -246,6 +264,9 @@ export interface ComplianceSection {
 export interface ComplianceVersion {
   id: string
   version_label: string
+  // By Control counts — the headline shown in FrameworkSidebar and FrameworkDetail's
+  // header. Falls back to a plain finding tally only for bare-mapping frameworks with
+  // no control granularity at all (rare, e.g. some Checkov/IaC slugs).
   pass: number
   fail: number
   total: number
@@ -257,20 +278,35 @@ export interface ComplianceFamily {
   family: string
   label: string
   versions: ComplianceVersion[]
+  target_by_control: number | null
+}
+
+export interface ComplianceTopCheck {
+  check_id: string
+  title: string
+  severity: SeverityLevel
+  count: number
+}
+
+export interface ComplianceTopAsset {
+  resource_id: string
+  resource_type: string
+  provider: string
+  region: string | null
+  account_id: string
+  count: number
 }
 
 export interface ComplianceSummary {
   families: ComplianceFamily[]
   threat_score: number
-  top_failing: { check_id: string; title: string; severity: SeverityLevel; count: number }[]
+  // Grouped by check — "which policy gap, fixed once, helps the most".
+  top_failing: ComplianceTopCheck[]
+  // Grouped by resource — "which single asset concentrates the most risk".
+  top_assets: ComplianceTopAsset[]
 }
 
 export type ComplianceControlStatus = 'PASS' | 'FAIL' | 'UNSCORED'
-
-// Control counts controls (ACCEPTED folds into Pass, MUTED folds into Unscored).
-// Findings counts raw findings by real status — MUTED/ACCEPTED shown, but excluded
-// from the score_by_asset ratio, same as Unscored is excluded from score_by_control.
-export type ComplianceView = 'control' | 'findings'
 
 export interface ComplianceRequirementNode {
   control_id: string
@@ -292,11 +328,6 @@ export interface ComplianceSectionNode {
   control_unscored_count: number
   control_total: number
   score_by_control: number
-  finding_pass_count: number
-  finding_fail_count: number
-  finding_accepted_count: number
-  finding_muted_count: number
-  score_by_asset: number
   subsections: ComplianceSectionNode[]
   requirements: ComplianceRequirementNode[]
 }
@@ -307,17 +338,23 @@ export interface ComplianceFrameworkDetail {
   family_label: string
   version_label: string
   score_by_control: number
-  score_by_asset: number
+  target_by_control: number | null
   control_pass_count: number
   control_fail_count: number
   control_unscored_count: number
   control_total: number
-  finding_pass_count: number
-  finding_fail_count: number
-  finding_accepted_count: number
-  finding_muted_count: number
   catalog_available: boolean
   sections: ComplianceSectionNode[]
+}
+
+export interface ComplianceControlAsset {
+  resource_id: string
+  resource_type: string
+  provider: string
+  region: string | null
+  account_id: string
+  pass_count: number
+  fail_count: number
 }
 
 export type CompliancePeriod = '7d' | '14d' | '1m'
@@ -325,7 +362,6 @@ export type CompliancePeriod = '7d' | '14d' | '1m'
 export interface ComplianceScoreTrendPoint {
   date: string
   score_by_control: number
-  score_by_asset: number
   pass_count: number
   fail_count: number
   unscored_count: number
@@ -431,10 +467,33 @@ export interface ScanJob {
   checks_completed: number
   findings_found: number
   findings_fail: number
+  findings_new: number
+  findings_updated: number
+  findings_removed: number
+  assets_total: number
+  assets_removed: number
+  duration_seconds: number | null
   started_at: string | null
   completed_at: string | null
   created_at: string
   error_message: string | null
+}
+
+export interface PagedScanJobs {
+  items: ScanJob[]
+  next_cursor: string | null
+}
+
+export interface ScanJobLogs {
+  job_id: string
+  logs: string[]
+}
+
+export interface ScanJobFilter {
+  status?: ScanJobStatus[]
+  provider_id?: string
+  limit?: number
+  cursor?: string
 }
 
 export interface ScanTriggerRequest {

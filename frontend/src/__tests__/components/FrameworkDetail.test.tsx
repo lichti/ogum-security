@@ -3,11 +3,13 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { FrameworkDetail } from '@/components/compliance/FrameworkDetail'
-import { complianceApi } from '@/lib/api'
+import { complianceApi, findingsApi, settingsApi } from '@/lib/api'
 import type { ComplianceFamily, ComplianceFrameworkDetail } from '@/lib/types'
 
 jest.mock('@/lib/api', () => ({
-  complianceApi: { frameworkDetail: jest.fn(), trend: jest.fn() },
+  complianceApi: { frameworkDetail: jest.fn(), trend: jest.fn(), controlAssets: jest.fn() },
+  settingsApi: { updateCompliance: jest.fn() },
+  findingsApi: { list: jest.fn() },
 }))
 
 jest.mock('next/navigation', () => ({
@@ -16,6 +18,9 @@ jest.mock('next/navigation', () => ({
 
 const mockFrameworkDetail = complianceApi.frameworkDetail as jest.Mock
 const mockTrend = complianceApi.trend as jest.Mock
+const mockControlAssets = complianceApi.controlAssets as jest.Mock
+const mockUpdateCompliance = settingsApi.updateCompliance as jest.Mock
+const mockFindingsList = findingsApi.list as jest.Mock
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -32,15 +37,11 @@ function mockDetail(overrides: Partial<ComplianceFrameworkDetail> = {}): Complia
     family_label: 'NIST 800-53',
     version_label: 'Revision 5',
     score_by_control: 66.7,
-    score_by_asset: 66.7,
+    target_by_control: null,
     control_pass_count: 10,
     control_fail_count: 5,
     control_unscored_count: 0,
     control_total: 15,
-    finding_pass_count: 10,
-    finding_fail_count: 5,
-    finding_accepted_count: 0,
-    finding_muted_count: 0,
     catalog_available: false,
     sections: [],
     ...overrides,
@@ -50,6 +51,7 @@ function mockDetail(overrides: Partial<ComplianceFrameworkDetail> = {}): Complia
 const family: ComplianceFamily = {
   family: 'nist-800-53',
   label: 'NIST 800-53',
+  target_by_control: null,
   versions: [
     {
       id: 'NIST-800-53-Revision-5',
@@ -78,6 +80,9 @@ beforeEach(() => {
   jest.clearAllMocks()
   mockFrameworkDetail.mockResolvedValue({ data: { data: mockDetail() } })
   mockTrend.mockResolvedValue({ data: { data: [] } })
+  mockUpdateCompliance.mockResolvedValue({ data: { data: {} } })
+  mockControlAssets.mockResolvedValue({ data: { data: [] } })
+  mockFindingsList.mockResolvedValue({ data: { data: { items: [], next_cursor: null } } })
 })
 
 describe('FrameworkDetail', () => {
@@ -117,6 +122,7 @@ describe('FrameworkDetail', () => {
     const single: ComplianceFamily = {
       family: 'SOC2',
       label: 'SOC 2',
+      target_by_control: null,
       versions: [{ id: 'SOC2', version_label: '', pass: 1, fail: 1, total: 2, score: 50, sections: [] }],
     }
     renderWithClient(<FrameworkDetail family={single} selectedVersionId="SOC2" onVersionChange={onVersionChange} />)
@@ -126,12 +132,10 @@ describe('FrameworkDetail', () => {
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
   })
 
-  it('fetches and renders the framework detail: score duality, heatmap, and accordion', async () => {
+  it('fetches and renders the framework detail: unscored count and expandable sections', async () => {
     mockFrameworkDetail.mockResolvedValue({
       data: {
         data: mockDetail({
-          score_by_control: 40,
-          score_by_asset: 66.7,
           control_unscored_count: 3,
           catalog_available: true,
           sections: [
@@ -143,11 +147,6 @@ describe('FrameworkDetail', () => {
               control_unscored_count: 0,
               control_total: 7,
               score_by_control: 85.7,
-              finding_pass_count: 6,
-              finding_fail_count: 1,
-              finding_accepted_count: 0,
-              finding_muted_count: 0,
-              score_by_asset: 85.7,
               subsections: [],
               requirements: [
                 {
@@ -176,38 +175,49 @@ describe('FrameworkDetail', () => {
       expect(mockFrameworkDetail).toHaveBeenCalledWith('NIST-800-53-Revision-5')
     })
 
-    // Score duality — both scores shown, distinct from each other.
-    expect(await screen.findByText('40%')).toBeInTheDocument()
-    expect(screen.getByText('By control')).toBeInTheDocument()
-    expect(screen.getByText('By asset')).toBeInTheDocument()
-    // Unscored count (3) appears twice: ScoreDuality's stat and the summary row's Unscored bucket.
-    expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(2)
+    // Unscored count (3) appears twice: the header stat and the summary row's Unscored bucket.
+    expect(await screen.findAllByText('3')).toHaveLength(2)
 
-    // "AC — Access Control" appears twice: once in the heatmap cell, once as the
-    // accordion's section header button.
-    const sectionLabels = screen.getAllByText('AC — Access Control')
-    expect(sectionLabels).toHaveLength(2)
+    // Sections merges the heatmap row and the accordion toggle into one — "AC —
+    // Access Control" now renders exactly once, not once per representation.
+    const sectionLabel = screen.getByText('AC — Access Control')
     expect(screen.getByText('85.7%')).toBeInTheDocument()
 
-    // Accordion — collapsed by default, requirement hidden until expanded.
+    // Collapsed by default, requirement hidden until the section row is clicked.
     expect(screen.queryByText('Account Management')).not.toBeInTheDocument()
-    const accordionHeader = sectionLabels.find((el) => el.closest('button'))
-    fireEvent.click(accordionHeader!.closest('button')!)
+    fireEvent.click(sectionLabel.closest('button')!)
     expect(await screen.findByText('Account Management')).toBeInTheDocument()
   })
 
-  it('toggles the summary row between the Control and Findings breakdowns', async () => {
+  it('clicking a Fail/Pass requirement row opens the control drilldown panel', async () => {
     mockFrameworkDetail.mockResolvedValue({
       data: {
         data: mockDetail({
-          control_pass_count: 8,
-          control_fail_count: 2,
-          control_unscored_count: 5,
-          control_total: 15,
-          finding_pass_count: 20,
-          finding_fail_count: 4,
-          finding_accepted_count: 3,
-          finding_muted_count: 1,
+          sections: [
+            {
+              key: 'ac',
+              label: 'AC — Access Control',
+              control_pass_count: 6,
+              control_fail_count: 1,
+              control_unscored_count: 0,
+              control_total: 7,
+              score_by_control: 85.7,
+              subsections: [],
+              requirements: [
+                {
+                  control_id: 'ac_2',
+                  name: 'Account Management',
+                  description: null,
+                  status: 'FAIL',
+                  finding_key: 'find-1',
+                  pass_count: 0,
+                  fail_count: 1,
+                  accepted_count: 0,
+                  muted_count: 0,
+                },
+              ],
+            },
+          ],
         }),
       },
     })
@@ -216,20 +226,122 @@ describe('FrameworkDetail', () => {
       <FrameworkDetail family={family} selectedVersionId="NIST-800-53-Revision-5" onVersionChange={onVersionChange} />,
     )
 
-    // Control view (default): Pass/Fail/Unscored/Total, no Accepted/Muted.
-    expect(await screen.findByText('By Control')).toBeInTheDocument()
-    expect(screen.getByText('8')).toBeInTheDocument()
+    fireEvent.click(await screen.findByText('AC — Access Control'))
+    fireEvent.click(await screen.findByText('Account Management'))
+
+    expect(await screen.findByTestId('control-drilldown-panel')).toBeInTheDocument()
+    expect(screen.getByText('ac_2')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(mockFindingsList).toHaveBeenCalledWith(
+        expect.objectContaining({ framework: ['NIST-800-53-Revision-5/ac_2'] }),
+      ),
+    )
+  })
+
+  it('renders Score Trend before Sections, and Sections with no collapse toggle', async () => {
+    mockFrameworkDetail.mockResolvedValue({
+      data: {
+        data: mockDetail({
+          sections: [
+            {
+              key: 'ac',
+              label: 'AC — Access Control',
+              control_pass_count: 6,
+              control_fail_count: 1,
+              control_unscored_count: 0,
+              control_total: 7,
+              score_by_control: 85.7,
+              subsections: [],
+              requirements: [],
+            },
+          ],
+        }),
+      },
+    })
+
+    const { container } = renderWithClient(
+      <FrameworkDetail family={family} selectedVersionId="NIST-800-53-Revision-5" onVersionChange={onVersionChange} />,
+    )
+
+    await screen.findByText('AC — Access Control')
+
+    const trend = container.querySelector('#compliance-score-trend-chart')
+    const sections = container.querySelector('#compliance-sections')
+    expect(trend).toBeInTheDocument()
+    expect(sections).toBeInTheDocument()
+    // DOCUMENT_POSITION_FOLLOWING (4) means `sections` comes after `trend` in the DOM.
+    expect(trend!.compareDocumentPosition(sections!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    // "Sections" is a plain heading now, not a collapsible toggle button.
+    expect(screen.queryByRole('button', { name: /Sections/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Sections (1)')).toBeInTheDocument()
+  })
+
+  it('shows a vs-goal indicator when a Compliance Settings target is configured', async () => {
+    mockFrameworkDetail.mockResolvedValue({
+      data: {
+        data: mockDetail({
+          score_by_control: 40,
+          target_by_control: 90, // below goal
+        }),
+      },
+    })
+
+    renderWithClient(
+      <FrameworkDetail family={family} selectedVersionId="NIST-800-53-Revision-5" onVersionChange={onVersionChange} />,
+    )
+
+    expect(await screen.findByText('▾ Goal 90%')).toBeInTheDocument()
+  })
+
+  it('setting a goal inline calls settingsApi.updateCompliance for this family and refreshes the detail', async () => {
+    renderWithClient(
+      <FrameworkDetail family={family} selectedVersionId="NIST-800-53-Revision-5" onVersionChange={onVersionChange} />,
+    )
+    await waitFor(() => expect(mockFrameworkDetail).toHaveBeenCalledWith('NIST-800-53-Revision-5'))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Set control goal' }))
+    fireEvent.change(screen.getByLabelText('control goal percentage'), { target: { value: '80' } })
+    fireEvent.click(screen.getByLabelText('Save goal'))
+
+    await waitFor(() =>
+      expect(mockUpdateCompliance).toHaveBeenCalledWith('nist-800-53', { target_by_control: 80 }),
+    )
+    // Saving a target re-fetches the framework detail so the new goal shows up immediately.
+    await waitFor(() => expect(mockFrameworkDetail).toHaveBeenCalledTimes(2))
+  })
+
+  it('clearing an existing goal sends the clear flag, not a value', async () => {
+    mockFrameworkDetail.mockResolvedValue({ data: { data: mockDetail({ target_by_control: 60 }) } })
+    renderWithClient(
+      <FrameworkDetail family={family} selectedVersionId="NIST-800-53-Revision-5" onVersionChange={onVersionChange} />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit control goal' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear goal' }))
+
+    await waitFor(() =>
+      expect(mockUpdateCompliance).toHaveBeenCalledWith('nist-800-53', { clear_target_by_control: true }),
+    )
+  })
+
+  it('shows the Pass/Fail/Unscored/Total summary row from the fetched detail', async () => {
+    mockFrameworkDetail.mockResolvedValue({
+      data: {
+        data: mockDetail({
+          control_pass_count: 8,
+          control_fail_count: 2,
+          control_unscored_count: 5,
+          control_total: 15,
+        }),
+      },
+    })
+
+    renderWithClient(
+      <FrameworkDetail family={family} selectedVersionId="NIST-800-53-Revision-5" onVersionChange={onVersionChange} />,
+    )
+
+    expect(await screen.findByText('8')).toBeInTheDocument()
     expect(screen.getByText('15')).toBeInTheDocument()
-    expect(screen.queryByText('Accepted')).not.toBeInTheDocument()
-    expect(screen.queryByText('Muted')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByText('By Findings'))
-
-    expect(screen.getByText('Accepted')).toBeInTheDocument()
-    expect(screen.getByText('Muted')).toBeInTheDocument()
-    expect(screen.getByText('20')).toBeInTheDocument() // finding_pass_count
-    expect(screen.getByText('3')).toBeInTheDocument() // finding_accepted_count
-    // Total = 20+4+3+1+5 (control_unscored_count reused as context) = 33
-    expect(screen.getByText('33')).toBeInTheDocument()
   })
 })
