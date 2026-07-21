@@ -79,7 +79,7 @@ def _soft_delete_stale(
     tenant_id: str,
     provider: str,
     inventory: dict[str, list[dict[str, Any]]],
-) -> int:
+) -> dict[str, list[str]]:
     """Mark resources/identities/data_assets absent from this scan as deleted.
 
     Scoped to (tenant_id, provider) — a single Prowler run covers every
@@ -87,10 +87,15 @@ def _soft_delete_stale(
     scoping is needed (unlike the old typed discovery.py soft-delete, which
     had to avoid deleting resources outside the specific type/region scope of
     a partial discovery run).
+
+    Returns the deleted docs' `resource_id` field (not the ArangoDB `_key`,
+    which is a hash of `resource_id` and not what `Finding.resource_id`
+    carries) per collection, so the caller can cascade-clean findings tied to
+    a resource that just vanished — see `_cascade_delete_findings`.
     """
     now = datetime.now(UTC).isoformat()
     normalized_provider = "k8s" if provider == "kubernetes" else provider
-    total = 0
+    deleted_resource_ids: dict[str, list[str]] = {}
     for collection, docs in inventory.items():
         discovered_keys = [doc["_key"] for doc in docs]
         cursor = db.aql.execute(
@@ -101,7 +106,7 @@ def _soft_delete_stale(
               FILTER doc.status != "deleted"
               FILTER doc._key NOT IN @discovered_keys
               UPDATE doc WITH { status: "deleted", deleted_at: @now, updated_at: @now } IN @@collection
-              RETURN 1
+              RETURN doc.resource_id
             """,
             bind_vars={
                 "@collection": collection,
@@ -111,8 +116,66 @@ def _soft_delete_stale(
                 "now": now,
             },
         )
-        total += len(list(cursor))
-    return total
+        deleted_resource_ids[collection] = list(cursor)
+    return deleted_resource_ids
+
+
+def _cascade_delete_findings(db: Any, tenant_id: str, deleted_resource_ids: list[str]) -> int:
+    """Hard-delete findings whose resource was just soft-deleted this run.
+
+    Unlike resources (kept, marked `status: deleted`, for the inventory audit
+    trail), a finding about a resource that no longer exists has no further
+    action attached to it — leaving it in place just reproduces the orphaned
+    "unknown"-style clutter already cleaned out of this collection once
+    (findings whose resource_id never resolves to a live document). Also
+    sweeps the now-dangling HAS_FINDING edges.
+    """
+    if not deleted_resource_ids:
+        return 0
+    cursor = db.aql.execute(
+        """
+        FOR f IN findings
+          FILTER f.tenant_id == @tenant_id
+          FILTER f.resource_id IN @resource_ids
+          REMOVE f IN findings
+          RETURN OLD._key
+        """,
+        bind_vars={"tenant_id": tenant_id, "resource_ids": deleted_resource_ids},
+    )
+    removed_finding_keys = list(cursor)
+    if removed_finding_keys:
+        db.aql.execute(
+            """
+            FOR e IN HAS_FINDING
+              FILTER PARSE_IDENTIFIER(e._to).key IN @finding_keys
+              REMOVE e IN HAS_FINDING
+            """,
+            bind_vars={"finding_keys": removed_finding_keys},
+        )
+    return len(removed_finding_keys)
+
+
+def _count_new_and_updated_findings(db: Any, tenant_id: str, job_id: str) -> tuple[int, int]:
+    """New vs. re-affirmed findings this run, from the first/last-seen stamps
+    `upsert_finding` already writes on every insert/update."""
+    cursor = db.aql.execute(
+        """
+        FOR f IN findings
+          FILTER f.tenant_id == @tenant_id
+          FILTER f.last_seen_scan_id == @job_id
+          COLLECT is_new = (f.first_seen_scan_id == @job_id) WITH COUNT INTO cnt
+          RETURN { is_new, cnt }
+        """,
+        bind_vars={"tenant_id": tenant_id, "job_id": job_id},
+    )
+    new_count = 0
+    updated_count = 0
+    for row in cursor:
+        if row["is_new"]:
+            new_count = row["cnt"]
+        else:
+            updated_count = row["cnt"]
+    return new_count, updated_count
 
 
 def _auto_trigger_side_scans(
@@ -284,9 +347,9 @@ def run_cspm_scan(
 
         # Score snapshot for the Compliance Score Trend chart — one row per framework,
         # upserted by day (see snapshot_compliance_scores). Runs for every provider,
-        # not just AWS: score_by_asset is computable tenant-wide regardless of catalog
-        # availability, so Azure/GCP/K8s frameworks still get a trend even though their
-        # score_by_control/Unscored state can't be computed (no AWS catalog for them).
+        # not just AWS: score_by_control only needs control-id granularity in
+        # framework_mapping, not the AWS catalog — the catalog just adds Unscored
+        # padding for controls with no finding yet, when it's available.
         try:
             snapshot_compliance_scores(db, tenant_id)
         except Exception:
@@ -300,7 +363,10 @@ def run_cspm_scan(
             account_id=account_id,
         )
         inventory_count = _upsert_inventory(db, inventory)
-        deleted_count = _soft_delete_stale(db, tenant_id, provider, inventory)
+        deleted_resource_ids = _soft_delete_stale(db, tenant_id, provider, inventory)
+        deleted_count = sum(len(ids) for ids in deleted_resource_ids.values())
+        assets_removed = len(deleted_resource_ids.get("resources", []))
+        findings_removed = _cascade_delete_findings(db, tenant_id, deleted_resource_ids.get("resources", []))
 
         # Side-scanning is AWS-only (scan_ec2_instance_v2/scan_lambda_function) and
         # needs a live boto3 session, which credentials/provider_id here already
@@ -318,6 +384,8 @@ def run_cspm_scan(
         exposure_counts = compute_exposed_internet(db, tenant_id)
 
         fail_count = sum(1 for f in findings if f.status == "FAIL")
+        findings_new, findings_updated = _count_new_and_updated_findings(db, tenant_id, job_id)
+        completed_at = datetime.now(UTC)
         _update_job(
             db,
             job_id,
@@ -326,16 +394,26 @@ def run_cspm_scan(
             checks_completed=len(findings),
             findings_found=len(findings),
             findings_fail=fail_count,
-            completed_at=datetime.now(UTC).isoformat(),
+            findings_new=findings_new,
+            findings_updated=findings_updated,
+            findings_removed=findings_removed,
+            assets_total=len(inventory.get("resources", [])),
+            assets_removed=assets_removed,
+            duration_seconds=(completed_at - job.started_at).total_seconds() if job.started_at else None,
+            completed_at=completed_at.isoformat(),
         )
 
         logger.info(
-            "CSPM scan complete [tenant=%s provider=%s]: findings=%d fail=%d inventory=%d deleted=%d "
-            "iam_edges=%s resource_edges=%s data_access_edges=%d exposure=%s side_scans_triggered=%d",
+            "CSPM scan complete [tenant=%s provider=%s]: findings=%d fail=%d new=%d updated=%d removed=%d "
+            "inventory=%d deleted=%d iam_edges=%s resource_edges=%s data_access_edges=%d exposure=%s "
+            "side_scans_triggered=%d",
             tenant_id,
             provider,
             len(findings),
             fail_count,
+            findings_new,
+            findings_updated,
+            findings_removed,
             inventory_count,
             deleted_count,
             iam_edge_counts,
@@ -363,6 +441,9 @@ def run_cspm_scan(
             "provider": provider,
             "findings_found": len(findings),
             "findings_fail": fail_count,
+            "findings_new": findings_new,
+            "findings_updated": findings_updated,
+            "findings_removed": findings_removed,
             "inventory_upserted": inventory_count,
             "inventory_deleted": deleted_count,
             "iam_edges": iam_edge_counts,
@@ -373,12 +454,14 @@ def run_cspm_scan(
 
     except Exception as exc:
         logger.exception("CSPM scan failed [tenant=%s job=%s]: %s", tenant_id, job_id, exc)
+        failed_at = datetime.now(UTC)
         _update_job(
             db,
             job_id,
             status=ScanJobStatus.FAILED,
             error_message=str(exc),
-            completed_at=datetime.now(UTC).isoformat(),
+            duration_seconds=(failed_at - job.started_at).total_seconds() if job.started_at else None,
+            completed_at=failed_at.isoformat(),
         )
         raise self.retry(exc=exc)
     finally:

@@ -61,6 +61,7 @@ def _seed_scan_job(db, job_id: str, tenant_id: str = TEST_TENANT_A, status: str 
             "tenant_id": tenant_id,
             "provider_id": "aws-111111111111",
             "provider": "aws",
+            "task_name": "cspm_scan/aws",
             "frameworks": ["CIS-AWS-2.0"],
             "regions": ["us-east-1"],
             "status": status,
@@ -217,9 +218,9 @@ class TestListScans:
         resp = api_client.get("/api/v1/scans", headers=HEADERS)
 
         assert resp.status_code == 200
-        jobs = resp.json()["data"]
-        assert len(jobs) == 2
-        for job in jobs:
+        body = resp.json()["data"]
+        assert len(body["items"]) == 2
+        for job in body["items"]:
             assert job["tenant_id"] == TEST_TENANT_A
 
     def test_list_scans_empty_returns_empty_list(self, api_client):
@@ -227,4 +228,148 @@ class TestListScans:
         resp = api_client.get("/api/v1/scans", headers=HEADERS)
 
         assert resp.status_code == 200
-        assert resp.json()["data"] == []
+        assert resp.json()["data"] == {"items": [], "next_cursor": None}
+
+    def test_list_scans_excludes_side_scan_jobs(self, api_client, db_tenant_a):
+        """`scan_jobs` is shared with side-scanning (`task_name` "side_scan/*", no
+        `frameworks` field at all) — mixing one into the CSPM list used to 500 the
+        whole endpoint (ValidationError: frameworks Field required)."""
+        _seed_scan_job(db_tenant_a, "job-cspm")
+        db_tenant_a.collection("scan_jobs").insert(
+            {
+                "_key": "job-side-scan",
+                "job_id": "job-side-scan",
+                "tenant_id": TEST_TENANT_A,
+                "task_name": "side_scan/ec2",
+                "status": "completed",
+                "created_at": "2026-07-04T00:00:00+00:00",
+            },
+            overwrite=True,
+        )
+
+        resp = api_client.get("/api/v1/scans", headers=HEADERS)
+
+        assert resp.status_code == 200
+        job_ids = [j["job_id"] for j in resp.json()["data"]["items"]]
+        assert job_ids == ["job-cspm"]
+
+    def test_get_scan_status_404s_for_a_side_scan_job_id(self, api_client, db_tenant_a):
+        """GET /{job_id} scoped to CSPM jobs — a side-scan job id is out of scope
+        for this endpoint (it has its own registry, the Side Scanning page)."""
+        db_tenant_a.collection("scan_jobs").insert(
+            {
+                "_key": "job-side-scan",
+                "job_id": "job-side-scan",
+                "tenant_id": TEST_TENANT_A,
+                "task_name": "side_scan/ec2",
+                "status": "completed",
+                "created_at": "2026-07-04T00:00:00+00:00",
+            },
+            overwrite=True,
+        )
+
+        resp = api_client.get("/api/v1/scans/job-side-scan", headers=HEADERS)
+        assert resp.status_code == 404
+
+    def test_list_scans_filters_by_status(self, api_client, db_tenant_a):
+        _seed_scan_job(db_tenant_a, "job-completed", status="completed")
+        _seed_scan_job(db_tenant_a, "job-failed", status="failed")
+
+        resp = api_client.get("/api/v1/scans?status=failed", headers=HEADERS)
+
+        body = resp.json()["data"]
+        assert len(body["items"]) == 1
+        assert body["items"][0]["job_id"] == "job-failed"
+
+    def test_list_scans_filters_by_provider_id(self, api_client, db_tenant_a):
+        _seed_scan_job(db_tenant_a, "job-a")
+        db_tenant_a.collection("scan_jobs").update({"_key": "job-a", "provider_id": "aws-222222222222"})
+        _seed_scan_job(db_tenant_a, "job-b")
+
+        resp = api_client.get("/api/v1/scans?provider_id=aws-222222222222", headers=HEADERS)
+
+        body = resp.json()["data"]
+        assert len(body["items"]) == 1
+        assert body["items"][0]["job_id"] == "job-a"
+
+    def test_list_scans_paginates_with_cursor(self, api_client, db_tenant_a):
+        for i in range(3):
+            _seed_scan_job(db_tenant_a, f"job-{i}")
+            db_tenant_a.collection("scan_jobs").update(
+                {"_key": f"job-{i}", "created_at": f"2026-07-0{i + 1}T00:00:00+00:00"}
+            )
+
+        first_page = api_client.get("/api/v1/scans?limit=2", headers=HEADERS).json()["data"]
+        assert len(first_page["items"]) == 2
+        assert first_page["items"][0]["job_id"] == "job-2"  # newest first
+        assert first_page["next_cursor"] is not None
+
+        second_page = api_client.get(
+            f"/api/v1/scans?limit=2&cursor={first_page['next_cursor']}", headers=HEADERS
+        ).json()["data"]
+        assert len(second_page["items"]) == 1
+        assert second_page["items"][0]["job_id"] == "job-0"
+        assert second_page["next_cursor"] is None
+
+    def test_get_scan_status_includes_new_summary_fields(self, api_client, db_tenant_a):
+        """The counts the Scans page needs (US-14.23) round-trip through the API."""
+        _seed_scan_job(db_tenant_a, "job-summary")
+        db_tenant_a.collection("scan_jobs").update(
+            {
+                "_key": "job-summary",
+                "findings_new": 3,
+                "findings_updated": 5,
+                "findings_removed": 1,
+                "assets_total": 12,
+                "assets_removed": 2,
+                "duration_seconds": 45.5,
+            }
+        )
+
+        resp = api_client.get("/api/v1/scans/job-summary", headers=HEADERS)
+        data = resp.json()["data"]
+        assert data["findings_new"] == 3
+        assert data["findings_updated"] == 5
+        assert data["findings_removed"] == 1
+        assert data["assets_total"] == 12
+        assert data["assets_removed"] == 2
+        assert data["duration_seconds"] == 45.5
+
+
+# ─── GET /api/v1/scans/{job_id}/logs ───────────────────────────────────────────
+
+
+@pytest.mark.integration
+class TestGetScanLogs:
+    def test_get_logs_returns_lines(self, api_client, db_tenant_a):
+        _seed_scan_job(db_tenant_a, "job-logs")
+        db_tenant_a.collection("scan_jobs").update({"_key": "job-logs", "logs": ["line 1", "line 2"]})
+
+        resp = api_client.get("/api/v1/scans/job-logs/logs", headers=HEADERS)
+
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["job_id"] == "job-logs"
+        assert data["logs"] == ["line 1", "line 2"]
+
+    def test_get_logs_defaults_to_empty_list(self, api_client, db_tenant_a):
+        """A job with no `logs` field yet (still running) returns [], not an error."""
+        _seed_scan_job(db_tenant_a, "job-no-logs")
+
+        resp = api_client.get("/api/v1/scans/job-no-logs/logs", headers=HEADERS)
+
+        assert resp.status_code == 200
+        assert resp.json()["data"]["logs"] == []
+
+    def test_get_logs_nonexistent_job_returns_404(self, api_client):
+        resp = api_client.get("/api/v1/scans/does-not-exist/logs", headers=HEADERS)
+        assert resp.status_code == 404
+
+    def test_get_logs_wrong_tenant_returns_403(self, api_client, db_tenant_a):
+        _seed_scan_job(db_tenant_a, "job-tenant-a", tenant_id=TEST_TENANT_A)
+
+        resp = api_client.get(
+            "/api/v1/scans/job-tenant-a/logs",
+            headers={"X-Tenant-Id": "other-tenant-bbb"},
+        )
+        assert resp.status_code == 403

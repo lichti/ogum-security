@@ -107,6 +107,15 @@ class ScanJob(BaseModel):
     checks_completed: int = 0
     findings_found: int = 0
     findings_fail: int = 0
+    # Populated at completion (US-14.23, the Scans page) — new/updated are
+    # derived from Finding.first_seen_scan_id/last_seen_scan_id, removed is a
+    # cascade count (findings whose resource got soft-deleted this same run).
+    findings_new: int = 0
+    findings_updated: int = 0
+    findings_removed: int = 0
+    assets_total: int = 0
+    assets_removed: int = 0
+    duration_seconds: float | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error_message: str | None = None
