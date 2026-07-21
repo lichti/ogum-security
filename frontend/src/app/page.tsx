@@ -70,6 +70,7 @@ function QuickLink({
   return (
     <Link
       href={href}
+      data-testid={`quick-link-${label.toLowerCase().replace(/\s+/g, '-')}`}
       className="flex items-center gap-3 p-3 rounded-lg border border-slate-800 bg-slate-900 hover:border-orange-500/40 hover:bg-orange-500/5 transition-colors group"
     >
       <Icon className="w-4 h-4 text-orange-400 shrink-0" />
@@ -99,7 +100,7 @@ export default function DashboardPage() {
 
   const { data: scansData } = useQuery({
     queryKey: ['scans-list'],
-    queryFn: () => scansApi.list(),
+    queryFn: () => scansApi.list({ limit: 5 }),
     refetchInterval: 30_000,
   })
 
@@ -111,22 +112,17 @@ export default function DashboardPage() {
 
   const threatScore = complianceData?.data.data.threat_score ?? null
   const stats = statsData?.data.data
-  const recentScans = (scansData?.data.data ?? []).slice(0, 5)
+  const recentScans = scansData?.data.data.items ?? []
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
-
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-50">Security Overview</h1>
-        <p className="text-sm text-slate-500 mt-1">Real-time posture across all connected accounts</p>
-      </div>
+    <div id="dashboard-page" className="max-w-5xl mx-auto px-4 py-8 space-y-8">
 
       {/* Top stats row */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
 
         {/* ThreatScore */}
         <div
+          id="dashboard-threatscore-card"
           className={`col-span-2 md:col-span-1 bg-slate-900 border rounded-lg p-4 flex flex-col gap-1 ${
             threatScore !== null ? threatScoreBg(threatScore) : 'border-slate-800'
           }`}
@@ -147,6 +143,7 @@ export default function DashboardPage() {
           <Link
             key={key}
             href={`/findings?severity=${key}`}
+            data-testid={`dashboard-severity-card-${key}`}
             className={`bg-slate-900 border rounded-lg p-4 flex flex-col gap-1 hover:opacity-80 transition-opacity ${
               (stats?.by_severity[key] ?? 0) > 0 ? bg : 'border-slate-800'
             }`}
@@ -163,6 +160,7 @@ export default function DashboardPage() {
       {/* Attack Paths card */}
       <Link
         href="/attack-paths"
+        id="dashboard-attack-paths-card"
         className="block bg-slate-900 border border-slate-800 rounded-lg p-4 hover:border-orange-500/40 hover:bg-orange-500/5 transition-colors group"
       >
         <div className="flex items-center justify-between mb-3">
@@ -203,14 +201,14 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
         {/* Recent scans */}
-        <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+        <div id="dashboard-recent-scans" className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
             <span className="text-sm font-medium text-slate-300 flex items-center gap-2">
               <Activity className="w-4 h-4 text-orange-400" />
               Recent Scans
             </span>
-            <Link href="/providers" className="text-xs text-orange-400 hover:text-orange-300">
-              Run scan →
+            <Link href="/scans" className="text-xs text-orange-400 hover:text-orange-300">
+              View scans →
             </Link>
           </div>
 
@@ -221,7 +219,7 @@ export default function DashboardPage() {
           ) : (
             <ul className="divide-y divide-slate-800">
               {recentScans.map((job) => (
-                <li key={job.job_id} className="px-4 py-2.5 flex items-center gap-3">
+                <li key={job.job_id} data-testid={`recent-scan-row-${job.job_id}`} className="px-4 py-2.5 flex items-center gap-3">
                   {scanStatusIcon(job.status)}
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-slate-300 truncate">
@@ -242,7 +240,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick links */}
-        <div className="space-y-2">
+        <div id="dashboard-quick-links" className="space-y-2">
           <p className="text-xs text-slate-500 uppercase tracking-wide px-1">Navigate</p>
           <QuickLink
             href="/findings"
