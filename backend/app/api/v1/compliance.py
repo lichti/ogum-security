@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from app.api.v1.inventory import get_tenant_db
 from app.models.api_responses import ApiResponse
-from app.models.compliance import ComplianceFrameworkDetail, ComplianceScoreTrendPoint
+from app.models.compliance import ComplianceControlAsset, ComplianceFrameworkDetail, ComplianceScoreTrendPoint
 from app.services import compliance_service
 
 router = APIRouter(prefix="/api/v1/compliance", tags=["compliance"])
@@ -15,10 +15,17 @@ router = APIRouter(prefix="/api/v1/compliance", tags=["compliance"])
 def compliance_summary(
     x_tenant_id: str = Header(..., alias="X-Tenant-Id"),
     db: StandardDatabase = Depends(get_tenant_db),
-    framework: str | None = Query(default=None, description="Scope top_failing to this framework version id"),
+    framework: str | None = Query(
+        default=None, description="Scope top_failing/top_assets to this framework version id"
+    ),
+    severity: list[str] | None = Query(
+        default=None, description="Restrict top_failing to these severities (does not affect top_assets)"
+    ),
 ) -> dict:
     try:
-        return {"data": compliance_service.get_compliance_summary(db, x_tenant_id, framework=framework)}
+        return {
+            "data": compliance_service.get_compliance_summary(db, x_tenant_id, framework=framework, severities=severity)
+        }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -44,3 +51,14 @@ def get_framework_trend(
 ) -> ApiResponse[list[ComplianceScoreTrendPoint]]:
     points = compliance_service.get_score_trend(db, x_tenant_id, framework_id, period)
     return ApiResponse(data=[ComplianceScoreTrendPoint(**p) for p in points])
+
+
+@router.get("/frameworks/{framework_id}/control-assets", response_model=ApiResponse[list[ComplianceControlAsset]])
+def get_control_assets(
+    framework_id: str,
+    control_id: str = Query(..., description="The control's control_id within this framework version"),
+    x_tenant_id: str = Header(..., alias="X-Tenant-Id"),
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> ApiResponse[list[ComplianceControlAsset]]:
+    assets = compliance_service.get_control_assets(db, x_tenant_id, framework_id, control_id)
+    return ApiResponse(data=[ComplianceControlAsset(**a) for a in assets])

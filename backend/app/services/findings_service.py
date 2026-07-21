@@ -36,13 +36,20 @@ def list_findings(
     region: str | None = None,
     account_id: str | None = None,
     resource_type: str | None = None,
+    resource_id: str | None = None,
+    check_id: str | None = None,
     source: list[str] | None = None,
     q: str | None = None,
     mitre_ttp: str | None = None,
     limit: int = 50,
     cursor: str | None = None,
 ) -> tuple[list[dict[str, Any]], str | None]:
-    """Return (findings, next_cursor). Keyset pagination on (detected_at DESC, _key DESC)."""
+    """Return (findings, next_cursor). Keyset pagination on (detected_at DESC, _key DESC).
+
+    `resource_id`/`check_id` power the Compliance page's drill-down panels (US-14.22):
+    "which assets are affected by this check" (`check_id` alone) and "which findings
+    affect this asset" (`resource_id` alone) — exact match, unlike `q`'s substring search.
+    """
     filters = ["f.tenant_id == @tenant_id"]
     bind: dict[str, Any] = {"tenant_id": tenant_id, "fetch_limit": limit + 1}
 
@@ -75,6 +82,12 @@ def list_findings(
     if resource_type:
         filters.append("f.resource_type == @resource_type")
         bind["resource_type"] = resource_type
+    if resource_id:
+        filters.append("f.resource_id == @resource_id")
+        bind["resource_id"] = resource_id
+    if check_id:
+        filters.append("f.check_id == @check_id")
+        bind["check_id"] = check_id
     if source:
         filters.append("f.source IN @source")
         bind["source"] = source
