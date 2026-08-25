@@ -286,13 +286,14 @@ jobs:
         run: |
           pip install pip-audit
           # Ignored vulnerabilities (tracked in chore/security-upgrades):
-          # CVE-2026-3219, CVE-2026-6357, PYSEC-2026-196 — affect pip (CI runner, not a project dep)
+          # CVE-2026-3219, CVE-2026-6357, PYSEC-2026-196, PYSEC-2026-3721 — affect pip itself in the poetry venv, not a project dep
           # GHSA-537c-gmf6-5ccf — cryptography transitive dep; no fix path without breaking changes
           # PYSEC-2026-1325 — ecdsa transitive dep; no fix version published yet
           PIPAPI_PYTHON_LOCATION=$(poetry env info --path)/bin/python pip-audit \
             --ignore-vuln CVE-2026-3219 \
             --ignore-vuln CVE-2026-6357 \
             --ignore-vuln PYSEC-2026-196 \
+            --ignore-vuln PYSEC-2026-3721 \
             --ignore-vuln GHSA-537c-gmf6-5ccf \
             --ignore-vuln PYSEC-2026-1325
 

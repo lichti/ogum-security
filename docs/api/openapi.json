@@ -105,6 +105,32 @@
         "title": "ApiResponse[BlastRadiusResponse]",
         "type": "object"
       },
+      "ApiResponse_ComplianceFamilySettings_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ComplianceFamilySettings"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[ComplianceFamilySettings]",
+        "type": "object"
+      },
       "ApiResponse_ComplianceFrameworkDetail_": {
         "properties": {
           "data": {
@@ -363,6 +389,32 @@
           "data"
         ],
         "title": "ApiResponse[PagedFindings]",
+        "type": "object"
+      },
+      "ApiResponse_PagedScanJobs_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PagedScanJobs"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[PagedScanJobs]",
         "type": "object"
       },
       "ApiResponse_PathNarrativeSummary_": {
@@ -625,6 +677,32 @@
         "title": "ApiResponse[SavedView]",
         "type": "object"
       },
+      "ApiResponse_ScanJobLogs_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ScanJobLogs"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[ScanJobLogs]",
+        "type": "object"
+      },
       "ApiResponse_ScanJob_": {
         "properties": {
           "data": {
@@ -815,6 +893,66 @@
         "title": "ApiResponse[dict[str, bool]]",
         "type": "object"
       },
+      "ApiResponse_list_ComplianceControlAsset__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ComplianceControlAsset"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[list[ComplianceControlAsset]]",
+        "type": "object"
+      },
+      "ApiResponse_list_ComplianceFamilySettingsView__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ComplianceFamilySettingsView"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[list[ComplianceFamilySettingsView]]",
+        "type": "object"
+      },
       "ApiResponse_list_ComplianceScoreTrendPoint__": {
         "properties": {
           "data": {
@@ -993,36 +1131,6 @@
           "data"
         ],
         "title": "ApiResponse[list[SavedView]]",
-        "type": "object"
-      },
-      "ApiResponse_list_ScanJob__": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/ScanJob"
-            },
-            "title": "Data",
-            "type": "array"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          },
-          "meta": {
-            "$ref": "#/components/schemas/Meta"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "ApiResponse[list[ScanJob]]",
         "type": "object"
       },
       "ApiResponse_list_WorkerInfo__": {
@@ -1300,8 +1408,149 @@
         "title": "BlastRadiusResponse",
         "type": "object"
       },
+      "ComplianceControlAsset": {
+        "description": "One asset's Pass/Fail tally for a single control (the compliance page's\ncontrol drill-down panel, Assets tab). ACCEPTED folds into `pass_count`, same as\neverywhere else in this module; MUTED findings are excluded from both counts\n(they show up under the panel's \"All\" filter, not under Pass or Fail).",
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "string"
+          },
+          "fail_count": {
+            "title": "Fail Count",
+            "type": "integer"
+          },
+          "pass_count": {
+            "title": "Pass Count",
+            "type": "integer"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "resource_id": {
+            "title": "Resource Id",
+            "type": "string"
+          },
+          "resource_type": {
+            "title": "Resource Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource_id",
+          "resource_type",
+          "provider",
+          "account_id",
+          "pass_count",
+          "fail_count"
+        ],
+        "title": "ComplianceControlAsset",
+        "type": "object"
+      },
+      "ComplianceFamilySettings": {
+        "description": "Per-framework-family configuration (US-14.19): whether it's shown on the\nCompliance page and counted in tenant-wide aggregates (ThreatScore, top failing\nchecks), plus the desired By Control score. The target is display-only today (a\nvs-goal indicator wherever the score already appears) but is modeled as its own\nfield so a future alerting job (Ogum.Pulse) can read it without a schema change \u2014\nsee `compliance_service` doc for how `enabled` filters aggregates.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "target_by_control": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target By Control"
+          }
+        },
+        "title": "ComplianceFamilySettings",
+        "type": "object"
+      },
+      "ComplianceFamilySettingsUpdateRequest": {
+        "properties": {
+          "clear_target_by_control": {
+            "default": false,
+            "title": "Clear Target By Control",
+            "type": "boolean"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "target_by_control": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target By Control"
+          }
+        },
+        "title": "ComplianceFamilySettingsUpdateRequest",
+        "type": "object"
+      },
+      "ComplianceFamilySettingsView": {
+        "description": "One row of `GET /api/v1/settings/compliance` \u2014 settings merged with the\nfamily's identity so the frontend doesn't need a second lookup to label the row.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "family_key": {
+            "title": "Family Key",
+            "type": "string"
+          },
+          "family_label": {
+            "title": "Family Label",
+            "type": "string"
+          },
+          "target_by_control": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target By Control"
+          }
+        },
+        "required": [
+          "family_key",
+          "family_label"
+        ],
+        "title": "ComplianceFamilySettingsView",
+        "type": "object"
+      },
       "ComplianceFrameworkDetail": {
-        "description": "Response for `GET /api/v1/compliance/frameworks/{id}` (US-14.14/US-14.15/US-14.16).\n\nSee `ComplianceSectionNode` for the Control vs. Findings view field split \u2014\nmirrored here at the framework-total level.",
+        "description": "Response for `GET /api/v1/compliance/frameworks/{id}` (US-14.14/15/16/19).\n\nSee `ComplianceSectionNode` for the By Control fold rule, mirrored here at the\nframework-total level. `target_by_control` is the desired score from Compliance\nSettings (US-14.19), `None` when no goal is configured for this framework's\nfamily \u2014 display-only today (a vs-goal indicator wherever the score appears),\nnot enforced anywhere.",
         "properties": {
           "catalog_available": {
             "title": "Catalog Available",
@@ -1331,29 +1580,9 @@
             "title": "Family Label",
             "type": "string"
           },
-          "finding_accepted_count": {
-            "title": "Finding Accepted Count",
-            "type": "integer"
-          },
-          "finding_fail_count": {
-            "title": "Finding Fail Count",
-            "type": "integer"
-          },
-          "finding_muted_count": {
-            "title": "Finding Muted Count",
-            "type": "integer"
-          },
-          "finding_pass_count": {
-            "title": "Finding Pass Count",
-            "type": "integer"
-          },
           "id": {
             "title": "Id",
             "type": "string"
-          },
-          "score_by_asset": {
-            "title": "Score By Asset",
-            "type": "number"
           },
           "score_by_control": {
             "title": "Score By Control",
@@ -1366,6 +1595,17 @@
             "title": "Sections",
             "type": "array"
           },
+          "target_by_control": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target By Control"
+          },
           "version_label": {
             "title": "Version Label",
             "type": "string"
@@ -1377,22 +1617,18 @@
           "family_label",
           "version_label",
           "score_by_control",
-          "score_by_asset",
+          "target_by_control",
           "control_pass_count",
           "control_fail_count",
           "control_unscored_count",
           "control_total",
-          "finding_pass_count",
-          "finding_fail_count",
-          "finding_accepted_count",
-          "finding_muted_count",
           "catalog_available"
         ],
         "title": "ComplianceFrameworkDetail",
         "type": "object"
       },
       "ComplianceRequirementNode": {
-        "description": "A single control, resolved against the AWS catalog when available (US-14.16).\n\n`status` is always the Control view's status (ACCEPTED folded into PASS, MUTED\nfolded into UNSCORED \u2014 see `compliance_service._score_by_control`) since a single\nrequirement row needs one canonical badge regardless of which top-level view is\nactive. The raw `*_count` fields carry the real per-status finding counts so the\nFindings view can still show the untouched breakdown elsewhere in the UI.",
+        "description": "A single control, resolved against the AWS catalog when available (US-14.16).",
         "properties": {
           "accepted_count": {
             "default": 0,
@@ -1463,7 +1699,7 @@
         "type": "object"
       },
       "ComplianceScoreTrendPoint": {
-        "description": "One daily snapshot for the Score Trend chart (US-14.15).",
+        "description": "One daily By Control snapshot for the Score Trend chart (US-14.15/US-14.18).",
         "properties": {
           "date": {
             "title": "Date",
@@ -1477,10 +1713,6 @@
             "title": "Pass Count",
             "type": "integer"
           },
-          "score_by_asset": {
-            "title": "Score By Asset",
-            "type": "number"
-          },
           "score_by_control": {
             "title": "Score By Control",
             "type": "number"
@@ -1493,7 +1725,6 @@
         "required": [
           "date",
           "score_by_control",
-          "score_by_asset",
           "pass_count",
           "fail_count",
           "unscored_count"
@@ -1502,7 +1733,7 @@
         "type": "object"
       },
       "ComplianceSectionNode": {
-        "description": "One level of the section -> sub-section -> requirement tree (US-14.15/US-14.16).\n\nCarries both views' aggregates so the frontend can toggle between them without a\nrefetch: `control_*`/`score_by_control` count *controls* (ACCEPTED folded into\nPass, MUTED folded into Unscored); `finding_*`/`score_by_asset` count raw\n*findings* by their real status, MUTED/ACCEPTED included but excluded from the\nscore_by_asset ratio itself (same denominator rule as before).\n\n`subsections` is only populated when the catalog's Attributes carry an explicit\nsub-section (NIST 800-53 does; most other frameworks don't) \u2014 a section with no\nsub-section data attaches its `requirements` directly, so the accordion degrades\nfrom 3 levels to 2 rather than rendering an empty middle tier.",
+        "description": "One level of the section -> sub-section -> requirement tree (US-14.15/16),\nBy Control: ACCEPTED folded into Pass, MUTED folded into Unscored, any FAIL on\nthe control wins regardless of how many assets pass. Score = (Pass + Unscored) /\nTotal \u2014 a control nobody has evaluated yet counts toward the compliant side, not\nagainst it (see `compliance_service._score_by_control`).\n\n`subsections` is only populated when the catalog's Attributes carry an explicit\nsub-section (NIST 800-53 does; most other frameworks don't) \u2014 a section with no\nsub-section data attaches its `requirements` directly, so the accordion degrades\nfrom 3 levels to 2 rather than rendering an empty middle tier.",
         "properties": {
           "control_fail_count": {
             "title": "Control Fail Count",
@@ -1520,22 +1751,6 @@
             "title": "Control Unscored Count",
             "type": "integer"
           },
-          "finding_accepted_count": {
-            "title": "Finding Accepted Count",
-            "type": "integer"
-          },
-          "finding_fail_count": {
-            "title": "Finding Fail Count",
-            "type": "integer"
-          },
-          "finding_muted_count": {
-            "title": "Finding Muted Count",
-            "type": "integer"
-          },
-          "finding_pass_count": {
-            "title": "Finding Pass Count",
-            "type": "integer"
-          },
           "key": {
             "title": "Key",
             "type": "string"
@@ -1550,10 +1765,6 @@
             },
             "title": "Requirements",
             "type": "array"
-          },
-          "score_by_asset": {
-            "title": "Score By Asset",
-            "type": "number"
           },
           "score_by_control": {
             "title": "Score By Control",
@@ -1574,12 +1785,7 @@
           "control_fail_count",
           "control_unscored_count",
           "control_total",
-          "score_by_control",
-          "finding_pass_count",
-          "finding_fail_count",
-          "finding_accepted_count",
-          "finding_muted_count",
-          "score_by_asset"
+          "score_by_control"
         ],
         "title": "ComplianceSectionNode",
         "type": "object"
@@ -2487,6 +2693,33 @@
           "count"
         ],
         "title": "PagedFindings",
+        "type": "object"
+      },
+      "PagedScanJobs": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScanJob"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PagedScanJobs",
         "type": "object"
       },
       "PathNarrativeSummary": {
@@ -3770,6 +4003,16 @@
       },
       "ScanJob": {
         "properties": {
+          "assets_removed": {
+            "default": 0,
+            "title": "Assets Removed",
+            "type": "integer"
+          },
+          "assets_total": {
+            "default": 0,
+            "title": "Assets Total",
+            "type": "integer"
+          },
           "checks_completed": {
             "default": 0,
             "title": "Checks Completed",
@@ -3797,6 +4040,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
           "error_message": {
             "anyOf": [
               {
@@ -3816,6 +4070,21 @@
           "findings_found": {
             "default": 0,
             "title": "Findings Found",
+            "type": "integer"
+          },
+          "findings_new": {
+            "default": 0,
+            "title": "Findings New",
+            "type": "integer"
+          },
+          "findings_removed": {
+            "default": 0,
+            "title": "Findings Removed",
+            "type": "integer"
+          },
+          "findings_updated": {
+            "default": 0,
+            "title": "Findings Updated",
             "type": "integer"
           },
           "frameworks": {
@@ -3896,6 +4165,27 @@
           "frameworks"
         ],
         "title": "ScanJob",
+        "type": "object"
+      },
+      "ScanJobLogs": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "logs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Logs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "job_id",
+          "logs"
+        ],
+        "title": "ScanJobLogs",
         "type": "object"
       },
       "ScanJobStatus": {
@@ -5114,6 +5404,77 @@
         ]
       }
     },
+    "/api/v1/compliance/frameworks/{framework_id}/control-assets": {
+      "get": {
+        "operationId": "get_control_assets_api_v1_compliance_frameworks__framework_id__control_assets_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "framework_id",
+            "required": true,
+            "schema": {
+              "title": "Framework Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The control's control_id within this framework version",
+            "in": "query",
+            "name": "control_id",
+            "required": true,
+            "schema": {
+              "description": "The control's control_id within this framework version",
+              "title": "Control Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_ComplianceControlAsset__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Control Assets",
+        "tags": [
+          "compliance"
+        ]
+      }
+    },
     "/api/v1/compliance/frameworks/{framework_id}/trend": {
       "get": {
         "operationId": "get_framework_trend_api_v1_compliance_frameworks__framework_id__trend_get",
@@ -5194,7 +5555,7 @@
         "operationId": "compliance_summary_api_v1_compliance_summary_get",
         "parameters": [
           {
-            "description": "Scope top_failing to this framework version id",
+            "description": "Scope top_failing/top_assets to this framework version id",
             "in": "query",
             "name": "framework",
             "required": false,
@@ -5207,8 +5568,29 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope top_failing to this framework version id",
+              "description": "Scope top_failing/top_assets to this framework version id",
               "title": "Framework"
+            }
+          },
+          {
+            "description": "Restrict top_failing to these severities (does not affect top_assets)",
+            "in": "query",
+            "name": "severity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict top_failing to these severities (does not affect top_assets)",
+              "title": "Severity"
             }
           },
           {
@@ -5488,6 +5870,42 @@
                 }
               ],
               "title": "Resource Type"
+            }
+          },
+          {
+            "description": "Exact match \u2014 the Compliance page's asset drill-down",
+            "in": "query",
+            "name": "resource_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact match \u2014 the Compliance page's asset drill-down",
+              "title": "Resource Id"
+            }
+          },
+          {
+            "description": "Exact match \u2014 the Compliance page's finding drill-down",
+            "in": "query",
+            "name": "check_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact match \u2014 the Compliance page's finding drill-down",
+              "title": "Check Id"
             }
           },
           {
@@ -7766,9 +8184,72 @@
     },
     "/api/v1/scans": {
       "get": {
-        "description": "List recent scan jobs for a tenant.",
+        "description": "List scan jobs for a tenant \u2014 the Scans page registry (US-14.23).",
         "operationId": "list_scans_api_v1_scans_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "provider_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
           {
             "in": "header",
             "name": "X-Tenant-Id",
@@ -7793,7 +8274,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponse_list_ScanJob__"
+                  "$ref": "#/components/schemas/ApiResponse_PagedScanJobs_"
                 }
               }
             },
@@ -8057,6 +8538,170 @@
         "summary": "Get Scan Status",
         "tags": [
           "scans"
+        ]
+      }
+    },
+    "/api/v1/scans/{job_id}/logs": {
+      "get": {
+        "description": "Execution log lines captured during the scan (US-14.23).",
+        "operationId": "get_scan_logs_api_v1_scans__job_id__logs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ScanJobLogs_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Scan Logs",
+        "tags": [
+          "scans"
+        ]
+      }
+    },
+    "/api/v1/settings/compliance": {
+      "get": {
+        "operationId": "list_compliance_settings_api_v1_settings_compliance_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_ComplianceFamilySettingsView__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Compliance Settings",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/compliance/{family_key}": {
+      "put": {
+        "operationId": "update_compliance_settings_api_v1_settings_compliance__family_key__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "family_key",
+            "required": true,
+            "schema": {
+              "title": "Family Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComplianceFamilySettingsUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ComplianceFamilySettings_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Compliance Settings",
+        "tags": [
+          "settings"
         ]
       }
     },
