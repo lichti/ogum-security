@@ -469,6 +469,32 @@
         "title": "ApiResponse[ProviderConfig]",
         "type": "object"
       },
+      "ApiResponse_ProviderHealth_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ProviderHealth"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[ProviderHealth]",
+        "type": "object"
+      },
       "ApiResponse_ProviderRegisterResponse_": {
         "properties": {
           "data": {
@@ -2850,6 +2876,28 @@
             ],
             "title": "Last Discovery Job Id"
           },
+          "last_health_check_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Health Check At"
+          },
+          "last_health_result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Health Result"
+          },
           "project_id": {
             "anyOf": [
               {
@@ -2918,6 +2966,106 @@
           "display_name"
         ],
         "title": "ProviderConfig",
+        "type": "object"
+      },
+      "ProviderHealth": {
+        "description": "Connection health for one connected provider.\n\n`health` is derived either from stored signals (`live=False`, cheap \u2014 used by\nGET /{id}/health when rendering many cards) or from a real credential probe\n(`live=True`, POST /{id}/test-connection).",
+        "properties": {
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "health": {
+            "enum": [
+              "healthy",
+              "degraded",
+              "failed"
+            ],
+            "title": "Health",
+            "type": "string"
+          },
+          "last_discovery_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Discovery At"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "live": {
+            "default": false,
+            "title": "Live",
+            "type": "boolean"
+          },
+          "provider_id": {
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "active",
+              "error",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "health",
+          "status",
+          "enabled"
+        ],
+        "title": "ProviderHealth",
         "type": "object"
       },
       "ProviderRegisterRequest": {
@@ -8177,6 +8325,110 @@
           }
         },
         "summary": "Trigger Discovery Endpoint",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/v1/providers/{provider_id}/health": {
+      "get": {
+        "description": "Cached health derivation from stored signals \u2014 no cloud API calls.",
+        "operationId": "provider_health_endpoint_api_v1_providers__provider_id__health_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ProviderHealth_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Provider Health Endpoint",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/v1/providers/{provider_id}/test-connection": {
+      "post": {
+        "description": "Live credential probe (read-only) \u2014 the \"Test Connection\" action.\n\nAlways returns 200 with a `health` verdict: a failed probe is a valid,\nexpected outcome to render on the card, not an HTTP error.",
+        "operationId": "test_connection_endpoint_api_v1_providers__provider_id__test_connection_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ProviderHealth_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Connection Endpoint",
         "tags": [
           "providers"
         ]

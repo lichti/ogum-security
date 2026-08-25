@@ -33,6 +33,9 @@ class ProviderConfig(BaseModel):
     azure_client_id: str | None = None
     last_discovery_at: str | None = None
     last_discovery_job_id: str | None = None
+    # Written by POST /{id}/test-connection — last live probe outcome (detail truncated)
+    last_health_check_at: str | None = None
+    last_health_result: str | None = None
     created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -102,3 +105,26 @@ class DiscoverResponse(BaseModel):
     provider_id: str
     discovery_job_id: str
     message: str
+
+
+ProviderHealthLevel = Literal["healthy", "degraded", "failed"]
+
+
+class ProviderHealth(BaseModel):
+    """Connection health for one connected provider.
+
+    `health` is derived either from stored signals (`live=False`, cheap — used by
+    GET /{id}/health when rendering many cards) or from a real credential probe
+    (`live=True`, POST /{id}/test-connection).
+    """
+
+    provider_id: str
+    health: ProviderHealthLevel
+    status: ProviderStatus
+    enabled: bool
+    reason: str | None = None
+    detail: str | None = None
+    latency_ms: int | None = None
+    last_discovery_at: str | None = None
+    checked_at: str | None = None
+    live: bool = False

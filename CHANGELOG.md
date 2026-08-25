@@ -15,6 +15,10 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+### Added
+
+- **Provider connection health cards, `GET /api/v1/providers/{id}/health`, and a "Test Connection" action (Epic 14 Sprint 5, US-14.20)**: the Providers page is rebuilt as an Account Center — one card per connected account, grouped by cloud with an account count in each section header (`ProvidersCardGrid.tsx`; the flat table component stays for reference/tests). Every card carries a health badge (✓ Healthy / ⚠ Degraded / ✕ Failed) derived from stored signals only (`status`, `last_discovery_at` staleness > 48h, disabled state) via the cheap cached `GET .../health` — no cloud calls on page render. The **Test Connection** button runs `POST /api/v1/providers/{id}/test-connection`: a real, read-only credential probe per provider type mirroring exactly how each discovery task builds credentials (AWS: `_get_aws_session` + `sts:GetCallerIdentity`; Azure: `ClientSecretCredential`/`DefaultAzureCredential` + first page of VM list; GCP: SA JSON/ADC + aggregated instance list; K8s: kubeconfig/in-cluster + `list_namespace(limit=1)`), returning 200 with the verdict either way — a failed probe renders inline on the card (error detail + latency), it is not an HTTP error. Probe outcome persists on `tenant_config` (`status` flips active/error following the discovery tasks' convention, plus new `last_health_check_at`/`last_health_result`) and re-reads as failed/degraded in subsequent cached health calls. New service module `provider_health.py` keeps evaluation pure and unit-tested separately from the probes; probes are strictly read-only — no IAM permission beyond what discovery already uses.
+
 ## [0.2.0] - 2026-08-25
 
 ### Added

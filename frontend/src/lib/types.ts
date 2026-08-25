@@ -389,7 +389,24 @@ export interface ProviderConfig {
   azure_client_id?: string | null
   last_discovery_at?: string | null
   last_discovery_job_id?: string | null
+  last_health_check_at?: string | null
+  last_health_result?: string | null
   created_at: string
+}
+
+export type ProviderHealthLevel = 'healthy' | 'degraded' | 'failed'
+
+export interface ProviderHealth {
+  provider_id: string
+  health: ProviderHealthLevel
+  status: ProviderStatus
+  enabled: boolean
+  reason?: string | null
+  detail?: string | null
+  latency_ms?: number | null
+  last_discovery_at?: string | null
+  checked_at?: string | null
+  live: boolean
 }
 
 export interface ProviderRegisterRequest {

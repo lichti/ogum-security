@@ -11,10 +11,12 @@ from app.models.provider import (
     DiscoverRequest,
     DiscoverResponse,
     ProviderConfig,
+    ProviderHealth,
     ProviderRegisterRequest,
     ProviderRegisterResponse,
     ProviderUpdateRequest,
 )
+from app.services.provider_health import evaluate_cached_health, run_connection_test
 from app.services.provider_service import (
     delete_provider,
     get_provider,
@@ -274,6 +276,42 @@ async def trigger_discovery_endpoint(
             message="Discovery job queued — check /api/v1/inventory for resources.",
         )
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# GET /api/v1/providers/{provider_id}/health
+# POST /api/v1/providers/{provider_id}/test-connection
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/{provider_id}/health", response_model=ApiResponse[ProviderHealth])
+async def provider_health_endpoint(
+    provider_id: str,
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> ApiResponse[ProviderHealth]:
+    """Cached health derivation from stored signals — no cloud API calls."""
+    config = get_provider(db, provider_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    return ApiResponse(data=evaluate_cached_health(config))
+
+
+@router.post("/{provider_id}/test-connection", response_model=ApiResponse[ProviderHealth])
+async def test_connection_endpoint(
+    provider_id: str,
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> ApiResponse[ProviderHealth]:
+    """Live credential probe (read-only) — the "Test Connection" action.
+
+    Always returns 200 with a `health` verdict: a failed probe is a valid,
+    expected outcome to render on the card, not an HTTP error.
+    """
+    config = get_provider(db, provider_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    if not config.enabled:
+        raise HTTPException(status_code=409, detail="Provider is disabled. Enable it before testing the connection.")
+    return ApiResponse(data=run_connection_test(db, config))
 
 
 # ──────────────────────────────────────────────────────────────────────────────
