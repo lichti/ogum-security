@@ -15,6 +15,9 @@ from app.api.v1 import (
     views,
 )
 from app.api.v1 import dev as dev_module
+from app.api.v1 import (
+    settings as settings_api,
+)
 from app.api.v1.admin import jobs as admin_jobs
 from app.core.config import settings
 
@@ -52,4 +55,5 @@ app.include_router(graph.router)
 app.include_router(side_scans.router)
 app.include_router(admin_jobs.router)
 app.include_router(views.router)
+app.include_router(settings_api.router)
 app.include_router(dev_module.router)  # endpoints return 404 unless DEV_MODE=true

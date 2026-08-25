@@ -45,7 +45,7 @@ export function SavedViewSelector({
   }
 
   return (
-    <div className="flex items-center gap-3" ref={containerRef}>
+    <div className="flex items-center gap-3" ref={containerRef} data-testid="saved-view-selector">
       {pinned.length > 0 && (
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-500 flex items-center gap-1">
@@ -55,6 +55,7 @@ export function SavedViewSelector({
             <button
               key={view.key}
               type="button"
+              data-testid={`saved-view-pinned-${view.key}`}
               onClick={() => onSelect(view)}
               className={clsx(
                 'px-2.5 py-1 rounded text-xs border',
@@ -91,6 +92,7 @@ export function SavedViewSelector({
             {views.map((view) => (
               <div
                 key={view.key}
+                data-testid={`saved-view-option-${view.key}`}
                 className="flex items-center justify-between gap-2 px-3 py-1.5 hover:bg-slate-800/50 text-sm"
               >
                 <button

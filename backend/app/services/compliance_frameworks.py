@@ -14,6 +14,8 @@ version switcher instead of N near-duplicate top-level cards.
 
 from __future__ import annotations
 
+import re
+
 # raw Prowler slug -> (family key, family display label, version label)
 FRAMEWORK_FAMILIES: dict[str, tuple[str, str, str]] = {
     # CIS AWS Foundations Benchmark — 8 versions
@@ -99,6 +101,16 @@ def resolve_family(prefix: str) -> tuple[str, str, str]:
     return prefix, label, ""
 
 
+def is_known_framework_slug(prefix: str) -> bool:
+    """Whether `prefix` is a slug this module has an explicit label for.
+
+    Used to distinguish "a real framework with zero findings so far" (still worth a
+    200 with an all-Unscored tree) from "not a framework at all" (404) when neither
+    findings nor the AWS catalog have anything to say about the slug.
+    """
+    return prefix in FRAMEWORK_FAMILIES or prefix in _SINGLE_VERSION_LABELS
+
+
 # NIST 800-53 control family codes (standard, both Rev 4 and Rev 5)
 _NIST_800_53_FAMILIES: dict[str, str] = {
     "ac": "Access Control",
@@ -150,3 +162,20 @@ def derive_section(control_id: str | None, family_key: str) -> tuple[str, str]:
             return key, label
 
     return "general", "General"
+
+
+_DIGIT_CHUNK = re.compile(r"(\d+)")
+
+
+def natural_sort_key(value: str) -> tuple[tuple[int, int | str], ...]:
+    """Sort key so section keys with leading numbers order 5, 6, ..., 19 instead of the
+    lexicographic 1, 10, ..., 19, 2, 20, ..., 5 — SecNumCloud hits this directly, its
+    sections are labelled "5. Politiques..." through "19. Exigences...", slugified to
+    section keys starting with those digits.
+
+    Each chunk is tagged `(0, int)` for a digit run or `(1, str)` for everything else,
+    so two keys are never compared int-to-str at the same position — Python 3 raises
+    `TypeError` on that, and a framework can freely mix numeric section keys (CIS,
+    SecNumCloud) with word-only ones (NIST 800-53's "ac", "au", ..., or "general").
+    """
+    return tuple((0, int(part)) if part.isdigit() else (1, part) for part in _DIGIT_CHUNK.split(value) if part)

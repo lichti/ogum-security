@@ -1,7 +1,25 @@
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { FindingsTable } from '@/components/findings/FindingsTable'
 import type { Finding } from '@/lib/types'
+
+jest.mock('@/lib/api', () => ({
+  settingsApi: {
+    getSla: jest.fn(() =>
+      Promise.resolve({ data: { data: { critical_days: 7, high_days: 30, medium_days: 90, low_days: 180 } } }),
+    ),
+  },
+}))
+
+function renderWithClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  function Wrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  }
+  return render(ui, { wrapper: Wrapper })
+}
 
 const makeFinding = (overrides: Partial<Finding> = {}): Finding => ({
   _key: 'finding-001',
@@ -26,6 +44,9 @@ const makeFinding = (overrides: Partial<Finding> = {}): Finding => ({
   updated_at: '2026-01-01T00:00:00Z',
   mute_reason: null,
   scan_job_id: null,
+  first_seen_scan_id: null,
+  last_seen_scan_id: null,
+  scan_count: 1,
   ...overrides,
 })
 
@@ -46,31 +67,31 @@ beforeEach(() => jest.clearAllMocks())
 
 describe('FindingsTable', () => {
   it('renders finding rows', () => {
-    render(<FindingsTable {...defaultProps} />)
+    renderWithClient(<FindingsTable {...defaultProps} />)
     expect(screen.getByText('S3 Bucket Publicly Accessible')).toBeInTheDocument()
     expect(screen.getByText('Security Group Too Permissive')).toBeInTheDocument()
   })
 
   it('renders severity badges for each row', () => {
-    render(<FindingsTable {...defaultProps} />)
+    renderWithClient(<FindingsTable {...defaultProps} />)
     expect(screen.getByText('CRITICAL')).toBeInTheDocument()
     expect(screen.getByText('HIGH')).toBeInTheDocument()
   })
 
   it('shows empty state when findings list is empty', () => {
-    render(<FindingsTable {...defaultProps} findings={[]} />)
+    renderWithClient(<FindingsTable {...defaultProps} findings={[]} />)
     expect(screen.getByTestId('findings-empty')).toBeInTheDocument()
     expect(screen.getByText('No findings found')).toBeInTheDocument()
   })
 
   it('shows skeleton loading state', () => {
-    render(<FindingsTable {...defaultProps} loading={true} />)
+    renderWithClient(<FindingsTable {...defaultProps} loading={true} />)
     expect(screen.getByTestId('findings-skeleton')).toBeInTheDocument()
     expect(screen.queryByTestId('findings-table')).not.toBeInTheDocument()
   })
 
   it('calls onRowClick when a row is clicked', () => {
-    render(<FindingsTable {...defaultProps} />)
+    renderWithClient(<FindingsTable {...defaultProps} />)
     const row = screen.getByText('S3 Bucket Publicly Accessible').closest('tr')!
     fireEvent.click(row)
     expect(defaultProps.onRowClick).toHaveBeenCalledTimes(1)
@@ -80,38 +101,38 @@ describe('FindingsTable', () => {
   })
 
   it('disables Prev button on first page', () => {
-    render(<FindingsTable {...defaultProps} prevCursors={[]} />)
+    renderWithClient(<FindingsTable {...defaultProps} prevCursors={[]} />)
     expect(screen.getByLabelText('Previous page')).toBeDisabled()
   })
 
   it('enables Prev button when prevCursors is non-empty', () => {
-    render(<FindingsTable {...defaultProps} prevCursors={['cursor-abc']} />)
+    renderWithClient(<FindingsTable {...defaultProps} prevCursors={['cursor-abc']} />)
     expect(screen.getByLabelText('Previous page')).not.toBeDisabled()
   })
 
   it('disables Next button when nextCursor is null', () => {
-    render(<FindingsTable {...defaultProps} nextCursor={null} />)
+    renderWithClient(<FindingsTable {...defaultProps} nextCursor={null} />)
     expect(screen.getByLabelText('Next page')).toBeDisabled()
   })
 
   it('enables Next button when nextCursor is provided', () => {
-    render(<FindingsTable {...defaultProps} nextCursor="cursor-xyz" />)
+    renderWithClient(<FindingsTable {...defaultProps} nextCursor="cursor-xyz" />)
     expect(screen.getByLabelText('Next page')).not.toBeDisabled()
   })
 
   it('calls onNext when Next button is clicked', () => {
-    render(<FindingsTable {...defaultProps} nextCursor="cursor-xyz" />)
+    renderWithClient(<FindingsTable {...defaultProps} nextCursor="cursor-xyz" />)
     fireEvent.click(screen.getByLabelText('Next page'))
     expect(defaultProps.onNext).toHaveBeenCalledTimes(1)
   })
 
   it('renders FAIL status in red', () => {
-    render(<FindingsTable {...defaultProps} />)
+    renderWithClient(<FindingsTable {...defaultProps} />)
     expect(screen.getAllByText('FAIL')[0]).toHaveClass('text-red-400')
   })
 
   it('renders MUTED status as badge', () => {
-    render(
+    renderWithClient(
       <FindingsTable
         {...defaultProps}
         findings={[makeFinding({ status: 'MUTED', mute_reason: 'false positive' })]}

@@ -2,9 +2,11 @@
 
 import {
   Activity,
+  Clock,
   Cloud,
   Database,
   GitBranch,
+  History,
   LayoutDashboard,
   Plug,
   ScanLine,
@@ -12,6 +14,7 @@ import {
   Shield,
   ShieldAlert,
   CheckSquare,
+  SlidersHorizontal,
   Terminal,
   Wand2,
 } from 'lucide-react'
@@ -33,7 +36,7 @@ function NavSection({ label, children }: SectionProps) {
 
 export function Sidebar() {
   return (
-    <aside className="w-60 bg-slate-900 flex flex-col shrink-0 h-full overflow-y-auto">
+    <aside id="app-sidebar" className="w-60 bg-slate-900 flex flex-col shrink-0 h-full overflow-y-auto">
       <div className="flex items-center gap-2 px-4 py-5 border-b border-slate-800">
         <Shield size={22} className="text-orange-500" />
         <span className="text-orange-500 font-bold text-base tracking-tight">Ogum Security</span>
@@ -63,8 +66,11 @@ export function Sidebar() {
 
         <NavSection label="Configuration">
           <NavItem icon={Cloud} label="Cloud Providers" href="/providers" />
+          <NavItem icon={History} label="Scans" href="/scans" />
           <NavItem icon={Plug} label="Integrations" disabled badge="Soon" />
           <NavItem icon={Terminal} label="Agent" disabled badge="Soon" />
+          <NavItem icon={Clock} label="SLA Settings" href="/settings/sla" />
+          <NavItem icon={SlidersHorizontal} label="Compliance Settings" href="/settings/compliance" />
         </NavSection>
 
         <NavSection label="Platform">

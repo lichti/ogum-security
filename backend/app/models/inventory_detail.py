@@ -47,3 +47,30 @@ class BlastRadiusResponse(BaseModel):
     nodes: list[BlastRadiusNode] = Field(default_factory=list)
     edges: list[BlastRadiusEdge] = Field(default_factory=list)
     grouped_counts: dict[str, int] = Field(default_factory=dict)
+
+
+class ResourceComplianceFrameworkOption(BaseModel):
+    id: str
+    label: str
+
+
+class ResourceComplianceControl(BaseModel):
+    control_id: str | None
+    status: str
+    title: str
+    category: str
+    severity: str
+    finding_key: str
+
+
+class ResourceComplianceResponse(BaseModel):
+    """Per-resource compliance view (US-14.07) — a resource-scoped slice of the same
+
+    framework/control data the global Compliance dashboard aggregates tenant-wide
+    (see `compliance_service.py`), reusing its family/section resolution helpers.
+    """
+
+    resource_key: str
+    available_frameworks: list[ResourceComplianceFrameworkOption] = Field(default_factory=list)
+    selected_framework: str | None = None
+    controls: list[ResourceComplianceControl] = Field(default_factory=list)

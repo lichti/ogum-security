@@ -91,9 +91,9 @@ export function EditProviderModal({ provider, onSave, onCancel }: EditProviderMo
   }[provider.provider]
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 pb-4">
+    <div id="edit-provider-modal" className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div id="edit-provider-modal-content" className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div id="edit-provider-modal-header" className="flex items-center justify-between p-6 pb-4">
           <div>
             <h2 className="text-lg font-semibold text-slate-100">Edit Provider</h2>
             <p className="text-slate-500 text-xs mt-0.5 font-mono">
@@ -106,7 +106,7 @@ export function EditProviderModal({ provider, onSave, onCancel }: EditProviderMo
           </button>
         </div>
 
-        <div className="px-6 pb-6 space-y-4">
+        <div id="edit-provider-modal-body" className="px-6 pb-6 space-y-4">
           {/* Display name */}
           <div>
             <label className={LABEL_CLASS}>Display name</label>
@@ -200,7 +200,7 @@ export function EditProviderModal({ provider, onSave, onCancel }: EditProviderMo
           )}
 
           {/* Collapsible ephemeral credentials section */}
-          <div className="border border-slate-700 rounded-lg overflow-hidden">
+          <div id="edit-provider-modal-cred-section" className="border border-slate-700 rounded-lg overflow-hidden">
             <button
               type="button"
               onClick={() => setShowCredSection((v) => !v)}
@@ -294,13 +294,14 @@ export function EditProviderModal({ provider, onSave, onCancel }: EditProviderMo
           </div>
 
           {error && (
-            <div className="text-red-400 text-sm bg-red-950 border border-red-800 rounded-lg p-3">
+            <div id="edit-provider-modal-error" className="text-red-400 text-sm bg-red-950 border border-red-800 rounded-lg p-3">
               {error}
             </div>
           )}
 
           <div className="flex items-center gap-3 pt-1">
             <button
+              id="edit-provider-modal-save-button"
               onClick={handleSave}
               disabled={saving}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
@@ -309,6 +310,7 @@ export function EditProviderModal({ provider, onSave, onCancel }: EditProviderMo
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
             <button
+              id="edit-provider-modal-cancel-button"
               onClick={onCancel}
               disabled={saving}
               className="px-4 py-2.5 text-slate-400 hover:text-slate-200 text-sm transition-colors"

@@ -67,6 +67,25 @@ def compute_exposed_internet(db: Any, tenant_id: str) -> dict[str, int]:
     return counts
 
 
+def classify_path_exposure(entry_doc: dict[str, Any] | None, rule: str) -> str:
+    """
+    Classify an attack path's exposure level from its entry point (US-14.13).
+
+    Mirrors the ExposureLevel enum already defined in the frontend's
+    ExposureBadge.tsx. There is no real signal for VPC peering/PrivateLink in
+    the graph today, so `trusted_access` only covers identity-only entry
+    points (privilege escalation rule) — never fabricated beyond that.
+    """
+    entry = entry_doc or {}
+    if entry.get("exposed_internet") or entry.get("is_internet_facing"):
+        return "internet_facing"
+    if entry.get("is_public"):
+        return "public_facing"
+    if rule == "privilege_escalation":
+        return "trusted_access"
+    return "none"
+
+
 def get_exposure_summary(db: Any, tenant_id: str) -> dict[str, Any]:
     """Return a summary of internet-exposed resources for the tenant."""
     try:

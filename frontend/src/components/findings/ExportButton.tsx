@@ -58,7 +58,7 @@ export function ExportButton({ filters }: ExportButtonProps) {
   }
 
   return (
-    <div className="relative" ref={menuRef}>
+    <div id="export-button" className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen((o) => !o)}
         disabled={loading}
@@ -78,14 +78,16 @@ export function ExportButton({ filters }: ExportButtonProps) {
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute right-0 mt-1 w-40 bg-slate-900 border border-slate-700 rounded shadow-lg z-20">
+          <div id="export-button-menu" className="absolute right-0 mt-1 w-40 bg-slate-900 border border-slate-700 rounded shadow-lg z-20">
             <button
+              id="export-button-csv"
               onClick={() => doExport('csv')}
               className="block w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-slate-100"
             >
               CSV
             </button>
             <button
+              id="export-button-json"
               onClick={() => doExport('json')}
               className="block w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-slate-100"
             >

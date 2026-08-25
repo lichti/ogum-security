@@ -105,6 +105,58 @@
         "title": "ApiResponse[BlastRadiusResponse]",
         "type": "object"
       },
+      "ApiResponse_ComplianceFamilySettings_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ComplianceFamilySettings"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[ComplianceFamilySettings]",
+        "type": "object"
+      },
+      "ApiResponse_ComplianceFrameworkDetail_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ComplianceFrameworkDetail"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[ComplianceFrameworkDetail]",
+        "type": "object"
+      },
       "ApiResponse_DiscoverJobResponse_": {
         "properties": {
           "data": {
@@ -339,6 +391,58 @@
         "title": "ApiResponse[PagedFindings]",
         "type": "object"
       },
+      "ApiResponse_PagedScanJobs_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PagedScanJobs"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[PagedScanJobs]",
+        "type": "object"
+      },
+      "ApiResponse_PathNarrativeSummary_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PathNarrativeSummary"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[PathNarrativeSummary]",
+        "type": "object"
+      },
       "ApiResponse_ProviderConfig_": {
         "properties": {
           "data": {
@@ -389,6 +493,32 @@
           "data"
         ],
         "title": "ApiResponse[ProviderRegisterResponse]",
+        "type": "object"
+      },
+      "ApiResponse_ResourceComplianceResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ResourceComplianceResponse"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[ResourceComplianceResponse]",
         "type": "object"
       },
       "ApiResponse_ResourceDetail_": {
@@ -443,6 +573,58 @@
         "title": "ApiResponse[ResourceNarrativeSummary]",
         "type": "object"
       },
+      "ApiResponse_SLASettings_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SLASettings"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[SLASettings]",
+        "type": "object"
+      },
+      "ApiResponse_SLASummaryResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SLASummaryResponse"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[SLASummaryResponse]",
+        "type": "object"
+      },
       "ApiResponse_SavedQuery_": {
         "properties": {
           "data": {
@@ -493,6 +675,32 @@
           "data"
         ],
         "title": "ApiResponse[SavedView]",
+        "type": "object"
+      },
+      "ApiResponse_ScanJobLogs_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ScanJobLogs"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[ScanJobLogs]",
         "type": "object"
       },
       "ApiResponse_ScanJob_": {
@@ -571,6 +779,32 @@
           "data"
         ],
         "title": "ApiResponse[ShortestPathResult]",
+        "type": "object"
+      },
+      "ApiResponse_SoftwareInventoryResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SoftwareInventoryResponse"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[SoftwareInventoryResponse]",
         "type": "object"
       },
       "ApiResponse_dict_": {
@@ -657,6 +891,96 @@
           "data"
         ],
         "title": "ApiResponse[dict[str, bool]]",
+        "type": "object"
+      },
+      "ApiResponse_list_ComplianceControlAsset__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ComplianceControlAsset"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[list[ComplianceControlAsset]]",
+        "type": "object"
+      },
+      "ApiResponse_list_ComplianceFamilySettingsView__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ComplianceFamilySettingsView"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[list[ComplianceFamilySettingsView]]",
+        "type": "object"
+      },
+      "ApiResponse_list_ComplianceScoreTrendPoint__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ComplianceScoreTrendPoint"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[list[ComplianceScoreTrendPoint]]",
         "type": "object"
       },
       "ApiResponse_list_ProviderConfig__": {
@@ -807,36 +1131,6 @@
           "data"
         ],
         "title": "ApiResponse[list[SavedView]]",
-        "type": "object"
-      },
-      "ApiResponse_list_ScanJob__": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/ScanJob"
-            },
-            "title": "Data",
-            "type": "array"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          },
-          "meta": {
-            "$ref": "#/components/schemas/Meta"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "ApiResponse[list[ScanJob]]",
         "type": "object"
       },
       "ApiResponse_list_WorkerInfo__": {
@@ -996,6 +1290,22 @@
             "title": "By Severity",
             "type": "object"
           },
+          "by_target_asset_category": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {},
+            "title": "By Target Asset Category",
+            "type": "object"
+          },
+          "by_target_crown_jewel_reason": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {},
+            "title": "By Target Crown Jewel Reason",
+            "type": "object"
+          },
           "new_24h": {
             "title": "New 24H",
             "type": "integer"
@@ -1096,6 +1406,388 @@
           "resource_key"
         ],
         "title": "BlastRadiusResponse",
+        "type": "object"
+      },
+      "ComplianceControlAsset": {
+        "description": "One asset's Pass/Fail tally for a single control (the compliance page's\ncontrol drill-down panel, Assets tab). ACCEPTED folds into `pass_count`, same as\neverywhere else in this module; MUTED findings are excluded from both counts\n(they show up under the panel's \"All\" filter, not under Pass or Fail).",
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "string"
+          },
+          "fail_count": {
+            "title": "Fail Count",
+            "type": "integer"
+          },
+          "pass_count": {
+            "title": "Pass Count",
+            "type": "integer"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "resource_id": {
+            "title": "Resource Id",
+            "type": "string"
+          },
+          "resource_type": {
+            "title": "Resource Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource_id",
+          "resource_type",
+          "provider",
+          "account_id",
+          "pass_count",
+          "fail_count"
+        ],
+        "title": "ComplianceControlAsset",
+        "type": "object"
+      },
+      "ComplianceFamilySettings": {
+        "description": "Per-framework-family configuration (US-14.19): whether it's shown on the\nCompliance page and counted in tenant-wide aggregates (ThreatScore, top failing\nchecks), plus the desired By Control score. The target is display-only today (a\nvs-goal indicator wherever the score already appears) but is modeled as its own\nfield so a future alerting job (Ogum.Pulse) can read it without a schema change \u2014\nsee `compliance_service` doc for how `enabled` filters aggregates.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "target_by_control": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target By Control"
+          }
+        },
+        "title": "ComplianceFamilySettings",
+        "type": "object"
+      },
+      "ComplianceFamilySettingsUpdateRequest": {
+        "properties": {
+          "clear_target_by_control": {
+            "default": false,
+            "title": "Clear Target By Control",
+            "type": "boolean"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "target_by_control": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target By Control"
+          }
+        },
+        "title": "ComplianceFamilySettingsUpdateRequest",
+        "type": "object"
+      },
+      "ComplianceFamilySettingsView": {
+        "description": "One row of `GET /api/v1/settings/compliance` \u2014 settings merged with the\nfamily's identity so the frontend doesn't need a second lookup to label the row.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "family_key": {
+            "title": "Family Key",
+            "type": "string"
+          },
+          "family_label": {
+            "title": "Family Label",
+            "type": "string"
+          },
+          "target_by_control": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target By Control"
+          }
+        },
+        "required": [
+          "family_key",
+          "family_label"
+        ],
+        "title": "ComplianceFamilySettingsView",
+        "type": "object"
+      },
+      "ComplianceFrameworkDetail": {
+        "description": "Response for `GET /api/v1/compliance/frameworks/{id}` (US-14.14/15/16/19).\n\nSee `ComplianceSectionNode` for the By Control fold rule, mirrored here at the\nframework-total level. `target_by_control` is the desired score from Compliance\nSettings (US-14.19), `None` when no goal is configured for this framework's\nfamily \u2014 display-only today (a vs-goal indicator wherever the score appears),\nnot enforced anywhere.",
+        "properties": {
+          "catalog_available": {
+            "title": "Catalog Available",
+            "type": "boolean"
+          },
+          "control_fail_count": {
+            "title": "Control Fail Count",
+            "type": "integer"
+          },
+          "control_pass_count": {
+            "title": "Control Pass Count",
+            "type": "integer"
+          },
+          "control_total": {
+            "title": "Control Total",
+            "type": "integer"
+          },
+          "control_unscored_count": {
+            "title": "Control Unscored Count",
+            "type": "integer"
+          },
+          "family": {
+            "title": "Family",
+            "type": "string"
+          },
+          "family_label": {
+            "title": "Family Label",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "score_by_control": {
+            "title": "Score By Control",
+            "type": "number"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/ComplianceSectionNode"
+            },
+            "title": "Sections",
+            "type": "array"
+          },
+          "target_by_control": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target By Control"
+          },
+          "version_label": {
+            "title": "Version Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "family",
+          "family_label",
+          "version_label",
+          "score_by_control",
+          "target_by_control",
+          "control_pass_count",
+          "control_fail_count",
+          "control_unscored_count",
+          "control_total",
+          "catalog_available"
+        ],
+        "title": "ComplianceFrameworkDetail",
+        "type": "object"
+      },
+      "ComplianceRequirementNode": {
+        "description": "A single control, resolved against the AWS catalog when available (US-14.16).",
+        "properties": {
+          "accepted_count": {
+            "default": 0,
+            "title": "Accepted Count",
+            "type": "integer"
+          },
+          "control_id": {
+            "title": "Control Id",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "fail_count": {
+            "default": 0,
+            "title": "Fail Count",
+            "type": "integer"
+          },
+          "finding_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Key"
+          },
+          "muted_count": {
+            "default": 0,
+            "title": "Muted Count",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pass_count": {
+            "default": 0,
+            "title": "Pass Count",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "PASS",
+              "FAIL",
+              "UNSCORED"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "control_id",
+          "name",
+          "status"
+        ],
+        "title": "ComplianceRequirementNode",
+        "type": "object"
+      },
+      "ComplianceScoreTrendPoint": {
+        "description": "One daily By Control snapshot for the Score Trend chart (US-14.15/US-14.18).",
+        "properties": {
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "fail_count": {
+            "title": "Fail Count",
+            "type": "integer"
+          },
+          "pass_count": {
+            "title": "Pass Count",
+            "type": "integer"
+          },
+          "score_by_control": {
+            "title": "Score By Control",
+            "type": "number"
+          },
+          "unscored_count": {
+            "title": "Unscored Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "score_by_control",
+          "pass_count",
+          "fail_count",
+          "unscored_count"
+        ],
+        "title": "ComplianceScoreTrendPoint",
+        "type": "object"
+      },
+      "ComplianceSectionNode": {
+        "description": "One level of the section -> sub-section -> requirement tree (US-14.15/16),\nBy Control: ACCEPTED folded into Pass, MUTED folded into Unscored, any FAIL on\nthe control wins regardless of how many assets pass. Score = (Pass + Unscored) /\nTotal \u2014 a control nobody has evaluated yet counts toward the compliant side, not\nagainst it (see `compliance_service._score_by_control`).\n\n`subsections` is only populated when the catalog's Attributes carry an explicit\nsub-section (NIST 800-53 does; most other frameworks don't) \u2014 a section with no\nsub-section data attaches its `requirements` directly, so the accordion degrades\nfrom 3 levels to 2 rather than rendering an empty middle tier.",
+        "properties": {
+          "control_fail_count": {
+            "title": "Control Fail Count",
+            "type": "integer"
+          },
+          "control_pass_count": {
+            "title": "Control Pass Count",
+            "type": "integer"
+          },
+          "control_total": {
+            "title": "Control Total",
+            "type": "integer"
+          },
+          "control_unscored_count": {
+            "title": "Control Unscored Count",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/ComplianceRequirementNode"
+            },
+            "title": "Requirements",
+            "type": "array"
+          },
+          "score_by_control": {
+            "title": "Score By Control",
+            "type": "number"
+          },
+          "subsections": {
+            "items": {
+              "$ref": "#/components/schemas/ComplianceSectionNode"
+            },
+            "title": "Subsections",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "control_pass_count",
+          "control_fail_count",
+          "control_unscored_count",
+          "control_total",
+          "score_by_control"
+        ],
+        "title": "ComplianceSectionNode",
         "type": "object"
       },
       "CrownJewelRequest": {
@@ -1909,6 +2601,34 @@
         "title": "NarrativeDeepLink",
         "type": "object"
       },
+      "NarrativeStep": {
+        "properties": {
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "index",
+          "total",
+          "title",
+          "text"
+        ],
+        "title": "NarrativeStep",
+        "type": "object"
+      },
       "PagedAttackPaths": {
         "properties": {
           "count": {
@@ -1973,6 +2693,59 @@
           "count"
         ],
         "title": "PagedFindings",
+        "type": "object"
+      },
+      "PagedScanJobs": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScanJob"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PagedScanJobs",
+        "type": "object"
+      },
+      "PathNarrativeSummary": {
+        "description": "Deterministic, data-driven narrative for the Path Info panel (US-14.13).\n\n`generated_by` mirrors ResourceNarrativeSummary's contract\n(inventory_detail.py) \u2014 Ogum.AI/RAG (Epic 05) is still not implemented,\nso this is the template fallback path a future LLM-backed narrative would\nreplace additively, not the LLM path itself.",
+        "properties": {
+          "generated_by": {
+            "default": "template",
+            "title": "Generated By",
+            "type": "string"
+          },
+          "path_id": {
+            "title": "Path Id",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/NarrativeStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "path_id"
+        ],
+        "title": "PathNarrativeSummary",
         "type": "object"
       },
       "ProviderConfig": {
@@ -2496,6 +3269,108 @@
         "title": "QueueDepth",
         "type": "object"
       },
+      "ResourceComplianceControl": {
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "control_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Control Id"
+          },
+          "finding_key": {
+            "title": "Finding Key",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "control_id",
+          "status",
+          "title",
+          "category",
+          "severity",
+          "finding_key"
+        ],
+        "title": "ResourceComplianceControl",
+        "type": "object"
+      },
+      "ResourceComplianceFrameworkOption": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "ResourceComplianceFrameworkOption",
+        "type": "object"
+      },
+      "ResourceComplianceResponse": {
+        "description": "Per-resource compliance view (US-14.07) \u2014 a resource-scoped slice of the same\n\nframework/control data the global Compliance dashboard aggregates tenant-wide\n(see `compliance_service.py`), reusing its family/section resolution helpers.",
+        "properties": {
+          "available_frameworks": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceComplianceFrameworkOption"
+            },
+            "title": "Available Frameworks",
+            "type": "array"
+          },
+          "controls": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceComplianceControl"
+            },
+            "title": "Controls",
+            "type": "array"
+          },
+          "resource_key": {
+            "title": "Resource Key",
+            "type": "string"
+          },
+          "selected_framework": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Framework"
+          }
+        },
+        "required": [
+          "resource_key"
+        ],
+        "title": "ResourceComplianceResponse",
+        "type": "object"
+      },
       "ResourceDetail": {
         "description": "Full resource with metadata and edges.",
         "properties": {
@@ -2793,6 +3668,106 @@
         "title": "RetryRequest",
         "type": "object"
       },
+      "SLASettings": {
+        "description": "Per-severity remediation SLA, in days (US-14.08). Defaults per the epic spec.",
+        "properties": {
+          "critical_days": {
+            "default": 7,
+            "title": "Critical Days",
+            "type": "integer"
+          },
+          "high_days": {
+            "default": 30,
+            "title": "High Days",
+            "type": "integer"
+          },
+          "low_days": {
+            "default": 180,
+            "title": "Low Days",
+            "type": "integer"
+          },
+          "medium_days": {
+            "default": 90,
+            "title": "Medium Days",
+            "type": "integer"
+          }
+        },
+        "title": "SLASettings",
+        "type": "object"
+      },
+      "SLASettingsUpdateRequest": {
+        "properties": {
+          "critical_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Critical Days"
+          },
+          "high_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "High Days"
+          },
+          "low_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low Days"
+          },
+          "medium_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Medium Days"
+          }
+        },
+        "title": "SLASettingsUpdateRequest",
+        "type": "object"
+      },
+      "SLASummaryResponse": {
+        "properties": {
+          "at_risk": {
+            "title": "At Risk",
+            "type": "integer"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "integer"
+          },
+          "within_sla": {
+            "title": "Within Sla",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "within_sla",
+          "at_risk",
+          "overdue"
+        ],
+        "title": "SLASummaryResponse",
+        "type": "object"
+      },
       "SavedQuery": {
         "properties": {
           "created_at": {
@@ -3028,6 +4003,16 @@
       },
       "ScanJob": {
         "properties": {
+          "assets_removed": {
+            "default": 0,
+            "title": "Assets Removed",
+            "type": "integer"
+          },
+          "assets_total": {
+            "default": 0,
+            "title": "Assets Total",
+            "type": "integer"
+          },
           "checks_completed": {
             "default": 0,
             "title": "Checks Completed",
@@ -3055,6 +4040,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
           "error_message": {
             "anyOf": [
               {
@@ -3074,6 +4070,21 @@
           "findings_found": {
             "default": 0,
             "title": "Findings Found",
+            "type": "integer"
+          },
+          "findings_new": {
+            "default": 0,
+            "title": "Findings New",
+            "type": "integer"
+          },
+          "findings_removed": {
+            "default": 0,
+            "title": "Findings Removed",
+            "type": "integer"
+          },
+          "findings_updated": {
+            "default": 0,
+            "title": "Findings Updated",
             "type": "integer"
           },
           "frameworks": {
@@ -3154,6 +4165,27 @@
           "frameworks"
         ],
         "title": "ScanJob",
+        "type": "object"
+      },
+      "ScanJobLogs": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "logs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Logs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "job_id",
+          "logs"
+        ],
+        "title": "ScanJobLogs",
         "type": "object"
       },
       "ScanJobStatus": {
@@ -3238,6 +4270,125 @@
           "edges"
         ],
         "title": "ShortestPathResult",
+        "type": "object"
+      },
+      "SoftwareInventoryResponse": {
+        "description": "Software Inventory sub-tabs (US-14.06).\n\nInstalled Packages and Licenses are derived from the CycloneDX SBOM already\ngenerated by Side-Scanning (Epic 03). Applications and Running Services have no\ndata source anywhere in the platform yet \u2014 `*_available=False` signals the\nfrontend to render an explicit \"not available yet\" state instead of fabricated\ndata, matching the precedent set for other un-wired tabs in Epic 14 Sprint 2.",
+        "properties": {
+          "applications_available": {
+            "default": false,
+            "title": "Applications Available",
+            "type": "boolean"
+          },
+          "installed_packages": {
+            "items": {
+              "$ref": "#/components/schemas/SoftwarePackage"
+            },
+            "title": "Installed Packages",
+            "type": "array"
+          },
+          "licenses": {
+            "items": {
+              "$ref": "#/components/schemas/SoftwareLicense"
+            },
+            "title": "Licenses",
+            "type": "array"
+          },
+          "resource_key": {
+            "title": "Resource Key",
+            "type": "string"
+          },
+          "running_services_available": {
+            "default": false,
+            "title": "Running Services Available",
+            "type": "boolean"
+          },
+          "sbom_generated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sbom Generated At"
+          }
+        },
+        "required": [
+          "resource_key"
+        ],
+        "title": "SoftwareInventoryResponse",
+        "type": "object"
+      },
+      "SoftwareLicense": {
+        "properties": {
+          "category": {
+            "enum": [
+              "permissive",
+              "copyleft",
+              "weak_copyleft",
+              "unknown"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "deprecated": {
+            "title": "Deprecated",
+            "type": "boolean"
+          },
+          "license_id": {
+            "title": "License Id",
+            "type": "string"
+          },
+          "package_count": {
+            "title": "Package Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "license_id",
+          "category",
+          "deprecated",
+          "package_count"
+        ],
+        "title": "SoftwareLicense",
+        "type": "object"
+      },
+      "SoftwarePackage": {
+        "properties": {
+          "cve_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cve Ids",
+            "type": "array"
+          },
+          "filesystem_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filesystem Path"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ],
+        "title": "SoftwarePackage",
         "type": "object"
       },
       "TaskType": {
@@ -3856,6 +5007,38 @@
           },
           {
             "in": "query",
+            "name": "target_asset_category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Asset Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target_crown_jewel_reason",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Crown Jewel Reason"
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
@@ -4101,12 +5284,278 @@
         ]
       }
     },
+    "/api/v1/attack-paths/{path_id}/narrative": {
+      "get": {
+        "operationId": "get_attack_path_narrative_api_v1_attack_paths__path_id__narrative_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "path_id",
+            "required": true,
+            "schema": {
+              "title": "Path Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_PathNarrativeSummary_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Attack Path Narrative",
+        "tags": [
+          "attack-paths"
+        ]
+      }
+    },
+    "/api/v1/compliance/frameworks/{framework_id}": {
+      "get": {
+        "operationId": "get_framework_detail_api_v1_compliance_frameworks__framework_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "framework_id",
+            "required": true,
+            "schema": {
+              "title": "Framework Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ComplianceFrameworkDetail_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Framework Detail",
+        "tags": [
+          "compliance"
+        ]
+      }
+    },
+    "/api/v1/compliance/frameworks/{framework_id}/control-assets": {
+      "get": {
+        "operationId": "get_control_assets_api_v1_compliance_frameworks__framework_id__control_assets_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "framework_id",
+            "required": true,
+            "schema": {
+              "title": "Framework Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The control's control_id within this framework version",
+            "in": "query",
+            "name": "control_id",
+            "required": true,
+            "schema": {
+              "description": "The control's control_id within this framework version",
+              "title": "Control Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_ComplianceControlAsset__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Control Assets",
+        "tags": [
+          "compliance"
+        ]
+      }
+    },
+    "/api/v1/compliance/frameworks/{framework_id}/trend": {
+      "get": {
+        "operationId": "get_framework_trend_api_v1_compliance_frameworks__framework_id__trend_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "framework_id",
+            "required": true,
+            "schema": {
+              "title": "Framework Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "7d",
+              "enum": [
+                "7d",
+                "14d",
+                "1m"
+              ],
+              "title": "Period",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_ComplianceScoreTrendPoint__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Framework Trend",
+        "tags": [
+          "compliance"
+        ]
+      }
+    },
     "/api/v1/compliance/summary": {
       "get": {
         "operationId": "compliance_summary_api_v1_compliance_summary_get",
         "parameters": [
           {
-            "description": "Scope top_failing to this framework version id",
+            "description": "Scope top_failing/top_assets to this framework version id",
             "in": "query",
             "name": "framework",
             "required": false,
@@ -4119,8 +5568,29 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope top_failing to this framework version id",
+              "description": "Scope top_failing/top_assets to this framework version id",
               "title": "Framework"
+            }
+          },
+          {
+            "description": "Restrict top_failing to these severities (does not affect top_assets)",
+            "in": "query",
+            "name": "severity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict top_failing to these severities (does not affect top_assets)",
+              "title": "Severity"
             }
           },
           {
@@ -4400,6 +5870,42 @@
                 }
               ],
               "title": "Resource Type"
+            }
+          },
+          {
+            "description": "Exact match \u2014 the Compliance page's asset drill-down",
+            "in": "query",
+            "name": "resource_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact match \u2014 the Compliance page's asset drill-down",
+              "title": "Resource Id"
+            }
+          },
+          {
+            "description": "Exact match \u2014 the Compliance page's finding drill-down",
+            "in": "query",
+            "name": "check_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact match \u2014 the Compliance page's finding drill-down",
+              "title": "Check Id"
             }
           },
           {
@@ -4755,6 +6261,58 @@
         ]
       }
     },
+    "/api/v1/findings/sla-summary": {
+      "get": {
+        "description": "Count of open (FAIL) findings by SLA state (US-14.08).",
+        "operationId": "sla_summary_endpoint_api_v1_findings_sla_summary_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_SLASummaryResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sla Summary Endpoint",
+        "tags": [
+          "findings"
+        ]
+      }
+    },
     "/api/v1/findings/stats": {
       "get": {
         "description": "Aggregate counts by severity, status, and provider \u2014 used by the dashboard.",
@@ -4930,6 +6488,67 @@
           }
         },
         "summary": "Update Finding Status Endpoint",
+        "tags": [
+          "findings"
+        ]
+      }
+    },
+    "/api/v1/findings/{finding_key}/exposure-path": {
+      "get": {
+        "description": "Mini exposure-path graph for a finding's resource (US-14.09) \u2014 reuses the same\n\nblast-radius traversal as the Inventory detail panel (inventory_detail_service.py).",
+        "operationId": "get_finding_exposure_path_endpoint_api_v1_findings__finding_key__exposure_path_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "finding_key",
+            "required": true,
+            "schema": {
+              "title": "Finding Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_BlastRadiusResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Finding Exposure Path Endpoint",
         "tags": [
           "findings"
         ]
@@ -6075,6 +7694,124 @@
         ]
       }
     },
+    "/api/v1/inventory/{resource_key}/compliance": {
+      "get": {
+        "operationId": "get_resource_compliance_endpoint_api_v1_inventory__resource_key__compliance_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resource_key",
+            "required": true,
+            "schema": {
+              "title": "Resource Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "framework",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Framework"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ResourceComplianceResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Resource Compliance Endpoint",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/{resource_key}/software": {
+      "get": {
+        "operationId": "get_resource_software_api_v1_inventory__resource_key__software_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resource_key",
+            "required": true,
+            "schema": {
+              "title": "Resource Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_SoftwareInventoryResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Resource Software",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
     "/api/v1/inventory/{resource_key}/summary": {
       "get": {
         "operationId": "get_resource_summary_api_v1_inventory__resource_key__summary_get",
@@ -6447,9 +8184,72 @@
     },
     "/api/v1/scans": {
       "get": {
-        "description": "List recent scan jobs for a tenant.",
+        "description": "List scan jobs for a tenant \u2014 the Scans page registry (US-14.23).",
         "operationId": "list_scans_api_v1_scans_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "provider_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
           {
             "in": "header",
             "name": "X-Tenant-Id",
@@ -6474,7 +8274,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponse_list_ScanJob__"
+                  "$ref": "#/components/schemas/ApiResponse_PagedScanJobs_"
                 }
               }
             },
@@ -6738,6 +8538,262 @@
         "summary": "Get Scan Status",
         "tags": [
           "scans"
+        ]
+      }
+    },
+    "/api/v1/scans/{job_id}/logs": {
+      "get": {
+        "description": "Execution log lines captured during the scan (US-14.23).",
+        "operationId": "get_scan_logs_api_v1_scans__job_id__logs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ScanJobLogs_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Scan Logs",
+        "tags": [
+          "scans"
+        ]
+      }
+    },
+    "/api/v1/settings/compliance": {
+      "get": {
+        "operationId": "list_compliance_settings_api_v1_settings_compliance_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_ComplianceFamilySettingsView__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Compliance Settings",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/compliance/{family_key}": {
+      "put": {
+        "operationId": "update_compliance_settings_api_v1_settings_compliance__family_key__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "family_key",
+            "required": true,
+            "schema": {
+              "title": "Family Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComplianceFamilySettingsUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ComplianceFamilySettings_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Compliance Settings",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/sla": {
+      "get": {
+        "operationId": "get_sla_api_v1_settings_sla_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_SLASettings_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Sla",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "operationId": "update_sla_api_v1_settings_sla_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SLASettingsUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_SLASettings_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Sla",
+        "tags": [
+          "settings"
         ]
       }
     },

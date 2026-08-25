@@ -23,7 +23,7 @@ function PathDisplay({ result }: { result: ShortestPathResult }) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div id="pathfinding-result" className="flex flex-col gap-3">
       <div className="flex items-center gap-2 text-xs">
         <span className="text-slate-400 font-medium">Shortest path:</span>
         <span className="text-orange-400 font-mono">{result.hops} hop{result.hops !== 1 ? 's' : ''}</span>
@@ -36,11 +36,12 @@ function PathDisplay({ result }: { result: ShortestPathResult }) {
           const edgeAfter = result.edges[i] as Record<string, unknown> | undefined
           const label = (v.name ?? v.resource_type ?? v.identity_type ?? v._id ?? `Node ${i}`) as string
           const collection = (v._id as string | undefined)?.split('/')[0] ?? 'unknown'
+          const nodeKey = (v._id as string | undefined) ?? `node-${i}`
           const isFirst = i === 0
           const isLast = i === result.vertices.length - 1
 
           return (
-            <div key={i}>
+            <div key={i} data-testid={`pathfinding-result-node-${nodeKey}`}>
               <div
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs ${
                   isFirst
@@ -94,7 +95,7 @@ export function PathfindingPanel({ onClose, prefilledFrom = '', prefilledTo = ''
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-xl mx-4 flex flex-col">
+      <div id="pathfinding-panel" className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-xl mx-4 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
           <div>
@@ -107,7 +108,7 @@ export function PathfindingPanel({ onClose, prefilledFrom = '', prefilledTo = ''
         </div>
 
         {/* Inputs */}
-        <div className="px-5 py-4 flex flex-col gap-3 border-b border-slate-800">
+        <div id="pathfinding-form" className="px-5 py-4 flex flex-col gap-3 border-b border-slate-800">
           <div>
             <label className="text-slate-500 text-[11px] uppercase tracking-wide block mb-1">
               From (ArangoDB _id)
@@ -147,7 +148,7 @@ export function PathfindingPanel({ onClose, prefilledFrom = '', prefilledTo = ''
         </div>
 
         {/* Result */}
-        <div className="px-5 py-4 max-h-96 overflow-y-auto">
+        <div id="pathfinding-results" className="px-5 py-4 max-h-96 overflow-y-auto">
           {error && (
             <div className="bg-red-900/20 border border-red-800/50 rounded-lg px-4 py-3 text-red-400 text-xs">
               {error}

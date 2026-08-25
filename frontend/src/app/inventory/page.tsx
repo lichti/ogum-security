@@ -148,11 +148,10 @@ function InventoryPageContent() {
     accountIds.length === 0
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div id="inventory-page" className="min-h-screen bg-slate-950">
       <header className="border-b border-slate-800 bg-slate-900 px-6 py-4">
         <div className="flex items-center justify-between max-w-screen-2xl mx-auto">
           <div>
-            <h1 className="text-xl font-bold text-slate-100">Inventory</h1>
             {lastScanned && (
               <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
                 <RefreshCw className="w-3 h-3" />
@@ -172,7 +171,7 @@ function InventoryPageContent() {
         </div>
       </header>
 
-      <main className="max-w-screen-2xl mx-auto px-6 py-6 space-y-4">
+      <main id="inventory-main" className="max-w-screen-2xl mx-auto px-6 py-6 space-y-4">
         <InventorySummary
           byProvider={stats?.by_provider ?? {}}
           byCategory={byCategory}
@@ -182,38 +181,40 @@ function InventoryPageContent() {
           onCategoryClick={handleCategoryToggle}
         />
 
-        <Filters
-          search={search}
-          onSearch={handleSearch}
-          providerOptions={providerOptions}
-          selectedProviders={providers}
-          onProvidersChange={(v) => {
-            setProviders(v)
-            setOffset(0)
-          }}
-          categoryOptions={categoryOptions}
-          selectedCategories={categories}
-          onCategoriesChange={(v) => {
-            setCategories(v)
-            setOffset(0)
-          }}
-          regionOptions={regionOptions}
-          selectedRegions={regions}
-          onRegionsChange={(v) => {
-            setRegions(v)
-            setOffset(0)
-          }}
-          accountOptions={accountOptions}
-          selectedAccounts={accountIds}
-          onAccountsChange={(v) => {
-            setAccountIds(v)
-            setOffset(0)
-          }}
-          onClear={handleClearFilters}
-        />
+        <div id="inventory-filters">
+          <Filters
+            search={search}
+            onSearch={handleSearch}
+            providerOptions={providerOptions}
+            selectedProviders={providers}
+            onProvidersChange={(v) => {
+              setProviders(v)
+              setOffset(0)
+            }}
+            categoryOptions={categoryOptions}
+            selectedCategories={categories}
+            onCategoriesChange={(v) => {
+              setCategories(v)
+              setOffset(0)
+            }}
+            regionOptions={regionOptions}
+            selectedRegions={regions}
+            onRegionsChange={(v) => {
+              setRegions(v)
+              setOffset(0)
+            }}
+            accountOptions={accountOptions}
+            selectedAccounts={accountIds}
+            onAccountsChange={(v) => {
+              setAccountIds(v)
+              setOffset(0)
+            }}
+            onClear={handleClearFilters}
+          />
+        </div>
 
         {isPristineEmpty ? (
-          <div className="text-center py-20">
+          <div id="inventory-empty-state" className="text-center py-20">
             <div className="text-slate-600 text-5xl mb-4">☁</div>
             <h2 className="text-xl font-semibold text-slate-300 mb-2">No cloud accounts connected</h2>
             <p className="text-slate-500 mb-6">Connect your first account to start discovering resources.</p>
@@ -225,15 +226,17 @@ function InventoryPageContent() {
             </a>
           </div>
         ) : (
-          <DataTable
-            resources={listData?.data ?? []}
-            total={listData?.meta.total ?? 0}
-            limit={LIMIT}
-            offset={offset}
-            loading={listLoading}
-            onPageChange={setOffset}
-            onRowClick={handleRowClick}
-          />
+          <div id="inventory-data-table">
+            <DataTable
+              resources={listData?.data ?? []}
+              total={listData?.meta.total ?? 0}
+              limit={LIMIT}
+              offset={offset}
+              loading={listLoading}
+              onPageChange={setOffset}
+              onRowClick={handleRowClick}
+            />
+          </div>
         )}
       </main>
 

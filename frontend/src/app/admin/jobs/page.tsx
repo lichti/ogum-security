@@ -34,9 +34,8 @@ export default function AdminJobsPage() {
   }, []);
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-slate-100">Admin — Jobs</h1>
+    <div id="admin-jobs-page" className="p-6">
+      <div className="flex items-center justify-end mb-6">
         <button
           onClick={fetchJobs}
           className="flex items-center gap-2 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors"
@@ -52,7 +51,7 @@ export default function AdminJobsPage() {
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-800 overflow-hidden">
+      <div id="admin-jobs-table" className="rounded-lg border border-slate-800 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-800 text-slate-400 text-xs uppercase tracking-wider">
             <tr>
@@ -83,6 +82,7 @@ export default function AdminJobsPage() {
             {jobs.map((job) => (
               <tr
                 key={job.job_id}
+                data-testid={`admin-job-row-${job.job_id}`}
                 onClick={() => setSelectedJob(job)}
                 className="hover:bg-slate-800/50 transition-colors cursor-pointer"
               >

@@ -17,9 +17,11 @@ describe('Sidebar', () => {
     expect(screen.getByRole('link', { name: /dashboard/i })).toHaveAttribute('href', '/')
     expect(screen.getByRole('link', { name: /inventory/i })).toHaveAttribute('href', '/inventory')
     expect(screen.getByRole('link', { name: /findings/i })).toHaveAttribute('href', '/findings')
-    expect(screen.getByRole('link', { name: /compliance/i })).toHaveAttribute('href', '/compliance')
+    expect(screen.getByRole('link', { name: /^compliance$/i })).toHaveAttribute('href', '/compliance')
     expect(screen.getByRole('link', { name: /attack paths/i })).toHaveAttribute('href', '/attack-paths')
     expect(screen.getByRole('link', { name: /cloud providers/i })).toHaveAttribute('href', '/providers')
+    expect(screen.getByRole('link', { name: /sla settings/i })).toHaveAttribute('href', '/settings/sla')
+    expect(screen.getByRole('link', { name: /compliance settings/i })).toHaveAttribute('href', '/settings/compliance')
     expect(screen.getByRole('link', { name: /admin/i })).toHaveAttribute('href', '/admin/jobs')
   })
 

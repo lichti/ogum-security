@@ -335,7 +335,13 @@ class TestProvidersDeleteEndpoint:
         assert resp.status_code == 404
 
     def test_cascade_delete_removes_findings_and_scan_jobs(self, api_client, mocker, db_tenant_a):
-        """Deleting a provider must cascade-delete its findings and scan_jobs."""
+        """Deleting a provider must cascade-delete its findings and scan_jobs.
+
+        `Finding` documents never carry a `provider_id` field — only `provider` +
+        `account_id`, the same (provider, account_id/cluster_name) pair graph
+        vertices are scoped by — so the seed here must match that real shape, not
+        the provider_id key scan_jobs happens to use.
+        """
         provider_id = _register_aws(api_client, mocker, account_id="777777777777")
 
         # Seed a finding and a scan_job linked to this provider
@@ -343,7 +349,8 @@ class TestProvidersDeleteEndpoint:
             {
                 "_key": "find-cascade",
                 "tenant_id": TEST_TENANT_A,
-                "provider_id": provider_id,
+                "provider": "aws",
+                "account_id": "777777777777",
                 "check_id": "ec2_public",
                 "severity": "HIGH",
                 "status": "FAIL",
@@ -370,6 +377,63 @@ class TestProvidersDeleteEndpoint:
         purge = del_resp.json()["data"].get("purged", {})
         assert purge.get("findings", 0) >= 1
         assert purge.get("scan_jobs", 0) >= 1
+
+    def test_cascade_delete_sweeps_orphaned_edges_not_covered_by_earlier_purge_passes(
+        self, api_client, mocker, db_tenant_a
+    ):
+        """STS_ASSUMEROLE_ALLOW, ATTACHED_POLICY, and HAS_FINDING used to survive a
+        provider delete as dangling edges pointing at vertices/findings the same
+        purge had already removed — regression coverage for that gap."""
+        provider_id = _register_aws(api_client, mocker, account_id="999999999999")
+
+        db_tenant_a.collection("identities").insert(
+            {
+                "_key": "id-a",
+                "tenant_id": TEST_TENANT_A,
+                "provider": "aws",
+                "account_id": "999999999999",
+                "arn": "arn:aws:iam::999999999999:role/id-a",
+            },
+            overwrite=True,
+        )
+        db_tenant_a.collection("identities").insert(
+            {
+                "_key": "id-b",
+                "tenant_id": TEST_TENANT_A,
+                "provider": "aws",
+                "account_id": "999999999999",
+                "arn": "arn:aws:iam::999999999999:role/id-b",
+            },
+            overwrite=True,
+        )
+        db_tenant_a.collection("findings").insert(
+            {
+                "_key": "find-edge",
+                "tenant_id": TEST_TENANT_A,
+                "provider": "aws",
+                "account_id": "999999999999",
+                "check_id": "iam_check",
+                "severity": "LOW",
+                "status": "FAIL",
+            },
+            overwrite=True,
+        )
+        db_tenant_a.collection("STS_ASSUMEROLE_ALLOW").insert(
+            {"_key": "sts-1", "_from": "identities/id-a", "_to": "identities/id-b"}, overwrite=True
+        )
+        db_tenant_a.collection("ATTACHED_POLICY").insert(
+            {"_key": "pol-1", "_from": "identities/id-a", "_to": "identities/id-b"}, overwrite=True
+        )
+        db_tenant_a.collection("HAS_FINDING").insert(
+            {"_key": "hf-1", "_from": "identities/id-a", "_to": "findings/find-edge"}, overwrite=True
+        )
+
+        del_resp = api_client.delete(f"/api/v1/providers/{provider_id}", headers=HEADERS)
+        assert del_resp.status_code == 200
+
+        assert db_tenant_a.collection("STS_ASSUMEROLE_ALLOW").get("sts-1") is None
+        assert db_tenant_a.collection("ATTACHED_POLICY").get("pol-1") is None
+        assert db_tenant_a.collection("HAS_FINDING").get("hf-1") is None
 
     def test_cascade_delete_removes_stale_attack_paths(self, api_client, mocker, db_tenant_a):
         """Deleting a provider must cascade-delete attack paths whose nodes are gone."""

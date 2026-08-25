@@ -16,8 +16,12 @@ from pydantic import BaseModel, model_validator
 from app.api.v1.inventory import get_tenant_db
 from app.models.api_responses import ApiResponse
 from app.models.finding import FindingStatus
+from app.models.inventory_detail import BlastRadiusResponse
 from app.services.cli_command import build_cli_command
+from app.services.finding_detail_service import get_finding_exposure_path
 from app.services.findings_service import get_finding, list_findings, update_finding_status
+from app.services.settings_service import get_sla_settings
+from app.services.sla_service import sla_summary as compute_sla_summary
 
 router = APIRouter(prefix="/api/v1/findings", tags=["findings"])
 
@@ -30,6 +34,12 @@ class PagedFindings(BaseModel):
     items: list[dict[str, Any]]
     next_cursor: str | None = None
     count: int
+
+
+class SLASummaryResponse(BaseModel):
+    within_sla: int
+    at_risk: int
+    overdue: int
 
 
 class FindingStatusUpdate(BaseModel):
@@ -56,6 +66,8 @@ async def list_findings_endpoint(
     region: str | None = Query(default=None),
     account_id: str | None = Query(default=None),
     resource_type: str | None = Query(default=None),
+    resource_id: str | None = Query(default=None, description="Exact match — the Compliance page's asset drill-down"),
+    check_id: str | None = Query(default=None, description="Exact match — the Compliance page's finding drill-down"),
     source: list[str] | None = Query(default=None),
     q: str | None = Query(default=None, description="Full-text search in title, check_id, resource_arn"),
     mitre_ttp: str | None = Query(default=None, description="Filter by MITRE ATT&CK technique ID (e.g. T1078)"),
@@ -75,6 +87,8 @@ async def list_findings_endpoint(
         region=region,
         account_id=account_id,
         resource_type=resource_type,
+        resource_id=resource_id,
+        check_id=check_id,
         source=source,
         q=q,
         mitre_ttp=mitre_ttp,
@@ -240,6 +254,17 @@ def export_findings_endpoint(
     )
 
 
+@router.get("/sla-summary", response_model=ApiResponse[SLASummaryResponse])
+async def sla_summary_endpoint(
+    x_tenant_id: str = Header(..., alias="X-Tenant-Id"),
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> ApiResponse[SLASummaryResponse]:
+    """Count of open (FAIL) findings by SLA state (US-14.08)."""
+    sla = get_sla_settings(db)
+    counts = compute_sla_summary(db, x_tenant_id, sla, datetime.now(UTC))
+    return ApiResponse(data=SLASummaryResponse(**counts))
+
+
 @router.get("/{finding_key}", response_model=ApiResponse[dict[str, Any]])
 async def get_finding_endpoint(
     finding_key: str,
@@ -278,3 +303,19 @@ async def update_finding_status_endpoint(
     if updated is None:
         raise HTTPException(status_code=404, detail="Finding not found")
     return ApiResponse(data=updated)
+
+
+@router.get("/{finding_key}/exposure-path", response_model=ApiResponse[BlastRadiusResponse])
+async def get_finding_exposure_path_endpoint(
+    finding_key: str,
+    x_tenant_id: str = Header(..., alias="X-Tenant-Id"),
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> ApiResponse[BlastRadiusResponse]:
+    """Mini exposure-path graph for a finding's resource (US-14.09) — reuses the same
+
+    blast-radius traversal as the Inventory detail panel (inventory_detail_service.py).
+    """
+    result = get_finding_exposure_path(db, x_tenant_id, finding_key)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    return ApiResponse(data=result)

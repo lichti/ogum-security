@@ -41,9 +41,8 @@ export default function AdminQueueDepthPage() {
   const maxDepth = Math.max(...queues.map((q) => q.depth), 1);
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-slate-100">Admin — Queue Depth</h1>
+    <div id="admin-queue-depth-page" className="p-6">
+      <div className="flex items-center justify-end mb-6">
         <button
           onClick={fetchQueues}
           className="flex items-center gap-2 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors"
@@ -59,13 +58,13 @@ export default function AdminQueueDepthPage() {
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-800 bg-slate-900 p-6 space-y-5">
+      <div id="admin-queue-depth-list" className="rounded-lg border border-slate-800 bg-slate-900 p-6 space-y-5">
         {loading && <p className="text-slate-500 text-sm">Loading…</p>}
         {queues.map((q) => {
           const pct = Math.min((q.depth / maxDepth) * MAX_BAR, 100);
           const barColor = q.depth === 0 ? "bg-slate-700" : q.depth > 50 ? "bg-red-500" : "bg-orange-500";
           return (
-            <div key={q.queue}>
+            <div key={q.queue} data-testid={`queue-depth-row-${q.queue}`}>
               <div className="flex justify-between text-sm mb-1.5">
                 <span className="text-slate-300 font-medium">{q.queue}</span>
                 <span className={q.depth > 0 ? "text-orange-400 font-semibold" : "text-slate-500"}>

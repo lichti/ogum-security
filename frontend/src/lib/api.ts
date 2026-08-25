@@ -5,6 +5,12 @@ import type {
   AttackPathFilters,
   AttackPathStats,
   AqlResult,
+  CompliancePeriod,
+  ComplianceControlAsset,
+  ComplianceFamilySettingsUpdateRequest,
+  ComplianceFamilySettingsView,
+  ComplianceFrameworkDetail,
+  ComplianceScoreTrendPoint,
   ComplianceSummary,
   ExposureSummary,
   FindingDetail,
@@ -20,6 +26,8 @@ import type {
   ResourceDetail,
   ResourceNarrativeSummary,
   BlastRadiusResponse,
+  ResourceComplianceResponse,
+  SoftwareInventoryResponse,
   InventoryStats,
   InventoryFilters,
   ProviderConfig,
@@ -33,10 +41,15 @@ import type {
   SavedViewCreateRequest,
   SavedViewUpdateRequest,
   ShortestPathResult,
+  PagedScanJobs,
   ScanJob,
+  ScanJobFilter,
+  ScanJobLogs,
   ScanTriggerRequest,
   ScanTriggerResponse,
   SideScanJob,
+  SLASettings,
+  SLASummary,
   ViewScope,
 } from './types'
 
@@ -100,6 +113,14 @@ export const inventoryApi = {
   blastRadius: (key: string) =>
     apiClient.get<ApiResponse<BlastRadiusResponse>>(`/api/v1/inventory/${key}/blast-radius`),
 
+  software: (key: string) =>
+    apiClient.get<ApiResponse<SoftwareInventoryResponse>>(`/api/v1/inventory/${key}/software`),
+
+  compliance: (key: string, framework?: string) =>
+    apiClient.get<ApiResponse<ResourceComplianceResponse>>(`/api/v1/inventory/${key}/compliance`, {
+      params: framework ? { framework } : undefined,
+    }),
+
   triggerDiscovery: (provider: string, regions: string[]) =>
     apiClient.post('/api/v1/inventory/discover', null, {
       params: { provider, regions },
@@ -155,6 +176,8 @@ export const findingsApi = {
         region: filters.region || undefined,
         account_id: filters.account_id || undefined,
         resource_type: filters.resource_type || undefined,
+        resource_id: filters.resource_id || undefined,
+        check_id: filters.check_id || undefined,
         source: filters.source || undefined,
         q: filters.q || undefined,
         limit: filters.limit,
@@ -176,6 +199,29 @@ export const findingsApi = {
       status: 'ACCEPTED',
       reason,
     }),
+
+  slaSummary: () =>
+    apiClient.get<ApiResponse<SLASummary>>('/api/v1/findings/sla-summary'),
+
+  exposurePath: (findingKey: string) =>
+    apiClient.get<ApiResponse<BlastRadiusResponse>>(`/api/v1/findings/${findingKey}/exposure-path`),
+}
+
+export const settingsApi = {
+  getSla: () =>
+    apiClient.get<ApiResponse<SLASettings>>('/api/v1/settings/sla'),
+
+  updateSla: (data: Partial<SLASettings>) =>
+    apiClient.put<ApiResponse<SLASettings>>('/api/v1/settings/sla', data),
+
+  listCompliance: () =>
+    apiClient.get<ApiResponse<ComplianceFamilySettingsView[]>>('/api/v1/settings/compliance'),
+
+  updateCompliance: (familyKey: string, data: ComplianceFamilySettingsUpdateRequest) =>
+    apiClient.put<ApiResponse<ComplianceFamilySettingsView>>(
+      `/api/v1/settings/compliance/${encodeURIComponent(familyKey)}`,
+      data,
+    ),
 }
 
 export const scansApi = {
@@ -185,15 +231,42 @@ export const scansApi = {
   get: (jobId: string) =>
     apiClient.get<ApiResponse<ScanJob>>(`/api/v1/scans/${jobId}`),
 
-  list: () =>
-    apiClient.get<ApiResponse<ScanJob[]>>('/api/v1/scans'),
+  list: (filters: ScanJobFilter = {}) =>
+    apiClient.get<ApiResponse<PagedScanJobs>>('/api/v1/scans', {
+      params: {
+        status: filters.status || undefined,
+        provider_id: filters.provider_id || undefined,
+        limit: filters.limit,
+        cursor: filters.cursor || undefined,
+      },
+    }),
+
+  logs: (jobId: string) =>
+    apiClient.get<ApiResponse<ScanJobLogs>>(`/api/v1/scans/${jobId}/logs`),
 }
 
 export const complianceApi = {
-  summary: (framework?: string) =>
+  summary: (framework?: string, severity?: string[]) =>
     apiClient.get<ApiResponse<ComplianceSummary>>('/api/v1/compliance/summary', {
-      params: framework ? { framework } : undefined,
+      params: { framework: framework || undefined, severity },
     }),
+
+  frameworkDetail: (frameworkId: string) =>
+    apiClient.get<ApiResponse<ComplianceFrameworkDetail>>(
+      `/api/v1/compliance/frameworks/${encodeURIComponent(frameworkId)}`,
+    ),
+
+  trend: (frameworkId: string, period: CompliancePeriod) =>
+    apiClient.get<ApiResponse<ComplianceScoreTrendPoint[]>>(
+      `/api/v1/compliance/frameworks/${encodeURIComponent(frameworkId)}/trend`,
+      { params: { period } },
+    ),
+
+  controlAssets: (frameworkId: string, controlId: string) =>
+    apiClient.get<ApiResponse<ComplianceControlAsset[]>>(
+      `/api/v1/compliance/frameworks/${encodeURIComponent(frameworkId)}/control-assets`,
+      { params: { control_id: controlId } },
+    ),
 }
 
 export const attackPathsApi = {
@@ -206,6 +279,8 @@ export const attackPathsApi = {
         severity: filters.severity || undefined,
         is_toxic_combination: filters.is_toxic_combination ?? undefined,
         provider: filters.provider || undefined,
+        target_asset_category: filters.target_asset_category || undefined,
+        target_crown_jewel_reason: filters.target_crown_jewel_reason || undefined,
         limit: filters.limit,
         cursor: filters.cursor || undefined,
       },
@@ -216,6 +291,9 @@ export const attackPathsApi = {
 
   getMitre: (pathKey: string) =>
     apiClient.get<ApiResponse<import('./types').MitreIntelligence>>(`/api/v1/attack-paths/${pathKey}/mitre`),
+
+  getNarrative: (pathKey: string) =>
+    apiClient.get<ApiResponse<import('./types').PathNarrativeSummary>>(`/api/v1/attack-paths/${pathKey}/narrative`),
 }
 
 export const identitiesApi = {

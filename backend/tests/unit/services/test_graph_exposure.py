@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.services.graph.exposure import compute_exposed_internet, get_exposure_summary
+from app.services.graph.exposure import classify_path_exposure, compute_exposed_internet, get_exposure_summary
 from app.services.graph.privilege_escalation import (
     _DANGEROUS_PERMISSION_PATTERNS,
     ESCALATION_PATTERNS,
@@ -199,6 +199,31 @@ class TestComputeExposedInternet:
         db.aql.execute.return_value = iter([])
         result = compute_exposed_internet(db, "tenant1")
         assert result["resources"] == 0
+
+
+@pytest.mark.unit
+class TestClassifyPathExposure:
+    def test_internet_facing_when_exposed_internet(self) -> None:
+        assert classify_path_exposure({"exposed_internet": True}, "internet_to_data") == "internet_facing"
+
+    def test_internet_facing_when_is_internet_facing(self) -> None:
+        assert classify_path_exposure({"is_internet_facing": True}, "internet_to_data") == "internet_facing"
+
+    def test_public_facing_when_is_public_only(self) -> None:
+        assert classify_path_exposure({"is_public": True}, "internet_to_data") == "public_facing"
+
+    def test_trusted_access_for_privilege_escalation_entry(self) -> None:
+        assert classify_path_exposure({}, "privilege_escalation") == "trusted_access"
+
+    def test_none_when_no_signal(self) -> None:
+        assert classify_path_exposure({}, "TC-03") == "none"
+
+    def test_none_when_entry_doc_is_none(self) -> None:
+        assert classify_path_exposure(None, "TC-03") == "none"
+
+    def test_exposed_internet_takes_priority_over_public(self) -> None:
+        entry = {"exposed_internet": True, "is_public": False}
+        assert classify_path_exposure(entry, "internet_to_data") == "internet_facing"
 
 
 @pytest.mark.unit

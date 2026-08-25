@@ -62,6 +62,9 @@ class Finding(BaseModel):
     updated_at: datetime = Field(default_factory=_utcnow)
     mute_reason: str | None = None
     scan_job_id: str | None = None
+    first_seen_scan_id: str | None = None
+    last_seen_scan_id: str | None = None
+    scan_count: int = 1
     raw_output: dict[str, Any] = Field(default_factory=dict)
 
     def arango_key(self) -> str:
@@ -104,6 +107,15 @@ class ScanJob(BaseModel):
     checks_completed: int = 0
     findings_found: int = 0
     findings_fail: int = 0
+    # Populated at completion (US-14.23, the Scans page) — new/updated are
+    # derived from Finding.first_seen_scan_id/last_seen_scan_id, removed is a
+    # cascade count (findings whose resource got soft-deleted this same run).
+    findings_new: int = 0
+    findings_updated: int = 0
+    findings_removed: int = 0
+    assets_total: int = 0
+    assets_removed: int = 0
+    duration_seconds: float | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error_message: str | None = None

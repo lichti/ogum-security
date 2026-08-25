@@ -7,6 +7,7 @@ const families: ComplianceFamily[] = [
   {
     family: 'cis-aws',
     label: 'CIS AWS Foundations Benchmark',
+    target_by_control: null,
     versions: [
       { id: 'CIS-7.0', version_label: '7.0', pass: 8, fail: 2, total: 10, score: 80, sections: [] },
       { id: 'CIS-1.4', version_label: '1.4', pass: 5, fail: 5, total: 10, score: 50, sections: [] },
@@ -15,6 +16,7 @@ const families: ComplianceFamily[] = [
   {
     family: 'SOC2',
     label: 'SOC 2',
+    target_by_control: null,
     versions: [{ id: 'SOC2', version_label: '', pass: 3, fail: 1, total: 4, score: 75, sections: [] }],
   },
 ]
@@ -53,5 +55,20 @@ describe('FrameworkSidebar', () => {
     render(<FrameworkSidebar families={families} selectedFamily={null} onSelect={onSelect} />)
     fireEvent.change(screen.getByLabelText('Search frameworks'), { target: { value: 'nonexistent' } })
     expect(screen.getByText('No frameworks match your search.')).toBeInTheDocument()
+  })
+
+  it('shows a vs-goal indicator when a Compliance Settings target is configured', () => {
+    const withGoal: ComplianceFamily[] = [
+      { ...families[0], target_by_control: 90 }, // headline score is 80% — below goal
+      { ...families[1], target_by_control: 70 }, // headline score is 75% — meets goal
+    ]
+    render(<FrameworkSidebar families={withGoal} selectedFamily={null} onSelect={onSelect} />)
+    expect(screen.getByText('▾ 90%')).toBeInTheDocument()
+    expect(screen.getByText('✓ 70%')).toBeInTheDocument()
+  })
+
+  it('omits the vs-goal indicator when no target is configured', () => {
+    render(<FrameworkSidebar families={families} selectedFamily={null} onSelect={onSelect} />)
+    expect(screen.queryByText(/^(✓|▾)/)).not.toBeInTheDocument()
   })
 })

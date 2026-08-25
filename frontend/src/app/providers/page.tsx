@@ -57,15 +57,9 @@ export default function ProvidersPage() {
   const providers = data ?? []
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div id="providers-page" className="min-h-screen bg-slate-950 text-slate-100">
       <div className="max-w-6xl mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-100">Connected Accounts</h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Manage cloud provider connections and trigger discovery jobs.
-            </p>
-          </div>
+        <div className="flex items-center justify-end mb-8">
           <button
             onClick={() => setShowWizard(true)}
             className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors"
@@ -92,7 +86,7 @@ export default function ProvidersPage() {
           </div>
         )}
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div id="providers-table" className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
           {isLoading ? (
             <div className="py-16 text-center text-slate-500 text-sm">Loading...</div>
           ) : (

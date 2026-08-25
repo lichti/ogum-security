@@ -37,7 +37,7 @@ export function BlastRadiusGraph({ resource, onViewFull }: BlastRadiusGraphProps
     : null
 
   return (
-    <div className="space-y-2">
+    <div id="blast-radius-graph" className="space-y-2">
       {countsLabel && <p className="text-slate-500 text-xs">Reachable: {countsLabel}</p>}
       <AttackPathCanvas
         mode="mini"

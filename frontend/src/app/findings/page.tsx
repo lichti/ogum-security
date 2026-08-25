@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { FindingsTable } from '@/components/findings/FindingsTable'
 import { FindingFilters } from '@/components/findings/FindingFilters'
 import { FindingsSummary } from '@/components/findings/FindingsSummary'
+import { SLASummaryPanel } from '@/components/findings/SLASummaryPanel'
 import { ExportButton } from '@/components/findings/ExportButton'
 import { FindingDetailPanel } from '@/components/findings/FindingDetailPanel'
 import { findingsApi } from '@/lib/api'
@@ -38,7 +39,9 @@ function FindingsPageContent() {
     return framework ? { ...DEFAULT_FILTERS, framework: [framework] } : DEFAULT_FILTERS
   })
   const [prevCursors, setPrevCursors] = useState<string[]>([])
-  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  // ?finding=<key> deep-link (e.g. from the Inventory resource Compliance tab)
+  // opens that finding's detail panel on first load — same one-time-URL-read pattern as `framework` above.
+  const [selectedKey, setSelectedKey] = useState<string | null>(() => searchParams.get('finding'))
 
   const { data: statsData } = useQuery({
     queryKey: ['findings-stats'],
@@ -95,19 +98,20 @@ function FindingsPageContent() {
   const handleRowClick = (f: Finding) => setSelectedKey(f._key)
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200">
+    <div id="findings-page" className="min-h-screen bg-slate-950 text-slate-200">
       <div className="max-w-screen-xl mx-auto px-6 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-100">Findings</h1>
-            <p className="text-slate-500 text-sm mt-1">CSPM and IaC security findings across all providers</p>
-          </div>
+        <div className="flex items-center justify-end mb-4">
           <ExportButton filters={filters} />
         </div>
 
+        {/* SLA Summary */}
+        <div id="findings-sla-summary" className="mb-6">
+          <SLASummaryPanel />
+        </div>
+
         {/* Summary */}
-        <div className="mb-6">
+        <div id="findings-summary" className="mb-6">
           <FindingsSummary
             bySeverity={stats?.by_severity ?? {}}
             byProvider={stats?.by_provider ?? {}}
@@ -119,20 +123,22 @@ function FindingsPageContent() {
         </div>
 
         {/* Filters */}
-        <div className="mb-6">
+        <div id="findings-filters" className="mb-6">
           <FindingFilters filters={filters} onChange={handleFiltersChange} />
         </div>
 
         {/* Table */}
-        <FindingsTable
-          findings={findings}
-          loading={isLoading}
-          nextCursor={nextCursor}
-          prevCursors={prevCursors}
-          onNext={handleNext}
-          onPrev={handlePrev}
-          onRowClick={handleRowClick}
-        />
+        <div id="findings-table">
+          <FindingsTable
+            findings={findings}
+            loading={isLoading}
+            nextCursor={nextCursor}
+            prevCursors={prevCursors}
+            onNext={handleNext}
+            onPrev={handlePrev}
+            onRowClick={handleRowClick}
+          />
+        </div>
       </div>
 
       {/* Detail panel */}

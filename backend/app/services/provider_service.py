@@ -202,6 +202,9 @@ _EDGE_COLLECTIONS = [
     "BELONGS_TO",
     "ATTACHED_TO",
     "MEMBER_OF",
+    "STS_ASSUMEROLE_ALLOW",
+    "ATTACHED_POLICY",
+    "HAS_FINDING",
 ]
 
 
@@ -209,9 +212,11 @@ def _purge_provider_resources(db: StandardDatabase, config: ProviderConfig) -> d
     """Hard-delete all graph data owned by a provider.
 
     Order: findings → scan_jobs → graph vertices → orphaned edges → attack_paths.
-    Findings and scan_jobs are keyed by provider_id (direct FK).
-    Vertices are scoped by (provider, account_id/cluster_name).
-    Orphaned edges are swept after vertices are removed.
+    Scan jobs are keyed by provider_id (direct FK). Findings have no provider_id
+    field at all (`Finding` never gained one) — scoped by (provider, account_id/
+    cluster_name) instead, the same key vertices use, since that's the only FK a
+    finding document actually carries back to a provider.
+    Orphaned edges are swept after vertices (and findings) are removed.
     Attack paths are swept last: any path whose entry_point or target no longer
     exists as a graph document is considered stale and removed.
 
@@ -220,20 +225,28 @@ def _purge_provider_resources(db: StandardDatabase, config: ProviderConfig) -> d
     counts: dict[str, int] = {}
     provider_id = config.key
 
-    # 1. Findings — keyed by provider_id
+    # Scope used by both findings and graph vertices below.
+    if config.provider == "k8s":
+        scope_filter = "FILTER doc.provider == @provider AND doc.cluster_name == @identifier"
+        identifier = config.cluster_name or ""
+    else:
+        scope_filter = "FILTER doc.provider == @provider AND doc.account_id == @identifier"
+        identifier = config.account_id or config.subscription_id or config.project_id or ""
+
+    # 1. Findings — no provider_id field; scoped by (provider, account_id/cluster_name).
     for coll in ("findings",):
         if not db.has_collection(coll):
             counts[coll] = 0
             continue
         cursor = db.aql.execute(
-            """
+            f"""
             FOR doc IN @@coll
-              FILTER doc.provider_id == @provider_id
+              {scope_filter}
               REMOVE doc IN @@coll
               COLLECT WITH COUNT INTO n
               RETURN n
             """,
-            bind_vars={"@coll": coll, "provider_id": provider_id},
+            bind_vars={"@coll": coll, "provider": config.provider, "identifier": identifier},
         )
         result = list(cursor)
         counts[coll] = result[0] if result else 0
@@ -257,13 +270,6 @@ def _purge_provider_resources(db: StandardDatabase, config: ProviderConfig) -> d
         counts[coll] = result[0] if result else 0
 
     # 3. Graph vertices — scoped by (provider, account_id/cluster_name)
-    if config.provider == "k8s":
-        scope_filter = "FILTER doc.provider == @provider AND doc.cluster_name == @identifier"
-        identifier = config.cluster_name or ""
-    else:
-        scope_filter = "FILTER doc.provider == @provider AND doc.account_id == @identifier"
-        identifier = config.account_id or config.subscription_id or config.project_id or ""
-
     for coll in _VERTEX_COLLECTIONS:
         if not db.has_collection(coll):
             counts[coll] = 0

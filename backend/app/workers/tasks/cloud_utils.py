@@ -129,6 +129,42 @@ def _upsert(db: Any, collection: str, doc: dict[str, Any], update: dict[str, Any
         )
 
 
+def upsert_finding(db: Any, finding: Any) -> None:
+    """Upsert a finding, tracking first/last-seen scan id and a re-scan counter.
+
+    `first_seen_scan_id` is only ever written by the INSERT branch (never overwritten
+    by the UPDATE branch), so it stays "when this finding was first detected" across
+    every re-scan — the basis for the Timeline panel (Epic 14 US-14.10). `scan_count`
+    guards against pre-migration documents that predate this field with `OLD.scan_count
+    || 0` — undercounts by one on the first re-scan after upgrade, which is an accepted,
+    self-correcting drift rather than a blocking backfill migration.
+    """
+    doc = finding.to_arango_doc()
+    doc["first_seen_scan_id"] = finding.scan_job_id
+    doc["last_seen_scan_id"] = finding.scan_job_id
+    doc["scan_count"] = 1
+    update = finding.to_arango_update()
+    db.aql.execute(
+        """
+        UPSERT { _key: @key }
+        INSERT @doc
+        UPDATE {
+            status: @update.status,
+            severity: @update.severity,
+            updated_at: @update.updated_at,
+            framework_mapping: @update.framework_mapping,
+            remediation: @update.remediation,
+            remediation_code: @update.remediation_code,
+            raw_output: @update.raw_output,
+            last_seen_scan_id: @doc.last_seen_scan_id,
+            scan_count: (OLD.scan_count || 0) + 1
+        }
+        IN findings
+        """,
+        bind_vars={"key": doc["_key"], "doc": doc, "update": update},
+    )
+
+
 def _mark_stale_deleted(
     db: Any,
     *,

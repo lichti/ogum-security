@@ -69,7 +69,7 @@ describe('AttackPathList', () => {
   it('calls onSelect with the clicked path', async () => {
     const onSelect = jest.fn()
     render(<AttackPathList paths={PATHS} selectedKey={null} onSelect={onSelect} />)
-    await userEvent.click(screen.getAllByRole('button')[0])
+    await userEvent.click(screen.getByText(/bastion → prod-data/).closest('button')!)
     expect(onSelect).toHaveBeenCalledTimes(1)
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ _key: 'p1' }))
   })
@@ -97,5 +97,55 @@ describe('AttackPathList', () => {
     render(<AttackPathList paths={PATHS} selectedKey={null} onSelect={noop} />)
     expect(screen.getByText(/3 hops/)).toBeInTheDocument()
     expect(screen.getAllByText(/2 hops/).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('groups by target_asset_category as a second level in paths/assets view', () => {
+    const paths = [
+      makePath({ _key: 'a', severity: 'HIGH', target_asset_category: 'database' }),
+      makePath({ _key: 'b', severity: 'HIGH', target_asset_category: 'compute' }),
+    ]
+    render(<AttackPathList paths={paths} selectedKey={null} viewMode="paths" onSelect={noop} />)
+    expect(screen.getByText('Database')).toBeInTheDocument()
+    expect(screen.getByText('Compute')).toBeInTheDocument()
+  })
+
+  it('groups by rule as a second level in alerts view', () => {
+    const paths = [
+      makePath({ _key: 'a', severity: 'HIGH', rule: 'TC-02' }),
+      makePath({ _key: 'b', severity: 'HIGH', rule: 'privilege_escalation' }),
+    ]
+    render(<AttackPathList paths={paths} selectedKey={null} viewMode="alerts" onSelect={noop} />)
+    expect(screen.getByText('TC-02')).toBeInTheDocument()
+    expect(screen.getByText('Privilege Escalation')).toBeInTheDocument()
+  })
+
+  it('shows a count for the second-level subgroup', () => {
+    const paths = [
+      makePath({ _key: 'a', severity: 'HIGH', target_asset_category: 'database' }),
+      makePath({ _key: 'b', severity: 'HIGH', target_asset_category: 'database' }),
+    ]
+    render(<AttackPathList paths={paths} selectedKey={null} viewMode="paths" onSelect={noop} />)
+    const header = screen.getByText('Database').closest('button')!
+    expect(header).toHaveTextContent('2')
+  })
+
+  it('collapses and re-expands the severity group on click', async () => {
+    render(<AttackPathList paths={PATHS} selectedKey={null} onSelect={noop} />)
+    const criticalHeader = screen.getByText('Critical').closest('button')!
+    expect(screen.getByText(/bastion → prod-data/)).toBeInTheDocument()
+    await userEvent.click(criticalHeader)
+    expect(screen.queryByText(/bastion → prod-data/)).not.toBeInTheDocument()
+    await userEvent.click(criticalHeader)
+    expect(screen.getByText(/bastion → prod-data/)).toBeInTheDocument()
+  })
+
+  it('collapses and re-expands a second-level subgroup on click', async () => {
+    render(<AttackPathList paths={PATHS} selectedKey={null} onSelect={noop} />)
+    // All PATHS lack target_asset_category, so every severity group has a single
+    // "Other" subgroup — the first one in DOM order belongs to the Critical group.
+    const subgroupHeader = screen.getAllByText('Other')[0].closest('button')!
+    expect(screen.getByText(/bastion → prod-data/)).toBeInTheDocument()
+    await userEvent.click(subgroupHeader)
+    expect(screen.queryByText(/bastion → prod-data/)).not.toBeInTheDocument()
   })
 })

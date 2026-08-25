@@ -66,7 +66,7 @@ export function ProvidersTable({ providers, onEdit, onToggle, onDiscover, onScan
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm" data-testid="providers-table">
         <thead>
           <tr className="border-b border-slate-800">
             <th className="text-left py-3 px-4 text-slate-400 font-medium">Provider</th>
@@ -84,7 +84,7 @@ export function ProvidersTable({ providers, onEdit, onToggle, onDiscover, onScan
             const status = STATUS_BADGE[p.status ?? 'pending']
             const isBusy = busy[p.key]
             return (
-              <tr key={p.key} className="border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors">
+              <tr key={p.key} data-testid={`provider-row-${p.key}`} className="border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors">
                 <td className="py-3 px-4">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${PROVIDER_BADGE_COLORS[p.provider]}`}>
                     {p.provider.toUpperCase()}
@@ -177,7 +177,7 @@ export function ProviderCard({ provider: p, onEdit, onToggle, onDiscover, onScan
   }
 
   return (
-    <div className="bg-slate-900 border border-slate-700 rounded-xl p-4">
+    <div data-testid={`provider-card-${p.key}`} className="bg-slate-900 border border-slate-700 rounded-xl p-4">
       <div className="flex items-start justify-between mb-3">
         <div>
           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${PROVIDER_BADGE_COLORS[p.provider]} mb-2`}>

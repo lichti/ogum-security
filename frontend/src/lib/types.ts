@@ -66,6 +66,52 @@ export interface BlastRadiusResponse {
   grouped_counts: Record<string, number>
 }
 
+export interface SoftwarePackage {
+  name: string
+  version: string
+  cve_ids: string[]
+  filesystem_path: string | null
+}
+
+export type LicenseCategory = 'permissive' | 'copyleft' | 'weak_copyleft' | 'unknown'
+
+export interface SoftwareLicense {
+  license_id: string
+  category: LicenseCategory
+  deprecated: boolean
+  package_count: number
+}
+
+export interface SoftwareInventoryResponse {
+  resource_key: string
+  sbom_generated_at: string | null
+  installed_packages: SoftwarePackage[]
+  licenses: SoftwareLicense[]
+  applications_available: boolean
+  running_services_available: boolean
+}
+
+export interface ResourceComplianceFrameworkOption {
+  id: string
+  label: string
+}
+
+export interface ResourceComplianceControl {
+  control_id: string | null
+  status: string
+  title: string
+  category: string
+  severity: string
+  finding_key: string
+}
+
+export interface ResourceComplianceResponse {
+  resource_key: string
+  available_frameworks: ResourceComplianceFrameworkOption[]
+  selected_framework: string | null
+  controls: ResourceComplianceControl[]
+}
+
 export interface InventoryStats {
   by_provider: Record<string, number>
   by_resource_type: Record<string, number>
@@ -136,6 +182,38 @@ export interface Finding {
   updated_at: string
   mute_reason: string | null
   scan_job_id: string | null
+  first_seen_scan_id: string | null
+  last_seen_scan_id: string | null
+  scan_count: number
+}
+
+export interface SLASettings {
+  critical_days: number
+  high_days: number
+  medium_days: number
+  low_days: number
+}
+
+export interface ComplianceFamilySettings {
+  enabled: boolean
+  target_by_control: number | null
+}
+
+export interface ComplianceFamilySettingsView extends ComplianceFamilySettings {
+  family_key: string
+  family_label: string
+}
+
+export interface ComplianceFamilySettingsUpdateRequest {
+  enabled?: boolean
+  target_by_control?: number
+  clear_target_by_control?: boolean
+}
+
+export interface SLASummary {
+  within_sla: number
+  at_risk: number
+  overdue: number
 }
 
 export interface FindingDetail extends Finding {
@@ -164,6 +242,8 @@ export interface FindingsFilter {
   region?: string
   account_id?: string
   resource_type?: string
+  resource_id?: string
+  check_id?: string
   source?: FindingSource[]
   q?: string
   limit: number
@@ -184,6 +264,9 @@ export interface ComplianceSection {
 export interface ComplianceVersion {
   id: string
   version_label: string
+  // By Control counts — the headline shown in FrameworkSidebar and FrameworkDetail's
+  // header. Falls back to a plain finding tally only for bare-mapping frameworks with
+  // no control granularity at all (rare, e.g. some Checkov/IaC slugs).
   pass: number
   fail: number
   total: number
@@ -195,12 +278,93 @@ export interface ComplianceFamily {
   family: string
   label: string
   versions: ComplianceVersion[]
+  target_by_control: number | null
+}
+
+export interface ComplianceTopCheck {
+  check_id: string
+  title: string
+  severity: SeverityLevel
+  count: number
+}
+
+export interface ComplianceTopAsset {
+  resource_id: string
+  resource_type: string
+  provider: string
+  region: string | null
+  account_id: string
+  count: number
 }
 
 export interface ComplianceSummary {
   families: ComplianceFamily[]
   threat_score: number
-  top_failing: { check_id: string; title: string; severity: SeverityLevel; count: number }[]
+  // Grouped by check — "which policy gap, fixed once, helps the most".
+  top_failing: ComplianceTopCheck[]
+  // Grouped by resource — "which single asset concentrates the most risk".
+  top_assets: ComplianceTopAsset[]
+}
+
+export type ComplianceControlStatus = 'PASS' | 'FAIL' | 'UNSCORED'
+
+export interface ComplianceRequirementNode {
+  control_id: string
+  name: string
+  description: string | null
+  status: ComplianceControlStatus
+  finding_key: string | null
+  pass_count: number
+  fail_count: number
+  accepted_count: number
+  muted_count: number
+}
+
+export interface ComplianceSectionNode {
+  key: string
+  label: string
+  control_pass_count: number
+  control_fail_count: number
+  control_unscored_count: number
+  control_total: number
+  score_by_control: number
+  subsections: ComplianceSectionNode[]
+  requirements: ComplianceRequirementNode[]
+}
+
+export interface ComplianceFrameworkDetail {
+  id: string
+  family: string
+  family_label: string
+  version_label: string
+  score_by_control: number
+  target_by_control: number | null
+  control_pass_count: number
+  control_fail_count: number
+  control_unscored_count: number
+  control_total: number
+  catalog_available: boolean
+  sections: ComplianceSectionNode[]
+}
+
+export interface ComplianceControlAsset {
+  resource_id: string
+  resource_type: string
+  provider: string
+  region: string | null
+  account_id: string
+  pass_count: number
+  fail_count: number
+}
+
+export type CompliancePeriod = '7d' | '14d' | '1m'
+
+export interface ComplianceScoreTrendPoint {
+  date: string
+  score_by_control: number
+  pass_count: number
+  fail_count: number
+  unscored_count: number
 }
 
 // ─── Providers ────────────────────────────────────────────────────────────────
@@ -303,10 +467,33 @@ export interface ScanJob {
   checks_completed: number
   findings_found: number
   findings_fail: number
+  findings_new: number
+  findings_updated: number
+  findings_removed: number
+  assets_total: number
+  assets_removed: number
+  duration_seconds: number | null
   started_at: string | null
   completed_at: string | null
   created_at: string
   error_message: string | null
+}
+
+export interface PagedScanJobs {
+  items: ScanJob[]
+  next_cursor: string | null
+}
+
+export interface ScanJobLogs {
+  job_id: string
+  logs: string[]
+}
+
+export interface ScanJobFilter {
+  status?: ScanJobStatus[]
+  provider_id?: string
+  limit?: number
+  cursor?: string
 }
 
 export interface ScanTriggerRequest {
@@ -322,6 +509,21 @@ export interface ScanTriggerResponse {
 // ─── Attack Paths ─────────────────────────────────────────────────────────────
 
 export type AttackPathSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+
+export type AttackPathTargetAssetCategory =
+  | 'compute'
+  | 'containers'
+  | 'storage'
+  | 'database'
+  | 'networking'
+  | 'security_identity'
+  | 'other'
+
+export type AttackPathCrownJewelReason =
+  | 'internet_facing'
+  | 'stores_sensitive_data'
+  | 'high_privilege_identity'
+  | 'manually_flagged'
 
 export interface AttackPath {
   _key: string
@@ -345,6 +547,28 @@ export interface AttackPath {
   last_runtime_event_at?: string | null
   detected_at: string
   status: string
+  // US-14.11 — computed at read time, always present in list/detail responses
+  target_asset_category?: AttackPathTargetAssetCategory
+  target_crown_jewel_reason?: AttackPathCrownJewelReason | null
+  // US-14.13 — only present on paths detected after this sprint's merge;
+  // undefined (not fabricated) on paths detected before it
+  exposure?: 'internet_facing' | 'public_facing' | 'trusted_access' | 'none'
+  is_cross_account?: boolean
+  is_cross_cloud_provider?: boolean
+  account_ids?: string[]
+}
+
+export interface NarrativeStep {
+  index: number
+  total: number
+  title: string
+  text: string
+}
+
+export interface PathNarrativeSummary {
+  path_id: string
+  steps: NarrativeStep[]
+  generated_by: string
 }
 
 export interface MitreTechnique {
@@ -379,6 +603,8 @@ export interface AttackPathStats {
   total: number
   by_severity: Record<AttackPathSeverity, number>
   new_24h: number
+  by_target_asset_category: Partial<Record<AttackPathTargetAssetCategory, number>>
+  by_target_crown_jewel_reason: Partial<Record<AttackPathCrownJewelReason, number>>
 }
 
 export interface AttackPathDetail {
@@ -397,6 +623,8 @@ export interface AttackPathFilters {
   severity?: AttackPathSeverity
   is_toxic_combination?: boolean
   provider?: string
+  target_asset_category?: AttackPathTargetAssetCategory
+  target_crown_jewel_reason?: AttackPathCrownJewelReason
   limit: number
   cursor?: string
 }

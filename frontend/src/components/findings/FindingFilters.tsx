@@ -73,10 +73,11 @@ export function FindingFilters({ filters, onChange }: FindingFiltersProps) {
   }
 
   return (
-    <div className="flex flex-wrap gap-2 items-center">
+    <div id="finding-filters" className="flex flex-wrap gap-2 items-center">
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
         <input
+          id="finding-filters-search"
           type="text"
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -119,6 +120,7 @@ export function FindingFilters({ filters, onChange }: FindingFiltersProps) {
 
       {hasActiveFilters && (
         <button
+          id="finding-filters-clear-button"
           onClick={clearAll}
           className="flex items-center gap-1 text-slate-500 hover:text-slate-300 text-sm transition-colors"
         >

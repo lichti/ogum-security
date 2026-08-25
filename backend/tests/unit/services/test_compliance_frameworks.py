@@ -1,6 +1,6 @@
 import pytest
 
-from app.services.compliance_frameworks import derive_section, resolve_family
+from app.services.compliance_frameworks import derive_section, natural_sort_key, resolve_family
 
 
 @pytest.mark.unit
@@ -64,3 +64,28 @@ class TestDeriveSection:
         key, label = derive_section("zz_1_2", "nist-800-53")
         assert key == "zz"
         assert label == "Section ZZ"
+
+
+@pytest.mark.unit
+class TestNaturalSortKey:
+    def test_double_digit_sections_sort_after_single_digit_ones(self):
+        # Regression: SecNumCloud's sections are "5. Politiques..." through
+        # "19. Exigences...", slugified to keys starting with those digits.
+        # Lexicographic sort put 10..19 before 5..9; this must not.
+        keys = ["19.-exigences", "5.-politiques", "10.-acquisition", "6.-organisation"]
+        assert sorted(keys, key=natural_sort_key) == [
+            "5.-politiques",
+            "6.-organisation",
+            "10.-acquisition",
+            "19.-exigences",
+        ]
+
+    def test_word_only_keys_sort_alphabetically_as_before(self):
+        keys = ["si", "ac", "cm"]
+        assert sorted(keys, key=natural_sort_key) == ["ac", "cm", "si"]
+
+    def test_mixed_numeric_and_word_keys_do_not_raise(self):
+        # A framework can have some sections keyed by number (CIS) and some by a
+        # generic fallback like "general" — must not TypeError comparing int to str.
+        keys = ["2-identity", "general", "10-networking"]
+        assert sorted(keys, key=natural_sort_key) == ["2-identity", "10-networking", "general"]

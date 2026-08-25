@@ -50,6 +50,17 @@ export function formatTaskName(taskName: string): string {
   return `${baseLabel} (${suffixLabel})`
 }
 
+function formatSeconds(seconds: number): string {
+  const whole = Math.max(0, Math.round(seconds))
+  if (whole < 60) return `${whole}s`
+  const minutes = Math.floor(whole / 60)
+  const remSeconds = whole % 60
+  if (minutes < 60) return `${minutes}m ${remSeconds}s`
+  const hours = Math.floor(minutes / 60)
+  const remMinutes = minutes % 60
+  return `${hours}h ${remMinutes}m`
+}
+
 /** Elapsed time between start and completion — completion defaults to "now"
  * for a still-running job, so duration keeps ticking up until the page is
  * refreshed (this page has no live polling, matching its existing UX). */
@@ -57,13 +68,13 @@ export function formatDuration(startedAt: string | null, completedAt: string | n
   if (!startedAt) return '—'
   const start = new Date(startedAt).getTime()
   const end = completedAt ? new Date(completedAt).getTime() : Date.now()
-  const seconds = Math.max(0, Math.round((end - start) / 1000))
+  return formatSeconds((end - start) / 1000)
+}
 
-  if (seconds < 60) return `${seconds}s`
-  const minutes = Math.floor(seconds / 60)
-  const remSeconds = seconds % 60
-  if (minutes < 60) return `${minutes}m ${remSeconds}s`
-  const hours = Math.floor(minutes / 60)
-  const remMinutes = minutes % 60
-  return `${hours}h ${remMinutes}m`
+/** Same mm:ss/h:mm formatting as `formatDuration`, but for a job that already
+ * carries its own server-computed `duration_seconds` (the Scans page) instead
+ * of two timestamps to diff client-side. */
+export function formatDurationSeconds(seconds: number | null): string {
+  if (seconds === null) return '—'
+  return formatSeconds(seconds)
 }

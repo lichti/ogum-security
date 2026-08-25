@@ -39,7 +39,7 @@ export function FindingsSummary({
 }: FindingsSummaryProps) {
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 flex-wrap">
+      <div id="findings-summary-severity-row" className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-medium text-slate-500 w-24 flex-shrink-0">By severity</span>
         {SEVERITIES.map((sev) => {
           const count = bySeverity[sev] ?? 0
@@ -47,6 +47,7 @@ export function FindingsSummary({
           return (
             <button
               key={sev}
+              data-testid={`findings-summary-severity-${sev}`}
               type="button"
               onClick={() => onSeverityClick(sev)}
               aria-label={`Filter by ${sev}`}
@@ -64,7 +65,7 @@ export function FindingsSummary({
         })}
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
+      <div id="findings-summary-provider-row" className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-medium text-slate-500 w-24 flex-shrink-0">By provider</span>
         {PROVIDERS.map((p) => {
           const count = byProvider[p] ?? 0
@@ -72,6 +73,7 @@ export function FindingsSummary({
           return (
             <button
               key={p}
+              data-testid={`findings-summary-provider-${p}`}
               type="button"
               onClick={() => onProviderClick(p)}
               aria-label={`Filter by ${p.toUpperCase()}`}

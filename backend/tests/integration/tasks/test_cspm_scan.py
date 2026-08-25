@@ -409,6 +409,110 @@ class TestCSPMScanTask:
         assert docs[uid_a] == "active"
         assert docs[uid_b] == "deleted"
 
+        # The resource is soft-deleted (kept, for the inventory audit trail) but its
+        # finding — no longer actionable — is hard-deleted, not left as an orphan.
+        assert result["findings_removed"] == 1
+        job = list(db_tenant_a.aql.execute("FOR j IN scan_jobs SORT j.created_at DESC LIMIT 1 RETURN j"))[0]
+        assert job["assets_removed"] == 1
+        assert job["assets_total"] == 1  # only uid_a in this run's inventory
+
+        remaining_findings = {f["resource_id"] for f in db_tenant_a.aql.execute("FOR f IN findings RETURN f")}
+        assert remaining_findings == {uid_a}
+
+        remaining_edges = list(db_tenant_a.aql.execute("FOR e IN HAS_FINDING RETURN e"))
+        assert all(uid_b not in e["_to"] for e in remaining_edges)
+
+    def test_findings_new_and_updated_counted_across_rescans(self, db_tenant_a, mocker):
+        """First scan: both findings are new. Second scan re-affirms the same
+        two findings — new=0, updated=2 (US-14.23, the Scans page summary)."""
+        init_tenant_schema(db_tenant_a)
+        mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
+
+        findings = [
+            _make_mock_finding("iam_root_mfa_enabled"),
+            _make_mock_finding("s3_bucket_public_read", "my-bucket", FindingStatus.PASS_),
+        ]
+
+        # ProwlerService is mocked wholesale, bypassing _normalize (which is what
+        # really stamps Finding.scan_job_id from run_cspm_scan's freshly-generated
+        # job_id) — a side_effect reading the real scan_job_id kwarg keeps this
+        # test honest about that per-run stamping instead of hardcoding one.
+        def _run_aws_scan(**kwargs):
+            for f in findings:
+                f.scan_job_id = kwargs["scan_job_id"]
+            return _scan_result(findings)
+
+        mock_prowler = MagicMock()
+        mock_prowler.run_aws_scan.side_effect = _run_aws_scan
+        mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
+
+        first = run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
+        assert first["findings_new"] == 2
+        assert first["findings_updated"] == 0
+
+        second = run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
+        assert second["findings_new"] == 0
+        assert second["findings_updated"] == 2
+
+    def test_duration_seconds_recorded_on_completion(self, db_tenant_a, mocker):
+        init_tenant_schema(db_tenant_a)
+        mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
+        mock_prowler = MagicMock()
+        mock_prowler.run_aws_scan.return_value = _scan_result([_make_mock_finding()])
+        mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
+
+        run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
+
+        job = list(db_tenant_a.aql.execute("FOR j IN scan_jobs RETURN j"))[0]
+        assert job["duration_seconds"] is not None
+        assert job["duration_seconds"] >= 0
+
+    def test_compliance_score_snapshot_written_and_idempotent(self, db_tenant_a, mocker):
+        """A completed scan writes one compliance_score_snapshots doc per framework
+        (Epic 14 Sprint 4, US-14.15); running the scan twice the same day upserts by
+        (tenant, framework, day) instead of duplicating."""
+        from app.models.finding import Finding, FindingSource
+
+        init_tenant_schema(db_tenant_a)
+        mocker.patch("app.workers.tasks.cspm_scan._get_tenant_db", return_value=db_tenant_a)
+
+        finding = Finding(
+            finding_id="test-cis-2.1.1",
+            tenant_id=TEST_TENANT,
+            check_id="iam_root_mfa_enabled",
+            title="Test",
+            description="desc",
+            resource_id="arn:aws:iam::111111111111:root",
+            resource_type="iam_user",
+            severity=SeverityLevel.CRITICAL,
+            status=FindingStatus.FAIL,
+            provider="aws",
+            account_id=ACCOUNT_ID,
+            source=FindingSource.CSPM,
+            framework_mapping=["CIS-7.0/2.1.1"],
+        )
+        mock_prowler = MagicMock()
+        mock_prowler.run_aws_scan.return_value = _scan_result([finding])
+        mocker.patch("app.workers.tasks.cspm_scan.ProwlerService", return_value=mock_prowler)
+
+        run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
+        run_cspm_scan.apply(kwargs=_TASK_KWARGS).get()
+
+        snapshots = list(
+            db_tenant_a.aql.execute(
+                "FOR s IN compliance_score_snapshots FILTER s.tenant_id == @t RETURN s",
+                bind_vars={"t": TEST_TENANT},
+            )
+        )
+        assert len(snapshots) == 1
+        assert snapshots[0]["framework_id"] == "CIS-7.0"
+        assert snapshots[0]["fail_count"] == 1
+        # score_by_control = (Pass + Unscored) / Total — the one real Fail is the only
+        # thing dragging the score down from 100%, every other catalog control is
+        # Unscored and counts toward Pass.
+        total = snapshots[0]["pass_count"] + snapshots[0]["fail_count"] + snapshots[0]["unscored_count"]
+        assert snapshots[0]["score_by_control"] == round(snapshots[0]["unscored_count"] / total * 100, 1)
+
 
 @pytest.mark.integration
 class TestAutoTriggerSideScans:

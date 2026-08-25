@@ -21,13 +21,14 @@ export function ResourceNarrative({ resourceKey, onNavigate }: ResourceNarrative
   if (!data) return null
 
   return (
-    <div className="space-y-2">
+    <div id="resource-narrative" className="space-y-2">
       <p className="text-slate-300 text-sm leading-relaxed">{data.narrative}</p>
       {data.deep_links.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div id="resource-narrative-links" className="flex flex-wrap gap-2">
           {data.deep_links.map((link: NarrativeDeepLink) => (
             <button
               key={`${link.tab}-${link.subtab}`}
+              data-testid={`resource-narrative-link-${link.tab}-${link.subtab}`}
               type="button"
               onClick={() => onNavigate(link.tab, link.subtab)}
               className="px-2 py-1 rounded bg-slate-800 border border-slate-700 text-orange-400 text-xs hover:border-orange-500"

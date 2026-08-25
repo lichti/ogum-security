@@ -52,7 +52,7 @@ export function JobDetailPanel({ job, onClose }: JobDetailPanelProps) {
       className="fixed top-0 right-0 h-full w-[480px] bg-slate-900 border-l border-slate-700 shadow-2xl z-50 overflow-y-auto"
       data-testid="job-detail-panel"
     >
-      <div className="flex items-center justify-between p-4 border-b border-slate-700 sticky top-0 bg-slate-900">
+      <div id="job-detail-panel-header" className="flex items-center justify-between p-4 border-b border-slate-700 sticky top-0 bg-slate-900">
         <div>
           <h2 className="text-slate-200 font-semibold">{formatTaskName(job.task_name)}</h2>
           <p className="text-slate-500 text-xs font-mono">{job.job_id}</p>
@@ -66,12 +66,12 @@ export function JobDetailPanel({ job, onClose }: JobDetailPanelProps) {
         </button>
       </div>
 
-      <div className="p-4 space-y-6">
-        <section>
+      <div id="job-detail-panel-content" className="p-4 space-y-6">
+        <section id="job-detail-panel-details">
           <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Details</h3>
           <dl className="space-y-2">
             {metadataRows.map(([label, value]) => (
-              <div key={String(label)} className="flex gap-2">
+              <div key={String(label)} data-testid={`job-detail-metadata-row-${label}`} className="flex gap-2">
                 <dt className="text-slate-500 text-sm w-24 flex-shrink-0">{label}</dt>
                 <dd className="text-slate-300 text-sm">{value}</dd>
               </div>
@@ -80,7 +80,7 @@ export function JobDetailPanel({ job, onClose }: JobDetailPanelProps) {
         </section>
 
         {detail?.error_message && (
-          <section>
+          <section id="job-detail-panel-error">
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Error</h3>
             <div className="p-2 bg-red-950 border border-red-800 rounded text-red-300 text-xs font-mono whitespace-pre-wrap break-words">
               {detail.error_message}
@@ -88,7 +88,7 @@ export function JobDetailPanel({ job, onClose }: JobDetailPanelProps) {
           </section>
         )}
 
-        <section>
+        <section id="job-detail-panel-logs">
           <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Logs</h3>
           {isLoading && <p className="text-slate-600 text-sm">Loading logs…</p>}
           {isError && <p className="text-red-400 text-sm">Failed to load logs.</p>}

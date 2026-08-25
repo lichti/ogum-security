@@ -20,7 +20,8 @@ import { EntryPointNode } from './nodes/EntryPointNode'
 import { TargetNode } from './nodes/TargetNode'
 import { IdentityNode } from './nodes/IdentityNode'
 import { CenterNode } from './nodes/CenterNode'
-import { buildFlowGraph } from '@/lib/graph-layout'
+import { RiskInsightNode } from './nodes/RiskInsightNode'
+import { attachRiskInsightNodes, buildFlowGraph } from '@/lib/graph-layout'
 import type { AttackPathDetail } from '@/lib/types'
 
 const NODE_TYPES: NodeTypes = {
@@ -29,6 +30,7 @@ const NODE_TYPES: NodeTypes = {
   target: TargetNode,
   identity: IdentityNode,
   center: CenterNode,
+  riskInsight: RiskInsightNode,
 }
 
 interface AttackPathCanvasProps {
@@ -71,7 +73,8 @@ export function AttackPathCanvas({
       setEdges([])
       return
     }
-    const { nodes: n, edges: e } = buildFlowGraph(detail.nodes, detail.path)
+    const base = buildFlowGraph(detail.nodes, detail.path)
+    const { nodes: n, edges: e } = attachRiskInsightNodes(base, detail.findings)
     setNodes(n)
     setEdges(e)
   }, [isMini, miniGraph, detail, setNodes, setEdges])
@@ -87,7 +90,10 @@ export function AttackPathCanvas({
 
   if (!isMini && !detail && !loading) {
     return (
-      <div className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}>
+      <div
+        id="attack-path-canvas-placeholder"
+        className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}
+      >
         <div className="text-center">
           <p className="text-slate-400 text-sm font-medium">Select a path to visualize</p>
           <p className="text-slate-600 text-xs mt-1">Click any item in the list on the left</p>
@@ -98,7 +104,10 @@ export function AttackPathCanvas({
 
   if (loading) {
     return (
-      <div className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}>
+      <div
+        id="attack-path-canvas-loading"
+        className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}
+      >
         <div className="flex flex-col items-center gap-2">
           <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-slate-500 text-xs">Loading graph...</p>
@@ -109,14 +118,17 @@ export function AttackPathCanvas({
 
   if (isEmpty) {
     return (
-      <div className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}>
+      <div
+        id="attack-path-canvas-empty"
+        className={`${sizeClasses} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50`}
+      >
         <p className="text-slate-500 text-sm">{emptyLabel ?? 'No graph data available for this path'}</p>
       </div>
     )
   }
 
   return (
-    <div className={`${sizeClasses} rounded-lg overflow-hidden border border-slate-800 relative`}>
+    <div id="attack-path-canvas" className={`${sizeClasses} rounded-lg overflow-hidden border border-slate-800 relative`}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -144,6 +156,7 @@ export function AttackPathCanvas({
               if (node.type === 'entryPoint') return '#ef4444'
               if (node.type === 'target') return '#eab308'
               if (node.type === 'identity') return '#a855f7'
+              if (node.type === 'riskInsight') return '#f59e0b'
               return '#475569'
             }}
             maskColor="rgba(2, 6, 23, 0.7)"
