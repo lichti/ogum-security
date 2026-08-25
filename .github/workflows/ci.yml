@@ -31,7 +31,7 @@ jobs:
           driver: docker-container
 
       - name: Cache Docker layers
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-${{ hashFiles('docker/**', 'backend/pyproject.toml', 'frontend/package-lock.json') }}
@@ -70,7 +70,7 @@ jobs:
 
       - name: Cache Poetry virtualenv
         id: venv-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: backend/.venv
           key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml', 'backend/poetry.lock') }}
@@ -115,7 +115,7 @@ jobs:
 
       - name: Cache Poetry virtualenv
         id: venv-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: backend/.venv
           key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml', 'backend/poetry.lock') }}
@@ -174,7 +174,7 @@ jobs:
 
       - name: Cache Poetry virtualenv
         id: venv-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: backend/.venv
           key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml', 'backend/poetry.lock') }}
@@ -233,7 +233,7 @@ jobs:
 
       - name: Cache Poetry virtualenv
         id: venv-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: backend/.venv
           key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml', 'backend/poetry.lock') }}
@@ -270,7 +270,7 @@ jobs:
 
       - name: Cache Poetry virtualenv
         id: venv-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: backend/.venv
           key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml', 'backend/poetry.lock') }}
