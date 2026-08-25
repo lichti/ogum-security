@@ -4536,7 +4536,7 @@
   "info": {
     "description": "Open CNAPP \u2014 Built for Everyone",
     "title": "Ogum Security API",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "openapi": "3.1.0",
   "paths": {
