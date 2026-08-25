@@ -296,10 +296,14 @@ We are building this in public. Here is where we are and where we are going:
 - [ ] **Ogum.Connect:** Jira bidirectional integration
 - [ ] **Ogum.Connect:** Slack / MS Teams / Telegram alerts
 - [ ] CIEM privilege gap (granted vs. used — requires CloudTrail data from Phase 3)
-- [ ] **Ogum.Frontend:** Two-tier tab detail panel for resources, findings, and paths (Info/Risk/Network/IAM/Configurations/Software/Compliance)
-- [ ] **Ogum.Frontend:** AI-generated narrative summaries in the detail panel (Ogum.AI, with deterministic fallback)
-- [ ] **Ogum.Frontend:** Embedded exposure/blast-radius mini-graphs in the detail panel (reuses the Attack Path canvas)
-- [ ] **Ogum.Frontend:** Pill-based composite filters and saved Views for Inventory, Findings, and Compliance
+- [x] **Ogum.Frontend:** Two-tier tab detail panel for resources, findings, and paths (Info/Risk/Network/IAM/Configurations/Software/Compliance)
+- [x] **Ogum.Frontend:** Deterministic narrative summaries in the detail panel (`generated_by: template` — the LLM-backed generator lands with Ogum.AI/Epic 05 and reuses the same response contract)
+- [x] **Ogum.Frontend:** Embedded exposure/blast-radius mini-graphs in the detail panel (reuses the Attack Path canvas via `mode="mini"`)
+- [x] **Ogum.Frontend:** Pill-based composite filters and saved Views (curated + per-user, pinnable) for Inventory, Findings, and Compliance
+- [x] **Ogum.Frontend:** Compliance advanced UX — score by control vs findings, section heatmap, 90-day score trend, requirement drill-down with control detail panel (findings + assets)
+- [x] **Ogum.Frontend:** Attack path list upgrades — hierarchical severity→category tree, "View Results By" toggle (Paths/Alerts/Assets), paginated path narrative, risk-insight canvas nodes
+- [x] **Ogum.Static:** `/scans` page — CSPM scan history with status pill filters, findings/assets deltas per run, duration, trigger modal, and raw log viewer
+- [x] **Ogum.Static:** Findings SLA engine — configurable per-severity deadlines, at-risk/overdue classification, SLA summary panel on Findings
 - [ ] **Ogum.Frontend:** Specialized dashboards (Identity & Access, Threat Detection, Vulnerabilities)
 
 ### Phase 3 — Beta (Planned 📋)

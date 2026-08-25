@@ -24,7 +24,7 @@ from app.core.config import settings
 app = FastAPI(
     title="Ogum Security API",
     description="Open CNAPP — Built for Everyone",
-    version="0.1.0",
+    version="0.2.0",
     docs_url="/docs" if settings.APP_ENV != "production" else None,
     redoc_url="/redoc" if settings.APP_ENV != "production" else None,
 )
@@ -40,7 +40,7 @@ app.add_middleware(
 
 @app.get("/health", tags=["system"])
 async def health() -> dict:
-    return {"status": "ok", "version": "0.1.0"}
+    return {"status": "ok", "version": "0.2.0"}
 
 
 app.include_router(inventory.router)

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ogum-security-backend"
-version = "0.1.0"
+version = "0.2.0"
 description = "Ogum Security — Open CNAPP Backend"
 authors = ["Ogum Security Contributors"]
 license = "MIT"

@@ -15,6 +15,8 @@ Commit types that trigger version bumps:
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-25
+
 ### Added
 
 - **New `/scans` page (Configuration)**: registers and lists every CSPM scan job — job id, provider, frameworks, start/end/duration, checks completed, and a findings/assets summary (new/updated/removed, total assets, assets removed) — with status pill filters (queued/running/completed/failed, all selected by default), cursor pagination, and a "Trigger Scan" modal picking any connected provider. Finished jobs (completed/failed) show a "View Logs" button opening the raw execution log. Backend: `ScanJob` gained `findings_new`/`findings_updated`/`findings_removed`/`assets_total`/`assets_removed`/`duration_seconds`, computed in `run_cspm_scan` (`workers/tasks/cspm_scan.py`) — `_soft_delete_stale` now returns the deleted `resource_id`s per collection, a new `_cascade_delete_findings` hard-deletes findings whose resource was just soft-deleted this run (sweeping their `HAS_FINDING` edges), and `_count_new_and_updated_findings` reads the pre-existing `first_seen_scan_id`/`scan_count` fields. `scan_service.py` (rewritten) adds keyset-paginated `list_scan_jobs` (status/provider filters) and `get_scan_job_logs`, both scoped to CSPM jobs only (`task_name` starting with `cspm_scan/`) since `scan_jobs` is shared with Side-Scanning's differently-shaped documents. New `GET /api/v1/scans` (paginated) and `GET /api/v1/scans/{job_id}/logs`.
@@ -560,5 +562,6 @@ Ogum.Inventory Sprint 1 (AWS basic discovery).
 
 ---
 
-[Unreleased]: https://github.com/ogum-security/ogum-security/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/ogum-security/ogum-security/releases/tag/v0.1.0
+[Unreleased]: https://github.com/lichti/ogum-security/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/lichti/ogum-security/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/lichti/ogum-security/releases/tag/v0.1.0
