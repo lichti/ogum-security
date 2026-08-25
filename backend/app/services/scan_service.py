@@ -49,7 +49,8 @@ def get_scan_job_logs(db: StandardDatabase, job_id: str) -> list[str] | None:
         doc = db.collection("scan_jobs").get(job_id)
         if doc is None or not _is_cspm_job(doc):
             return None
-        return doc.get("logs", [])
+        logs: list[str] = doc.get("logs") or []
+        return logs
     except Exception:
         return None
 

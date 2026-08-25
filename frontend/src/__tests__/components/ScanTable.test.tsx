@@ -47,7 +47,8 @@ describe('ScanTable', () => {
     expect(screen.getByText('AWS')).toBeInTheDocument()
     expect(screen.getByText('completed')).toBeInTheDocument()
     expect(screen.getByText('CIS-AWS-2.0')).toBeInTheDocument()
-    expect(screen.getByText(/10/)).toBeInTheDocument()
+    expect(screen.getByText(/^10$/)).toBeInTheDocument() // findings_found (exact match: started_at time also contains "10")
+    expect(screen.getByText(/^3$/)).toBeInTheDocument() // findings_fail
     expect(screen.getByText('2 new')).toBeInTheDocument()
     expect(screen.getByText('7 updated')).toBeInTheDocument()
     expect(screen.getByText('1 removed')).toBeInTheDocument()
