@@ -535,3 +535,138 @@ class TestInventoryExportEndpoint:
         lines = resp.text.strip().split("\n")
         assert len(lines) >= 2, "CSV must have at least header + 1 data row"
         assert "export-test-server" in resp.text
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# GET /api/v1/providers/{provider_id}/health
+# POST /api/v1/providers/{provider_id}/test-connection
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.integration
+class TestProvidersHealthEndpoint:
+    def test_health_of_pending_provider_is_degraded(self, api_client, mocker, db_tenant_a):
+        provider_id = _register_aws(api_client, mocker)
+        # Simulate the never-discovered state: registration with a failed
+        # dispatch leaves status=pending / last_discovery_at=None.
+        db_tenant_a.collection("tenant_config").update(
+            {"_key": provider_id, "status": "pending", "last_discovery_at": None}
+        )
+        resp = api_client.get(f"/api/v1/providers/{provider_id}/health", headers=HEADERS)
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert body["health"] == "degraded"
+        assert body["live"] is False
+        assert "no successful discovery" in body["reason"]
+
+    def test_health_of_freshly_registered_active_provider_is_healthy(self, api_client, mocker):
+        provider_id = _register_aws(api_client, mocker)
+        resp = api_client.get(f"/api/v1/providers/{provider_id}/health", headers=HEADERS)
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert body["health"] == "healthy"
+        assert body["live"] is False
+
+    def test_health_404_for_unknown_provider(self, api_client):
+        resp = api_client.get("/api/v1/providers/aws-does-not-exist/health", headers=HEADERS)
+        assert resp.status_code == 404
+
+    def test_health_reflects_stored_error_status(self, api_client, mocker, db_tenant_a):
+        provider_id = _register_aws(api_client, mocker)
+        db_tenant_a.collection("tenant_config").update(
+            {"_key": provider_id, "status": "error", "last_health_result": "AssumeRole denied"}
+        )
+        resp = api_client.get(f"/api/v1/providers/{provider_id}/health", headers=HEADERS)
+        body = resp.json()["data"]
+        assert body["health"] == "failed"
+        assert "AssumeRole denied" in body["reason"]
+
+    def test_health_reflects_disabled_provider(self, api_client, mocker, db_tenant_a):
+        provider_id = _register_aws(api_client, mocker)
+        api_client.patch(
+            f"/api/v1/providers/{provider_id}", json={"enabled": False}, headers=HEADERS
+        )
+        resp = api_client.get(f"/api/v1/providers/{provider_id}/health", headers=HEADERS)
+        body = resp.json()["data"]
+        assert body["health"] == "degraded"
+        assert "disabled" in body["reason"]
+
+    def test_health_becomes_healthy_after_successful_discovery_update(self, api_client, mocker, db_tenant_a):
+        from datetime import UTC, datetime
+
+        provider_id = _register_aws(api_client, mocker)
+        db_tenant_a.collection("tenant_config").update(
+            {
+                "_key": provider_id,
+                "status": "active",
+                "last_discovery_at": datetime.now(UTC).isoformat(),
+            }
+        )
+        resp = api_client.get(f"/api/v1/providers/{provider_id}/health", headers=HEADERS)
+        body = resp.json()["data"]
+        assert body["health"] == "healthy"
+
+
+@pytest.mark.integration
+class TestProvidersTestConnectionEndpoint:
+    def _patch_probe(self, mocker, outcome="ok", error=None):
+        if error is not None:
+            probe = mocker.MagicMock(side_effect=error)
+        else:
+            probe = mocker.MagicMock(return_value=outcome)
+        # _PROBES captures function refs at import time — patch the dict entry
+        mocker.patch.dict("app.services.provider_health._PROBES", {"aws": probe})
+        return probe
+
+    def test_test_connection_success_flips_status_to_active(self, api_client, mocker, db_tenant_a):
+        provider_id = _register_aws(api_client, mocker)
+        self._patch_probe(mocker, outcome="AWS account 111111111111 reachable")
+
+        resp = api_client.post(f"/api/v1/providers/{provider_id}/test-connection", headers=HEADERS)
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert body["health"] == "healthy"
+        assert body["live"] is True
+        assert body["status"] == "active"
+        assert "111111111111" in body["detail"]
+
+        doc = db_tenant_a.collection("tenant_config").get(provider_id)
+        assert doc["status"] == "active"
+        assert doc["last_health_check_at"] is not None
+        assert "reachable" in doc["last_health_result"]
+
+    def test_test_connection_failure_marks_failed_and_persists_error(self, api_client, mocker, db_tenant_a):
+        provider_id = _register_aws(api_client, mocker)
+        self._patch_probe(mocker, error=Exception("ExpiredToken"))
+
+        resp = api_client.post(f"/api/v1/providers/{provider_id}/test-connection", headers=HEADERS)
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert body["health"] == "failed"
+        assert body["status"] == "error"
+        assert "ExpiredToken" in body["detail"]
+
+        doc = db_tenant_a.collection("tenant_config").get(provider_id)
+        assert doc["status"] == "error"
+        assert "ExpiredToken" in doc["last_health_result"]
+
+    def test_test_connection_404_unknown_provider(self, api_client):
+        resp = api_client.post("/api/v1/providers/aws-nope/test-connection", headers=HEADERS)
+        assert resp.status_code == 404
+
+    def test_test_connection_409_when_disabled(self, api_client, mocker, db_tenant_a):
+        provider_id = _register_aws(api_client, mocker)
+        api_client.patch(f"/api/v1/providers/{provider_id}", json={"enabled": False}, headers=HEADERS)
+        probe = self._patch_probe(mocker)
+
+        resp = api_client.post(f"/api/v1/providers/{provider_id}/test-connection", headers=HEADERS)
+        assert resp.status_code == 409
+        probe.assert_not_called()
+
+    def test_failed_test_then_cached_health_reads_failed(self, api_client, mocker, db_tenant_a):
+        provider_id = _register_aws(api_client, mocker)
+        self._patch_probe(mocker, error=Exception("AccessDenied"))
+        api_client.post(f"/api/v1/providers/{provider_id}/test-connection", headers=HEADERS)
+
+        resp = api_client.get(f"/api/v1/providers/{provider_id}/health", headers=HEADERS)
+        assert resp.json()["data"]["health"] == "failed"

@@ -31,6 +31,7 @@ import type {
   InventoryStats,
   InventoryFilters,
   ProviderConfig,
+  ProviderHealth,
   ProviderRegisterRequest,
   ProviderRegisterResponse,
   ProviderUpdateRequest,
@@ -145,6 +146,12 @@ export const providersApi = {
 
   get: (providerId: string) =>
     apiClient.get<ApiResponse<ProviderConfig>>(`/api/v1/providers/${providerId}`),
+
+  health: (providerId: string) =>
+    apiClient.get<ApiResponse<ProviderHealth>>(`/api/v1/providers/${providerId}/health`),
+
+  testConnection: (providerId: string) =>
+    apiClient.post<ApiResponse<ProviderHealth>>(`/api/v1/providers/${providerId}/test-connection`),
 
   register: (data: ProviderRegisterRequest) =>
     apiClient.post<ApiResponse<ProviderRegisterResponse>>('/api/v1/providers', data),
