@@ -43,9 +43,7 @@ class TestEvaluateCachedHealth:
         assert "disabled" in (result.reason or "")
 
     def test_error_status_is_failed(self):
-        result = evaluate_cached_health(
-            make_config(status="error", last_health_result="AssumeRole denied")
-        )
+        result = evaluate_cached_health(make_config(status="error", last_health_result="AssumeRole denied"))
         assert result.health == "failed"
         assert result.reason == "AssumeRole denied"
 
