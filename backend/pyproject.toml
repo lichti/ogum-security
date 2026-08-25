@@ -11,8 +11,6 @@ packages = [{ include = "app" }]
 python = ">=3.12,<3.14"
 fastapi = "^0.138.0"
 uvicorn = { extras = ["standard"], version = "^0.32.0" }
-# Transitive via uvicorn[standard]; explicit floor to stay ahead of PYSEC-2026-3628 (fixed in 4.4.1)
-h2 = ">=4.4.1"
 pydantic = "^2.9.0"
 pydantic-settings = "^2.6.0"
 python-arango = "^8.1.0"
