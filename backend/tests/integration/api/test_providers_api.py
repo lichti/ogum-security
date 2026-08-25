@@ -583,9 +583,7 @@ class TestProvidersHealthEndpoint:
 
     def test_health_reflects_disabled_provider(self, api_client, mocker, db_tenant_a):
         provider_id = _register_aws(api_client, mocker)
-        api_client.patch(
-            f"/api/v1/providers/{provider_id}", json={"enabled": False}, headers=HEADERS
-        )
+        api_client.patch(f"/api/v1/providers/{provider_id}", json={"enabled": False}, headers=HEADERS)
         resp = api_client.get(f"/api/v1/providers/{provider_id}/health", headers=HEADERS)
         body = resp.json()["data"]
         assert body["health"] == "degraded"
