@@ -28,7 +28,7 @@ ollama = "^0.3.0"
 boto3 = "^1.35.0"
 google-cloud-compute = "^1.19.0"
 google-cloud-container = "^2.52.0"
-google-cloud-storage = "^2.18.0"
+google-cloud-storage = ">=2.18,<4.0"
 google-auth = "^2.35.0"
 
 [tool.poetry.group.dev.dependencies]
