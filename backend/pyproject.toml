@@ -10,7 +10,7 @@ packages = [{ include = "app" }]
 [tool.poetry.dependencies]
 python = ">=3.12,<3.14"
 fastapi = "^0.138.0"
-uvicorn = { extras = ["standard"], version = ">=0.32.0,<0.52.0" }
+uvicorn = { extras = ["standard"], version = ">=0.32.0,<0.53.0" }
 pydantic = "^2.9.0"
 pydantic-settings = "^2.6.0"
 python-arango = "^8.1.0"
