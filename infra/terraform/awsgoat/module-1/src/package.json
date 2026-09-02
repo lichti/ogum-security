@@ -39,7 +39,7 @@
     "@date-io/moment": "^2.14.0",
     "@emotion/react": "^11.9.0",
     "@emotion/styled": "^11.8.1",
-    "@faker-js/faker": "^6.1.2",
+    "@faker-js/faker": "^10.5.0",
     "@iconify/react": "^3.2.1",
     "@mui/icons-material": "^5.8.4",
     "@mui/lab": "^5.0.0-alpha.77",
