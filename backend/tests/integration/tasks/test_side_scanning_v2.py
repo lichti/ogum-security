@@ -261,6 +261,8 @@ def test_v2_passes_external_id_to_aws_session(db_tenant_a: Any, mocker: Any) -> 
     session_spy.assert_called_once_with(
         role_arn="arn:aws:iam::123456789012:role/ogum-scanner",
         external_id="ogum-dev-dev",
+        # US-06.12: segredos vêm do credential store no worker — sem stored
+        # credentials os overrides são None (modo ambient).
         aws_access_key_id=None,
         aws_secret_access_key=None,
     )

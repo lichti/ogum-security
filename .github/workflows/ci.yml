@@ -150,6 +150,16 @@ jobs:
         image: redis:7-alpine
         ports:
           - 6379:6379
+
+      vault:
+        image: hashicorp/vault:1.15
+        env:
+          VAULT_DEV_ROOT_TOKEN_ID: ogum-dev-root
+          VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+        ports:
+          - 8200:8200
+        options: >-
+          --cap-add IPC_LOCK
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s
@@ -203,6 +213,8 @@ jobs:
           ARANGO_ROOT_PASSWORD: testpassword
           ARANGO_PASSWORD: testpassword
           REDIS_URL: redis://localhost:6379/0
+          VAULT_ADDR: http://localhost:8200
+          VAULT_TOKEN: ogum-dev-root
           ENVIRONMENT: test
 
       - name: Upload coverage

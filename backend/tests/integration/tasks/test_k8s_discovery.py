@@ -21,8 +21,12 @@ CLUSTER_NAME = "test-cluster"
 _K8S_KWARGS = {
     "tenant_id": TEST_TENANT_A,
     "cluster_name": CLUSTER_NAME,
-    "kubeconfig": {"apiVersion": "v1", "clusters": [], "contexts": [], "users": []},
+    "provider_key": "k8s-test-cluster",
 }
+
+# Segredos via Vault (US-06.12): a task resolve no worker — o teste mocka o
+# credential store no módulo da task.
+_KUBECONFIG = {"apiVersion": "v1", "clusters": [], "contexts": [], "users": []}
 
 
 def _make_mock_pod(name: str = "test-pod", namespace: str = "default", uid: str = "pod-uid-001") -> MagicMock:
@@ -56,6 +60,10 @@ def _patch_k8s_clients(
     persistent_volumes=None,
 ):
     mocker.patch("app.workers.tasks.k8s_discovery._get_tenant_db", return_value=db)
+    mocker.patch(
+        "app.workers.tasks.k8s_discovery.get_provider_credentials",
+        return_value={"kubeconfig": _KUBECONFIG},
+    )
     mocker.patch("app.workers.tasks.k8s_discovery.acquire_lock", return_value=True)
     mocker.patch("app.workers.tasks.k8s_discovery.release_lock")
     mocker.patch("app.workers.tasks.k8s_discovery.k8s_config.load_kube_config_from_dict")
@@ -130,6 +138,10 @@ class TestK8sDiscoveryTask:
         pod = _make_mock_pod("deleted-pod", "default", "uid-gone-001")
 
         mocker.patch("app.workers.tasks.k8s_discovery._get_tenant_db", return_value=db_tenant_a)
+        mocker.patch(
+            "app.workers.tasks.k8s_discovery.get_provider_credentials",
+            return_value={"kubeconfig": _KUBECONFIG},
+        )
         mocker.patch("app.workers.tasks.k8s_discovery.acquire_lock", return_value=True)
         mocker.patch("app.workers.tasks.k8s_discovery.release_lock")
         mocker.patch("app.workers.tasks.k8s_discovery.k8s_config.load_kube_config_from_dict")
@@ -174,6 +186,10 @@ class TestK8sDiscoveryTask:
     def test_skipped_when_lock_is_held(self, db_tenant_a, mocker) -> None:
         """Task must return skipped=True if another K8s discovery is running."""
         mocker.patch("app.workers.tasks.k8s_discovery._get_tenant_db", return_value=db_tenant_a)
+        mocker.patch(
+            "app.workers.tasks.k8s_discovery.get_provider_credentials",
+            return_value={"kubeconfig": _KUBECONFIG},
+        )
         mocker.patch("app.workers.tasks.k8s_discovery.acquire_lock", return_value=False)
         mocker.patch("app.workers.tasks.k8s_discovery.release_lock")
 

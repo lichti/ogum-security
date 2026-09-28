@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    # Vault — credential store dos providers (US-06.11, ADR-015: sem fallback
+    # para credencial em banco)
+    VAULT_ENABLED: bool = True
+    VAULT_ADDR: str = "http://localhost:8200"
+    VAULT_TOKEN: str = "ogum-dev-root"
+    VAULT_MOUNT: str = "secret"
+
     # Redpanda / Kafka
     REDPANDA_BROKERS: str = "localhost:9092"
 

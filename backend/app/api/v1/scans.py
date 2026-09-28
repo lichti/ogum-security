@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from app.api.v1.inventory import get_tenant_db
 from app.models.api_responses import ApiResponse
 from app.models.finding import ScanJob
-from app.services.provider_service import get_provider, get_provider_credentials
+from app.services.provider_service import get_provider
 from app.services.scan_service import get_scan_job, get_scan_job_logs, list_scan_jobs
 from app.workers.tasks.cspm_scan import run_cspm_scan
 
@@ -47,32 +47,20 @@ async def trigger_scan(
     if provider is None:
         raise HTTPException(status_code=404, detail="Provider not found")
 
-    credentials = get_provider_credentials(db, body.provider_id)
-    if not credentials:
-        raise HTTPException(status_code=400, detail="Provider credentials not available")
-
+    # Segredos NÃO vão no payload (US-06.12): a task resolve credenciais do
+    # Vault no worker via provider_id. Sem stored credentials nem modo ambient,
+    # a task falha com erro claro no log do job.
     account_id = provider.account_id or provider.subscription_id or provider.project_id or ""
 
     # No caller-supplied frameworks -> None, which runs Prowler's full check
     # catalog instead of a curated subset (see run_cspm_scan's docstring).
     frameworks = body.frameworks or None
 
-    # Build complete credentials including non-secret role fields stored on the provider
-    full_credentials = {
-        **credentials,
-        "role_arn": provider.role_arn,
-        "external_id": getattr(provider, "external_id", None),
-        "azure_tenant_id": getattr(provider, "azure_tenant_id", None),
-        "azure_client_id": getattr(provider, "azure_client_id", None),
-        "cluster_name": getattr(provider, "cluster_name", None),
-    }
-
     task = run_cspm_scan.delay(
         tenant_id=x_tenant_id,
         provider_id=body.provider_id,
         provider=provider.provider,
         frameworks=frameworks,
-        credentials=full_credentials,
         account_id=account_id,
         regions=provider.regions or None,
     )

@@ -22,6 +22,7 @@ from app.services.graph.data_access_edges import build_data_access_edges
 from app.services.graph.exposure import compute_exposed_internet
 from app.services.graph.iam_edges import build_iam_edges
 from app.services.graph.resource_edges import build_resource_edges
+from app.services.provider_service import resolve_provider_credentials
 from app.services.prowler_inventory import extract_inventory_from_findings
 from app.services.prowler_service import ProwlerService, ScanResult
 from app.services.side_scanning.trigger import (
@@ -182,7 +183,6 @@ def _auto_trigger_side_scans(
     db: Any,
     tenant_id: str,
     provider_id: str,
-    credentials: dict[str, Any],
     inventory: dict[str, list[dict[str, Any]]],
 ) -> int:
     """
@@ -203,7 +203,7 @@ def _auto_trigger_side_scans(
         if not resource_key or has_prior_side_scan(db, tenant_id, resource_key):
             continue
         try:
-            job_id = enqueue_side_scan(db, tenant_id, resource, provider_id, credentials)
+            job_id = enqueue_side_scan(db, tenant_id, resource, provider_id)
         except Exception:
             logger.exception("Failed to auto-trigger side-scan [tenant=%s resource=%s]", tenant_id, resource_key)
             continue
@@ -279,7 +279,6 @@ def run_cspm_scan(
     provider_id: str,
     provider: str,
     frameworks: list[str] | None,
-    credentials: dict[str, Any],
     account_id: str,
     regions: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -298,12 +297,16 @@ def run_cspm_scan(
             Prowler's full check catalog (recommended — every check still
             tags its result with every framework it belongs to, so this is a
             superset of any explicit list, not a narrower scan).
-        credentials: Ephemeral credentials dict (never stored beyond this call).
         account_id: Cloud account/subscription/project ID.
         regions: Optional list of regions to scan (None = all).
     """
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
+
+    # Credenciais resolvidas no worker (US-06.11/12) — nunca mais via payload
+    # do broker. Vault indisponível → segredos ausentes (logado) e o scan
+    # falha na camada cloud com erro claro; sem fallback para banco.
+    credentials = resolve_provider_credentials(db, provider_id)
 
     job_id = str(uuid.uuid4())
     job = ScanJob(
@@ -368,11 +371,10 @@ def run_cspm_scan(
         assets_removed = len(deleted_resource_ids.get("resources", []))
         findings_removed = _cascade_delete_findings(db, tenant_id, deleted_resource_ids.get("resources", []))
 
-        # Side-scanning is AWS-only (scan_ec2_instance_v2/scan_lambda_function) and
-        # needs a live boto3 session, which credentials/provider_id here already
-        # carry — no extra credential resolution.
+        # Side-scanning is AWS-only (scan_ec2_instance_v2/scan_lambda_function);
+        # as tasks resolvem as credenciais no worker via provider_id (US-06.12).
         side_scans_triggered = (
-            _auto_trigger_side_scans(db, tenant_id, provider_id, credentials, inventory) if provider == "aws" else 0
+            _auto_trigger_side_scans(db, tenant_id, provider_id, inventory) if provider == "aws" else 0
         )
 
         # Graph enrichment — derives edges from the raw_metadata just persisted

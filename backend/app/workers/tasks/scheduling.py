@@ -44,7 +44,9 @@ def trigger_all_discoveries(tenant_id: str, provider: str, **kwargs: Any) -> dic
     """
     Celery Beat router: dispatches a provider discovery task for a given tenant.
 
-    The Beat schedule calls this with (tenant_id, provider, **credentials).
+    The Beat schedule calls this with (tenant_id, provider, provider_key,
+    ...non-secret config kwargs). NEVER pass credential secrets here — the
+    discovery tasks resolve them from Vault in the worker (US-06.12).
     Each dispatched discovery task manages its own Redis lock so concurrent
     runs are skipped rather than stacked.
 
@@ -84,7 +86,7 @@ def trigger_all_cspm_scans() -> dict[str, Any]:
     from arango import ArangoClient
 
     from app.core.config import settings
-    from app.services.provider_service import get_provider_credentials, list_providers
+    from app.services.provider_service import list_providers
     from app.workers.tasks.cspm_scan import run_cspm_scan
 
     client = ArangoClient(hosts=f"http://{settings.ARANGO_HOST}:{settings.ARANGO_PORT}")
@@ -120,7 +122,6 @@ def trigger_all_cspm_scans() -> dict[str, Any]:
                 continue
 
             try:
-                credentials = get_provider_credentials(tenant_db, cfg.key)
                 account_id = cfg.account_id or cfg.subscription_id or cfg.project_id or ""
 
                 run_cspm_scan.apply_async(
@@ -130,7 +131,6 @@ def trigger_all_cspm_scans() -> dict[str, Any]:
                         "provider": cfg.provider,
                         # None -> Prowler's full check catalog, not a curated subset.
                         "frameworks": None,
-                        "credentials": credentials,
                         "account_id": account_id,
                         "regions": cfg.regions or None,
                     }

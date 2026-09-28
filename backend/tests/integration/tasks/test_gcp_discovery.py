@@ -21,14 +21,19 @@ PROJECT_ID = "test-gcp-project"
 _GCP_KWARGS = {
     "tenant_id": TEST_TENANT_A,
     "project_id": PROJECT_ID,
-    "service_account_info": {
+    "provider_key": "gcp-test-project",
+}
+
+# Service account via Vault (US-06.12): a task resolve no worker.
+_GCP_SECRETS = {
+    "gcp_service_account_json": {
         "type": "service_account",
         "project_id": PROJECT_ID,
         "private_key_id": "key-id",
         "private_key": "fake-key",
         "client_email": "test@test-gcp-project.iam.gserviceaccount.com",
         "client_id": "123456",
-    },
+    }
 }
 
 
@@ -45,6 +50,10 @@ def _make_mock_instance(name: str = "test-vm", zone: str = "us-central1-a") -> M
 
 def _patch_gcp_clients(mocker, db, instances=None, buckets=None, clusters=None, firewalls=None, networks=None):
     mocker.patch("app.workers.tasks.gcp_discovery._get_tenant_db", return_value=db)
+    mocker.patch(
+        "app.workers.tasks.gcp_discovery.get_provider_credentials",
+        return_value=_GCP_SECRETS,
+    )
     mocker.patch("app.workers.tasks.gcp_discovery.acquire_lock", return_value=True)
     mocker.patch("app.workers.tasks.gcp_discovery.release_lock")
     mocker.patch("app.workers.tasks.gcp_discovery.SACredentials")

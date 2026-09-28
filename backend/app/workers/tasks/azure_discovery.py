@@ -23,6 +23,7 @@ from redis import Redis
 from app.core.config import settings
 from app.db.init import init_tenant_schema
 from app.models.inventory import AzureResource, Provider
+from app.services.provider_service import get_provider_credentials
 from app.workers.celery_app import celery_app
 from app.workers.tasks._job_tracking import complete_discovery_job, fail_discovery_job, start_discovery_job
 from app.workers.tasks.cloud_utils import (
@@ -430,7 +431,6 @@ def discover_azure(
     tenant_id: str,
     subscription_id: str,
     client_id: str | None = None,
-    client_secret: str | None = None,
     azure_tenant_id: str | None = None,
     provider_key: str | None = None,
 ) -> dict[str, Any]:
@@ -441,7 +441,6 @@ def discover_azure(
         tenant_id: Ogum tenant identifier.
         subscription_id: Azure subscription ID.
         client_id: Azure service principal client ID (optional — uses DefaultAzureCredential if absent).
-        client_secret: Azure service principal client secret (ephemeral — never stored).
         azure_tenant_id: Azure Active Directory tenant ID (optional with Service Principal).
         provider_key: ArangoDB key of the provider config for status updates.
     """
@@ -454,6 +453,10 @@ def discover_azure(
     _job_id = start_discovery_job(db, tenant_id, "azure", provider_key)
 
     try:
+        # Segredo resolvido no worker via Vault (US-06.12); sem stored secret
+        # → DefaultAzureCredential (modo managed identity da worker).
+        stored = get_provider_credentials(db, provider_key) if provider_key else {}
+        client_secret = stored.get("azure_client_secret")
         if client_id and client_secret and azure_tenant_id:
             credential: ClientSecretCredential | DefaultAzureCredential = ClientSecretCredential(
                 tenant_id=azure_tenant_id,

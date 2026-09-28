@@ -35,6 +35,18 @@ services:
       retries: 5
     restart: unless-stopped
 
+  vault:
+    image: hashicorp/vault:1.15
+    container_name: ogum-vault
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ogum-dev-root
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    ports:
+      - "8200:8200"
+    restart: unless-stopped
+
   # ── Redpanda — Kafka-compatible Message Broker ────────────────────────────
   redpanda:
     image: redpandadata/redpanda:v24.2.1

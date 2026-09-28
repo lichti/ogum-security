@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from app.api.v1.inventory import get_tenant_db
-from app.services.provider_service import _make_key, get_provider, get_provider_credentials
+from app.services.provider_service import _make_key, get_provider
 from app.services.side_scanning.trigger import SCANNABLE_RESOURCE_TYPES, enqueue_side_scan
 from app.workers.tasks.side_scanning import scan_container_image, scan_k8s_container
 
@@ -187,14 +187,7 @@ async def trigger_resource_scan(
     if provider is None:
         raise HTTPException(status_code=400, detail="Provider not found for this resource")
 
-    credentials = get_provider_credentials(db, provider_id)
-    full_credentials = {
-        **credentials,
-        "role_arn": provider.role_arn,
-        "external_id": getattr(provider, "external_id", None),
-    }
-
-    job_id = enqueue_side_scan(db, x_tenant_id, resource_doc, provider_id, full_credentials)
+    job_id = enqueue_side_scan(db, x_tenant_id, resource_doc, provider_id)
     if job_id is None:
         raise HTTPException(status_code=422, detail="Resource could not be resolved to a scannable target")
 
@@ -313,14 +306,7 @@ async def retry_scan_job(
         provider = get_provider(db, provider_id)
         if provider is None:
             raise HTTPException(status_code=400, detail="Provider not found for this resource")
-        credentials = get_provider_credentials(db, provider_id)
-        full_credentials = {
-            **credentials,
-            "role_arn": provider.role_arn,
-            "external_id": getattr(provider, "external_id", None),
-        }
-
-        new_job_id = enqueue_side_scan(db, x_tenant_id, resource_doc, provider_id, full_credentials)
+        new_job_id = enqueue_side_scan(db, x_tenant_id, resource_doc, provider_id)
         if new_job_id is None:
             raise HTTPException(status_code=422, detail="Resource could not be resolved to a scannable target")
         return {"job_id": new_job_id, "status": "queued", "original_job_id": job_id}
