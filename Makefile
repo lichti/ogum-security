@@ -169,25 +169,12 @@ fe-test-watch: ## Run frontend tests in watch mode
 fe-build: ## Build frontend for production
 	cd frontend && npm run build
 
-# ── Agent — Go ────────────────────────────────────────────────────────────────
-.PHONY: agent-vet
-agent-vet: ## Run go vet on agent
-	cd agent && go vet ./...
-
-.PHONY: agent-build
-agent-build: ## Build agent binary
-	cd agent && go build ./...
-
-.PHONY: agent-test
-agent-test: ## Run agent tests
-	cd agent && go test ./...
-
 # ── Combined ──────────────────────────────────────────────────────────────────
 .PHONY: test-all
-test-all: test fe-test agent-test ## Run all tests across backend, frontend, and agent
+test-all: test fe-test ## Run all tests across backend and frontend
 
 .PHONY: check-all
-check-all: check fe-check agent-vet ## Run all code quality checks across all services
+check-all: check fe-check ## Run all code quality checks across backend and frontend
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 .PHONY: install

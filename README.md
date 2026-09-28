@@ -43,8 +43,7 @@ It is built on top of [Prowler v5](https://github.com/prowler-cloud/prowler) and
 
 - **Graph-based risk correlation** — connects isolated findings into visual Attack Paths
 - **Side-Scanning (No Production Impact)** — reads VM disk snapshots, Lambda artifacts, and container filesystems without touching production workloads or installing agents
-- **Near Real-Time detection** — from cloud event to alert in under 2 seconds
-- **AI-powered remediation** — context-aware RAG generates corrective IaC code and opens Pull Requests automatically
+- Near Real-Time detection (< 2s cloud event → alert) and AI-powered remediation (RAG-generated IaC Pull Requests) are **planned** — see the roadmap
 
 > The philosophy: Prowler, Trivy, Checkov, and Falco are the **sensors**. Ogum Security is the **brain** that connects them.
 
@@ -88,11 +87,11 @@ That's a **Toxic Combination** — an actual attack chain. Everything else is no
 ### Side-Scanning (No Production Impact)
 Inspired by Orca Security's approach. Scans production workloads without installing agents or touching running processes:
 
-- **Virtual Machines (AWS EC2, Azure VM):** creates an ephemeral disk snapshot, mounts it read-only in an isolated analyzer container, scans with Trivy + YARA + secret detectors, then destroys the snapshot immediately — zero CPU impact on production, zero agent installation
+- **Virtual Machines (AWS EC2 today; Azure VM planned):** creates an ephemeral disk snapshot, mounts it read-only in an isolated analyzer container, scans with Trivy + YARA + secret detectors, then destroys the snapshot immediately — zero CPU impact on production, zero agent installation
 - **AWS Lambda:** extracts the deployment artifact via API, scans dependencies and source code in an isolated RAM disk — the function is never invoked
 - **Kubernetes containers (runtime):** an ephemeral privileged DaemonSet reads `/proc/<PID>/root` from the host node — the target container never knows it was scanned. Note: this requires a DaemonSet with elevated permissions, not a fully agentless approach
 
-### Near Real-Time Detection
+### Near Real-Time Detection (Planned — Phase 3)
 ```
 CloudTrail / K8s Audit Logs → Vector.dev → Redpanda → Apache Flink CEP → Alert (< 2s)
 ```
@@ -101,7 +100,7 @@ Complex event correlation in memory. Detects multi-step attack patterns that ind
 
 High-confidence events require **both** a deviation from the per-principal behavioral baseline (typical actions, IPs, regions, user-agent) **and** a match against a known TTP — reducing noise instead of alerting on either condition alone.
 
-### AI-Powered Remediation (Ogum.AI)
+### AI-Powered Remediation (Ogum.AI — Planned)
 A RAG engine that:
 1. Retrieves the relevant remediation guide and your infrastructure style from a vector database
 2. Injects the actual attack path context from the graph
@@ -114,9 +113,9 @@ Continuous posture tracking per framework. If a developer opens a port at 3am, O
 ### CIEM — Identity Risk Analysis
 - Privilege gap scoring: what a role *can* do vs. what it *actually* does (last 90 days)
 - AssumeRole chaining detection: maps hidden privilege escalation paths across roles
-- Least-privilege policy generation: Ogum.AI rewrites overpermissive IAM policies from scratch based on actual usage
+- Least-privilege policy generation: Ogum.AI rewrites overpermissive IAM policies from scratch based on actual usage (planned — lands with Ogum.AI)
 
-### Cloud Detection and Response (Ogum.CDR)
+### Cloud Detection and Response (Ogum.CDR — Planned, Phase 3)
 When a threat is detected, Ogum doesn't just alert — it acts:
 
 **Tier 1 — Automatic containment (< 10 seconds, no human needed):**
@@ -132,8 +131,8 @@ High-impact actions — isolate EC2, terminate deployment, revoke org access —
 
 > CDR is the only module that modifies cloud resources directly — and only when an active threat demands it. Misconfigurations go through GitOps. Active attackers don't wait for PRs.
 
-### Hybrid Coverage with eBPF Agent
-For on-premise servers, edge environments, or unsupported clouds — a lightweight Go + C agent using **eBPF** provides:
+### Hybrid Coverage with eBPF Agent (Planned — Phase 3)
+For on-premise servers, edge environments, or unsupported clouds — a planned lightweight Go + C agent using **eBPF** will provide:
 - Passive network lineage (no intrusive port scanning)
 - Runtime command audit (`sys_enter_execve`)
 - Host IAM equivalent (SSH key and sudoer monitoring)
@@ -160,13 +159,13 @@ For on-premise servers, edge environments, or unsupported clouds — a lightweig
 └──────┬──────────────────────────────────────────────────┬────────┘
        ↑                    ↑                             ↑
 ┌──────┴──────┐  ┌──────────┴───────┐  ┌────────────────┴────────┐
-│Ogum.Static  │  │  Ogum.Dynamic    │  │      Ogum.Pulse         │
+│Ogum.Static  │  │  Ogum.Dynamic    │  │   Ogum.Pulse (plan)     │
 │Prowler v5   │  │  Side-Scanning   │  │  Redpanda + Flink CEP   │
 │+ Checkov    │  │  VM/Lambda/K8s   │  │  NRT < 2s latency       │
 └─────────────┘  └──────────────────┘  └─────────────────────────┘
        │ (misconfiguration)                         │ (active threat)
 ┌──────▼──────────────┐               ┌─────────────▼──────────────┐
-│      Ogum.AI        │               │        Ogum.CDR            │
+│  Ogum.AI (plan)     │               │      Ogum.CDR (plan)       │
 │  RAG + GitOps PRs   │               │  Tier 1: auto < 10s        │
 │  never direct cloud │               │  Tier 2: Slack approval     │
 └──────┬──────────────┘               └─────────────┬──────────────┘
@@ -178,7 +177,8 @@ For on-premise servers, edge environments, or unsupported clouds — a lightweig
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-**Core stack:** Python 3.12+ · FastAPI · Prowler v5 (`prowler-core`) · ArangoDB · Redpanda · Apache Flink · React 19 · Next.js 15 · Go · eBPF · LangChain · Ollama
+**Core stack:** Python 3.12+ · FastAPI · Prowler v5 (`prowler-core`) · ArangoDB · Celery + Redis · React 19 · Next.js 15  
+**Planned:** Redpanda + Apache Flink (NRT) · Go + eBPF agent · LangChain + Ollama (Ogum.AI)
 
 ---
 
@@ -351,10 +351,6 @@ poetry run uvicorn app.main:app --reload --port 8000
 cd frontend
 npm install
 npm run dev
-
-# Agent (Go)
-cd agent
-go build ./cmd/...
 ```
 
 See [docs/getting-started.md](docs/getting-started.md) for the full development guide.
