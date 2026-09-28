@@ -38,6 +38,7 @@ import httpx
 
 from app.db.init import init_tenant_schema
 from app.models.finding import Finding, FindingSource, FindingStatus, SeverityLevel
+from app.services.provider_service import get_provider_credentials
 from app.services.side_scanning import cvss_to_severity
 from app.services.side_scanning.analyzers.trivy_analyzer import (
     run_trivy_ebs,
@@ -459,8 +460,6 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
     resource_arn: str | None = None,
     role_arn: str | None = None,
     external_id: str | None = None,
-    aws_access_key_id: str | None = None,
-    aws_secret_access_key: str | None = None,
 ) -> dict[str, Any]:
     """
     EBS Direct API scan pipeline:
@@ -488,11 +487,14 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
         scan_job_id,
     )
 
+    # Segredos resolvidos no worker via Vault (US-06.12) — {} habilita o
+    # modo ambient da worker (instance role), sem fallback para banco.
+    stored = get_provider_credentials(db, provider_id)
     session = _get_aws_session(
         role_arn=role_arn,
         external_id=external_id,
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key,
+        aws_access_key_id=stored.get("aws_access_key_id"),
+        aws_secret_access_key=stored.get("aws_secret_access_key"),
     )
     ec2 = session.client("ec2", region_name=region)
 
@@ -629,8 +631,6 @@ def scan_lambda_function(  # noqa: PLR0913
     account_id: str = "",
     role_arn: str | None = None,
     external_id: str | None = None,
-    aws_access_key_id: str | None = None,
-    aws_secret_access_key: str | None = None,
 ) -> dict[str, Any]:
     """
     Agentless Lambda scan via RAM disk:
@@ -655,11 +655,12 @@ def scan_lambda_function(  # noqa: PLR0913
         scan_job_id,
     )
 
+    stored = get_provider_credentials(db, provider_id)
     session = _get_aws_session(
         role_arn=role_arn,
         external_id=external_id,
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key,
+        aws_access_key_id=stored.get("aws_access_key_id"),
+        aws_secret_access_key=stored.get("aws_secret_access_key"),
     )
     lambda_client = session.client("lambda", region_name=region)
 

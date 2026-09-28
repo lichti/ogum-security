@@ -15,6 +15,7 @@ from typing import Any
 
 from arango.database import StandardDatabase
 
+from app.services.provider_service import get_provider, get_provider_credentials
 from app.services.side_scanning.ec2_metadata import resolve_ec2_scan_metadata
 from app.workers.tasks.cloud_utils import _get_aws_session
 from app.workers.tasks.side_scanning import scan_ec2_instance_v2, scan_lambda_function
@@ -69,7 +70,6 @@ def enqueue_side_scan(
     tenant_id: str,
     resource_doc: dict[str, Any],
     provider_id: str,
-    credentials: dict[str, Any],
 ) -> str | None:
     """
     Create a scan_jobs record and enqueue the matching side-scanning task for an
@@ -77,16 +77,20 @@ def enqueue_side_scan(
     the resource isn't a scannable/currently-scannable EC2 or Lambda resource
     (wrong resource_type, malformed ARN, or the EC2 instance no longer exists /
     has no attached volume per a live describe_instances lookup).
+
+    Nenhum segredo entra no payload (US-06.12): as tasks recebem provider_id e
+    resolvem credenciais do Vault no worker. Aqui só os campos não-secretos
+    (role_arn/external_id do documento do provider) são necessários — para a
+    checagem pré-voo de describe_instances.
     """
     resource_type = resource_doc.get("resource_type")
     resource_key = resource_doc["_key"]
     region = resource_doc.get("region") or "us-east-1"
     account_id = resource_doc.get("account_id") or ""
     arn = resource_doc.get("arn")
-    role_arn = credentials.get("role_arn")
-    external_id = credentials.get("external_id")
-    aws_access_key_id = credentials.get("aws_access_key_id")
-    aws_secret_access_key = credentials.get("aws_secret_access_key")
+    provider = get_provider(db, provider_id)
+    role_arn = provider.role_arn if provider else None
+    external_id = provider.external_id if provider else None
 
     job_id = f"{resource_type}-{resource_key}-{int(time.time())}"
 
@@ -95,11 +99,12 @@ def enqueue_side_scan(
         if not instance_id:
             return None
 
+        stored = get_provider_credentials(db, provider_id)
         session = _get_aws_session(
             role_arn=role_arn,
             external_id=external_id,
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
+            aws_access_key_id=stored.get("aws_access_key_id"),
+            aws_secret_access_key=stored.get("aws_secret_access_key"),
         )
         ec2_client = session.client("ec2", region_name=region)
         instance_meta = resolve_ec2_scan_metadata(ec2_client, [instance_id]).get(instance_id)
@@ -134,8 +139,6 @@ def enqueue_side_scan(
             resource_arn=arn,
             role_arn=role_arn,
             external_id=external_id,
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
         )
         return job_id
 
@@ -169,8 +172,6 @@ def enqueue_side_scan(
             account_id=account_id,
             role_arn=role_arn,
             external_id=external_id,
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
         )
         return job_id
 

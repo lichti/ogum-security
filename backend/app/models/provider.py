@@ -50,16 +50,16 @@ class ProviderRegisterRequest(BaseModel):
     validate_connection: bool = True
     # AWS — option A: cross-account IAM role (recommended for multi-account)
     role_arn: str | None = None
-    # AWS — option B: static access keys (dev only, never stored in ArangoDB)
+    # AWS — option B: static access keys (stored in Vault only — US-06.11/ADR-015)
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
-    # Azure Service Principal credentials (client_secret NOT stored — ephemeral)
+    # Azure Service Principal credentials (client_secret stored in Vault only)
     azure_tenant_id: str | None = None
     azure_client_id: str | None = None
     azure_client_secret: str | None = None
-    # GCP Service Account JSON (NOT stored — ephemeral)
+    # GCP Service Account JSON (stored in Vault only)
     gcp_service_account_json: dict[str, Any] | None = None
-    # Kubernetes external cluster kubeconfig (NOT stored — ephemeral)
+    # Kubernetes external cluster kubeconfig (stored in Vault only)
     kubeconfig: dict[str, Any] | None = None
 
 
@@ -71,7 +71,8 @@ class ProviderUpdateRequest(BaseModel):
     role_arn: str | None = None
     azure_tenant_id: str | None = None
     azure_client_id: str | None = None
-    # Secrets stored for scheduled jobs — NEVER returned in API responses
+    # Secrets live in Vault (US-06.11); the document carries only the
+    # credentials_vault_path/_version references and is never returned by API responses
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
     azure_client_secret: str | None = None
@@ -88,9 +89,10 @@ class ProviderRegisterResponse(BaseModel):
 class DiscoverRequest(BaseModel):
     """Optional body for POST /{id}/discover.
 
-    Allows re-providing ephemeral credentials for providers registered with
+    Allows re-providing credentials for providers registered with
     credential_type='static' / 'service_principal' / 'service_account' / 'kubeconfig'.
-    Credentials passed here are forwarded to the task and never stored.
+    Credentials passed here are persisted to Vault (US-06.11) and resolved by the
+    task in the worker — never carried in the Celery payload (US-06.12).
     Omit the body (or all fields) to use ambient worker credentials / stored role_arn.
     """
 

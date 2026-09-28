@@ -20,12 +20,12 @@ from app.services.provider_health import evaluate_cached_health, run_connection_
 from app.services.provider_service import (
     delete_provider,
     get_provider,
-    get_provider_credentials,
     list_providers,
     register_provider,
     update_provider,
     update_provider_last_discovery,
 )
+from app.services.vault_client import VaultUnavailableError
 from app.workers.tasks.azure_discovery import discover_azure
 from app.workers.tasks.cloud_utils import _get_aws_session
 from app.workers.tasks.cspm_scan import run_cspm_scan
@@ -65,18 +65,13 @@ def _dispatch_discovery(
     config_key: str,
     request: ProviderRegisterRequest,
     db: StandardDatabase,
-    role_arn: str | None = None,
-    external_id: str | None = None,
 ) -> str | None:
     """Dispatch discovery task for the given provider. Returns job_id or None.
 
-    Sensitive credentials (aws_secret_access_key, azure_client_secret,
-    gcp_service_account_json, kubeconfig) are passed as task kwargs and are
-    ephemeral — they live only in the Celery message broker and worker memory,
-    never in ArangoDB or application logs.
-
-    For re-triggered discovery (POST /{id}/discover), credentials are not
-    available (not stored). The task falls back to ambient worker credentials.
+    Nenhum segredo vai no payload (US-06.12): as tasks recebem provider_key e
+    resolvem credenciais do Vault no worker. Providers sem segredo armazenado
+    (ambient/managed identity/ADC/incluster) seguem o caminho de credenciais
+    ambientes da própria worker.
     """
     job_id: str | None = None
     try:
@@ -89,12 +84,6 @@ def _dispatch_discovery(
                 provider_id=config_key,
                 provider="aws",
                 frameworks=None,
-                credentials={
-                    "role_arn": role_arn,
-                    "external_id": external_id,
-                    "aws_access_key_id": request.aws_access_key_id,
-                    "aws_secret_access_key": request.aws_secret_access_key,
-                },
                 account_id=request.account_id or "",
                 regions=request.regions,
             ).id
@@ -103,7 +92,6 @@ def _dispatch_discovery(
                 tenant_id,
                 request.subscription_id or "",
                 client_id=request.azure_client_id,
-                client_secret=request.azure_client_secret,
                 azure_tenant_id=request.azure_tenant_id,
                 provider_key=config_key,
             ).id
@@ -111,14 +99,12 @@ def _dispatch_discovery(
             job_id = discover_gcp.delay(
                 tenant_id,
                 request.project_id or "",
-                service_account_info=request.gcp_service_account_json,
                 provider_key=config_key,
             ).id
         elif provider == "k8s":
             job_id = discover_k8s.delay(
                 tenant_id,
                 request.cluster_name or "",
-                kubeconfig=request.kubeconfig,
                 provider_key=config_key,
             ).id
 
@@ -151,15 +137,19 @@ async def register_provider_endpoint(
         if not request.account_id and detected:
             request = request.model_copy(update={"account_id": detected})
 
-    config = register_provider(db, x_tenant_id, request)
+    try:
+        config = register_provider(db, x_tenant_id, request)
+    except VaultUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Credential store (Vault) unavailable — provider not registered: {exc}",
+        ) from exc
     job_id = _dispatch_discovery(
         request.provider,
         x_tenant_id,
         config.key,
         request,
         db,
-        role_arn=config.role_arn,
-        external_id=config.external_id,
     )
 
     queued = "queued" if job_id else "not started"
@@ -235,9 +225,28 @@ async def trigger_discovery_endpoint(
     if not config.enabled:
         raise HTTPException(status_code=409, detail="Provider is disabled. Enable it before triggering discovery.")
 
-    # Body credentials override stored ones; stored credentials are the fallback for scheduled jobs.
+    # Credenciais do body (override) são persistidas no Vault antes do
+    # despacho; a task resolve tudo no worker via provider_key (US-06.12).
     body_creds = body or DiscoverRequest()
-    stored = get_provider_credentials(db, provider_id)
+    body_secrets = {
+        field: getattr(body_creds, field)
+        for field in (
+            "aws_access_key_id",
+            "aws_secret_access_key",
+            "azure_client_secret",
+            "gcp_service_account_json",
+            "kubeconfig",
+        )
+        if getattr(body_creds, field)
+    }
+    if body_secrets:
+        update_provider(
+            db,
+            provider_id,
+            ProviderUpdateRequest(**body_secrets),
+            tenant_id=x_tenant_id,
+        )
+
     from app.models.provider import ProviderRegisterRequest as _Req
 
     stub = _Req(
@@ -251,11 +260,6 @@ async def trigger_discovery_endpoint(
         validate_connection=False,
         azure_tenant_id=config.azure_tenant_id,
         azure_client_id=config.azure_client_id,
-        aws_access_key_id=body_creds.aws_access_key_id or stored.get("aws_access_key_id"),
-        aws_secret_access_key=body_creds.aws_secret_access_key or stored.get("aws_secret_access_key"),
-        azure_client_secret=body_creds.azure_client_secret or stored.get("azure_client_secret"),
-        gcp_service_account_json=body_creds.gcp_service_account_json or stored.get("gcp_service_account_json"),
-        kubeconfig=body_creds.kubeconfig or stored.get("kubeconfig"),
     )
     job_id = _dispatch_discovery(
         config.provider,
@@ -263,8 +267,6 @@ async def trigger_discovery_endpoint(
         provider_id,
         stub,
         db,
-        role_arn=config.role_arn,
-        external_id=config.external_id,
     )
     if not job_id:
         raise HTTPException(status_code=503, detail="Failed to dispatch discovery job. Check worker connectivity.")

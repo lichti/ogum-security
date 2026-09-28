@@ -20,6 +20,7 @@ from redis import Redis
 from app.core.config import settings
 from app.db.init import init_tenant_schema
 from app.models.inventory import GCPResource, Provider
+from app.services.provider_service import get_provider_credentials
 from app.workers.celery_app import celery_app
 from app.workers.tasks._job_tracking import complete_discovery_job, fail_discovery_job, start_discovery_job
 from app.workers.tasks.cloud_utils import (
@@ -216,7 +217,6 @@ def discover_gcp(
     self: Any,
     tenant_id: str,
     project_id: str,
-    service_account_info: dict[str, Any] | None = None,
     provider_key: str | None = None,
 ) -> dict[str, Any]:
     """
@@ -238,6 +238,10 @@ def discover_gcp(
     _job_id = start_discovery_job(db, tenant_id, "gcp", provider_key)
 
     try:
+        # Service account resolvida no worker via Vault (US-06.12); sem stored
+        # secret → ADC automático das client libraries.
+        stored = get_provider_credentials(db, provider_key) if provider_key else {}
+        service_account_info = stored.get("gcp_service_account_json")
         credentials: SACredentials | None = None
         if service_account_info:
             credentials = SACredentials.from_service_account_info(service_account_info, scopes=_GCP_SCOPES)

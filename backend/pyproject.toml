@@ -30,6 +30,7 @@ google-cloud-compute = "^1.19.0"
 google-cloud-container = "^2.52.0"
 google-cloud-storage = "^2.18.0"
 google-auth = "^2.35.0"
+hvac = "^2.3.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.0"

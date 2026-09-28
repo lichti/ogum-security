@@ -1866,7 +1866,7 @@
         "type": "object"
       },
       "DiscoverRequest": {
-        "description": "Optional body for POST /{id}/discover.\n\nAllows re-providing ephemeral credentials for providers registered with\ncredential_type='static' / 'service_principal' / 'service_account' / 'kubeconfig'.\nCredentials passed here are forwarded to the task and never stored.\nOmit the body (or all fields) to use ambient worker credentials / stored role_arn.",
+        "description": "Optional body for POST /{id}/discover.\n\nAllows re-providing credentials for providers registered with\ncredential_type='static' / 'service_principal' / 'service_account' / 'kubeconfig'.\nCredentials passed here are persisted to Vault (US-06.11) and resolved by the\ntask in the worker \u2014 never carried in the Celery payload (US-06.12).\nOmit the body (or all fields) to use ambient worker credentials / stored role_arn.",
         "properties": {
           "aws_access_key_id": {
             "anyOf": [

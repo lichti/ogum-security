@@ -22,9 +22,12 @@ _AZURE_KWARGS = {
     "tenant_id": TEST_TENANT_A,
     "subscription_id": SUB_ID,
     "client_id": "client-id",
-    "client_secret": "client-secret",
     "azure_tenant_id": "azure-tenant-id",
+    "provider_key": "azure-test-sub",
 }
+
+# Segredo via Vault (US-06.12): a task resolve no worker.
+_AZURE_SECRETS = {"azure_client_secret": "client-secret"}
 
 
 def _make_mock_vm(
@@ -59,6 +62,10 @@ def _patch_azure_clients(
     vaults=None,
 ):
     mocker.patch("app.workers.tasks.azure_discovery._get_tenant_db", return_value=db)
+    mocker.patch(
+        "app.workers.tasks.azure_discovery.get_provider_credentials",
+        return_value=_AZURE_SECRETS,
+    )
     mocker.patch("app.workers.tasks.azure_discovery.acquire_lock", return_value=True)
     mocker.patch("app.workers.tasks.azure_discovery.release_lock")
     mocker.patch("app.workers.tasks.azure_discovery.ClientSecretCredential")

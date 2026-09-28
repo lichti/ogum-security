@@ -20,6 +20,7 @@ from redis import Redis
 from app.core.config import settings
 from app.db.init import init_tenant_schema
 from app.models.inventory import K8sResource, Provider
+from app.services.provider_service import get_provider_credentials
 from app.workers.celery_app import celery_app
 from app.workers.tasks._job_tracking import complete_discovery_job, fail_discovery_job, start_discovery_job
 from app.workers.tasks.cloud_utils import (
@@ -441,7 +442,6 @@ def discover_k8s(
     self: Any,
     tenant_id: str,
     cluster_name: str,
-    kubeconfig: dict[str, Any] | None = None,
     provider_key: str | None = None,
 ) -> dict[str, Any]:
     """
@@ -450,7 +450,6 @@ def discover_k8s(
     Args:
         tenant_id: Ogum tenant identifier.
         cluster_name: Logical cluster name (used as part of ArangoDB key).
-        kubeconfig: Kubeconfig dict for remote clusters (ephemeral — never stored).
             None → in-cluster config (ServiceAccount mounted by Kubernetes).
         provider_key: ArangoDB key of the provider config for status updates.
     """
@@ -463,6 +462,8 @@ def discover_k8s(
     _job_id = start_discovery_job(db, tenant_id, "k8s", provider_key)
 
     try:
+        stored = get_provider_credentials(db, provider_key) if provider_key else {}
+        kubeconfig = stored.get("kubeconfig")
         if kubeconfig:
             k8s_config.load_kube_config_from_dict(kubeconfig)
         else:
