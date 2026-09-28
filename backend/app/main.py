@@ -19,7 +19,9 @@ from app.api.v1 import (
     settings as settings_api,
 )
 from app.api.v1.admin import jobs as admin_jobs
+from app.api.v1.admin import tenants as admin_tenants
 from app.core.config import settings
+from app.core.middleware import TenantIdentityMiddleware
 
 app = FastAPI(
     title="Ogum Security API",
@@ -36,6 +38,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# US-06.09 — pass-through quando AUTH_ENABLED=false (dev); com true, exige
+# Bearer em toda rota (menos /health, docs e webhooks de scanner) e resolve
+# X-Tenant-ID/X-User-Id a partir do token verificado.
+app.add_middleware(TenantIdentityMiddleware)
 
 
 @app.get("/health", tags=["system"])
@@ -54,6 +60,7 @@ app.include_router(attack_paths.router)
 app.include_router(graph.router)
 app.include_router(side_scans.router)
 app.include_router(admin_jobs.router)
+app.include_router(admin_tenants.router)
 app.include_router(views.router)
 app.include_router(settings_api.router)
 app.include_router(dev_module.router)  # endpoints return 404 unless DEV_MODE=true

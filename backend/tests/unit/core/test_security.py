@@ -78,6 +78,13 @@ def test_rs256_creation_refuses_without_keypair(monkeypatch):
         _token()
 
 
+def test_token_type_claim_defaults_to_access_and_supports_api():
+    access = decode_access_token(_token())
+    assert access.typ == "access"
+    api = decode_access_token(_token(token_type="api"))
+    assert api.typ == "api"
+
+
 def test_secret_falls_back_to_app_secret(monkeypatch):
     monkeypatch.setattr(settings, "JWT_SECRET_KEY", "")
     monkeypatch.setattr(settings, "APP_SECRET_KEY", "app-secret")

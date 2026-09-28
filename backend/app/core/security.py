@@ -38,6 +38,8 @@ class TokenData(BaseModel):
     exp: int
     iat: int
     jti: str
+    # "access" (OIDC/interim de curta vida) | "api" (token de tenant, US-06.09)
+    typ: str = "access"
 
 
 def _signing_key() -> str:
@@ -71,6 +73,7 @@ def create_access_token(
     role: Role | str,
     expires_delta: timedelta | None = None,
     email: str | None = None,
+    token_type: str = "access",
 ) -> str:
     now = datetime.now(UTC)
     expire = now + (expires_delta or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES))
@@ -82,6 +85,7 @@ def create_access_token(
         "iat": int(now.timestamp()),
         "exp": int(expire.timestamp()),
         "jti": uuid4().hex,
+        "typ": token_type,
     }
     return str(jwt.encode(payload, _signing_key(), algorithm=settings.JWT_ALGORITHM))
 
