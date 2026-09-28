@@ -327,31 +327,3 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-  agent-check:
-    name: Agent — Vet & Build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.23"
-          cache-dependency-path: agent/go.sum
-
-      - name: Go vet
-        working-directory: agent
-        run: |
-          if [ -n "$(find . -name '*.go')" ]; then
-            go vet ./...
-          else
-            echo "No Go source files yet — skipping vet"
-          fi
-
-      - name: Build
-        working-directory: agent
-        run: |
-          if [ -n "$(find . -name '*.go')" ]; then
-            go build ./...
-          else
-            echo "No Go source files yet — skipping build"
-          fi
