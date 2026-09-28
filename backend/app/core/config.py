@@ -34,8 +34,9 @@ class Settings(BaseSettings):
     # Dev / seed
     DEV_MODE: bool = False
 
-    # Auth (Epic 06 Sprint 1 — fundação; enforcement ligado na US-06.09)
+    # Auth (Epic 06 — Sprint 1 fundação + US-06.09 gate interim)
     AUTH_ENABLED: bool = False
+    INTERIM_TOKEN_EXPIRE_DAYS: int = 30
     JWT_ALGORITHM: str = "HS256"  # RS256 (tokens de IdP) chega com a US-06.01
     JWT_SECRET_KEY: str = ""  # fallback: APP_SECRET_KEY
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15

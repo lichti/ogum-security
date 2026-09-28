@@ -78,14 +78,57 @@ export const apiClient = axios.create({
   paramsSerializer: serializeParams,
 })
 
-// DEV MODE: tenant/user injected from env vars — Epic 06 replaces with JWT extraction
+// ── Interim tenant API token (US-06.09) ──────────────────────────────────────
+// O token é emitido pelo PlatformAdmin (`PUT /api/v1/admin/tenants/{id}/api-token`
+// ou o script mint_tenant_token.py) e vale uma única vez na emissão. Enquanto
+// não há UI de login (Epic 06 Sprint 2), ele vive no localStorage. Sem token,
+// o cliente cai no modo dev (headers X-Tenant-ID/X-User-Id) — compatível com
+// AUTH_ENABLED=false; removido quando o OIDC chegar (US-06.01).
+const API_TOKEN_STORAGE_KEY = 'ogum_api_token'
+
+export function getApiToken(): string | null {
+  if (typeof window === 'undefined') return null
+  return window.localStorage.getItem(API_TOKEN_STORAGE_KEY)
+}
+
+export function setApiToken(token: string | null): void {
+  if (typeof window === 'undefined') return
+  if (token) {
+    window.localStorage.setItem(API_TOKEN_STORAGE_KEY, token)
+  } else {
+    window.localStorage.removeItem(API_TOKEN_STORAGE_KEY)
+  }
+}
+
 apiClient.interceptors.request.use((config) => {
+  const token = getApiToken()
+  if (token) {
+    config.headers['Authorization'] = `Bearer ${token}`
+    return config
+  }
+  // DEV MODE: tenant/user injected from env vars — replaced by the token above
+  // when one is configured; removed entirely with Epic 06 Sprint 2 (OIDC).
   const tenantId = process.env.NEXT_PUBLIC_TENANT_ID ?? 'dev-tenant'
   const userId = process.env.NEXT_PUBLIC_USER_ID ?? 'dev-user'
   config.headers['X-Tenant-ID'] = tenantId
   config.headers['X-User-Id'] = userId
   return config
 })
+
+// 401 → token ausente, revogado (rotacionado) ou expirado. Normaliza a mensagem
+// e emite um evento para a UI; os estados de erro dedicados chegam com US-14.24.
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      error.message = 'Unauthorized — set a valid tenant API token (ogum_api_token)'
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ogum:unauthorized'))
+      }
+    }
+    return Promise.reject(error)
+  },
+)
 
 export const inventoryApi = {
   list: (filters: InventoryFilters) =>

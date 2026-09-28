@@ -4679,6 +4679,12 @@
         "title": "WorkerInfo",
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
     }
   },
   "info": {
@@ -4782,6 +4788,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Jobs",
         "tags": [
           "admin"
@@ -4824,6 +4835,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Trigger Job",
         "tags": [
           "admin"
@@ -4878,6 +4894,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Revoke Job",
         "tags": [
           "admin"
@@ -4930,6 +4951,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Job",
         "tags": [
           "admin"
@@ -4982,6 +5008,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Stream Job Logs",
         "tags": [
           "admin"
@@ -5035,6 +5066,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Retry Job",
         "tags": [
           "admin"
@@ -5057,9 +5093,99 @@
             "description": "Successful Response"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Queue Depth",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/tenants": {
+      "get": {
+        "description": "Lista os tenants registrados (sem expor hashes de token).",
+        "operationId": "list_registered_tenants_api_v1_admin_tenants_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_dict__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Registered Tenants",
+        "tags": [
+          "admin-tenants"
+        ]
+      }
+    },
+    "/api/v1/admin/tenants/{tenant_id}/api-token": {
+      "put": {
+        "description": "Registra o tenant (se necess\u00e1rio) e emite/rotaciona o token API.\n\nO valor do token \u00e9 retornado **uma \u00fanica vez** nesta resposta; o registro\npersiste apenas o hash. Emitir novamente revoga o token anterior.",
+        "operationId": "issue_api_token_api_v1_admin_tenants__tenant_id__api_token_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "platform_admin",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Platform Admin",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_dict_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Issue Api Token",
+        "tags": [
+          "admin-tenants"
         ]
       }
     },
@@ -5079,6 +5205,11 @@
             "description": "Successful Response"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Workers",
         "tags": [
           "admin"

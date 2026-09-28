@@ -1,21 +1,26 @@
 """Admin Jobs API — cross-tenant job inspection and control."""
 
-# TODO(epic-06): add @require_role(["PlatformAdmin"]) to all routes once Auth/RBAC is implemented.
-
 from __future__ import annotations
 
 import asyncio
 import json
 from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
+from app.core.deps import require_platform_admin
 from app.models.admin import JobDetail, QueueDepth, RetryRequest, TriggerRequest, WorkerInfo
 from app.models.api_responses import ApiResponse
 from app.services import admin_service
 
-router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
+# US-06.09: todas as rotas admin exigem role PlatformAdmin quando
+# AUTH_ENABLED=true; com false (dev) o gate é inerte.
+router = APIRouter(
+    prefix="/api/v1/admin",
+    tags=["admin"],
+    dependencies=[Depends(require_platform_admin)],
+)
 
 
 @router.get("/jobs", response_model=ApiResponse[dict])
