@@ -55,23 +55,21 @@ jobs:
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache 2>/dev/null || true
 
+      # US-13.11 — docker run da imagem trivy pinada (o trivy-action 0.28
+      # está quebrado upstream: delega a setup-trivy@v0.2.1, tag inexistente)
       - name: "Trivy image scan — backend (US-13.11: CRITICAL bloqueia)"
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
-        with:
-          image-ref: ogum-security-backend:latest
-          format: table
-          severity: CRITICAL
-          exit-code: "1"
-          ignore-unfixed: true
+        run: >-
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy@sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9
+          image --exit-code 1 --severity CRITICAL --ignore-unfixed
+          ogum-security-backend:latest
 
       - name: Trivy image scan — frontend
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
-        with:
-          image-ref: ogum-security-frontend:latest
-          format: table
-          severity: CRITICAL
-          exit-code: "1"
-          ignore-unfixed: true
+        run: >-
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy@sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9
+          image --exit-code 1 --severity CRITICAL --ignore-unfixed
+          ogum-security-frontend:latest
 
   backend-lint:
     name: Backend — Lint & Type Check
