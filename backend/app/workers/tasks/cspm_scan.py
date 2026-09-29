@@ -307,7 +307,7 @@ def run_cspm_scan(
             status=ScanJobStatus.SKIPPED,
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
-            raw_output={"skip_reason": "another scan already running for this provider"},
+            error_message="another scan already running for this provider",
         )
         db.collection("scan_jobs").insert(skipped.to_arango_doc())
         logger.warning(

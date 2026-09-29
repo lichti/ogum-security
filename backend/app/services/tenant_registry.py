@@ -74,7 +74,7 @@ def _registry_collection() -> Any:
 def is_registered(tenant_id: str) -> bool:
     """Allowlist check do resolver estrito (US-06.10)."""
     try:
-        return _registry_collection().has(tenant_id)
+        return bool(_registry_collection().has(tenant_id))
     except Exception:
         # Registro indisponível → não é allowlist: falha fechada (o tenant
         # deixa de resolver) com o erro logado.
@@ -109,6 +109,8 @@ def register_tenant(tenant_id: str, platform_admin: bool = False) -> dict:
     elif platform_admin and not doc.get("platform_admin"):
         col.update({"_key": tenant_id, "platform_admin": True})
         doc = dict(col.get(tenant_id))
+    else:
+        doc = dict(doc)
 
     # Provisioning mínimo do database (US-06.10: a resolução por request não
     # cria nada — a criação é toda daqui) + migrações versionadas (US-00.12).
