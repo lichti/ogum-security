@@ -119,11 +119,6 @@ def _validate_collections(db: StandardDatabase, query: str, bind_vars: dict[str,
         )
 
 
-def _inject_tenant_filter(aql: str, tenant_id: str) -> str:
-    """Inject @tenant_id bind var that queries can reference as @tenant_id."""
-    return aql  # user must use @tenant_id in their query; we supply it as a bind var
-
-
 # ── Pydantic models ──────────────────────────────────────────────────────────
 
 

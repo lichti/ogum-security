@@ -442,6 +442,15 @@ jobs:
           terraform init -backend=false
           terraform validate
 
+      - name: tflint (W4.5)
+        uses: terraform-linters/setup-tflint@v4
+
+      - name: tflint run
+        working-directory: infra/iam
+        run: |
+          tflint --init
+          tflint --recursive
+
       - name: Kubectl client dry-run (US-13.11 — pendência do Epic 03 Sprint 3)
         uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4
 

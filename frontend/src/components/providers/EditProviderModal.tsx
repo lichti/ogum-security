@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { getErrorMessage } from "@/lib/api";
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { providersApi } from '@/lib/api'
 import type { ProviderConfig } from '@/lib/types'
@@ -72,12 +73,7 @@ export function EditProviderModal({ provider, onSave, onCancel }: EditProviderMo
 
       onSave()
     } catch (e: unknown) {
-      const msg =
-        e instanceof Error
-          ? e.message
-          : (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-            'Failed to save changes.'
-      setError(msg)
+      setError(getErrorMessage(e, 'Failed to save changes.'))
     } finally {
       setSaving(false)
     }

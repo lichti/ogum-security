@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.db.init import init_tenant_schema
-from app.models.finding import Finding, ScanJob, ScanJobStatus
+from app.models.finding import ScanJob, ScanJobStatus
 from app.services.compliance_service import snapshot_compliance_scores
 from app.services.graph.data_access_edges import build_data_access_edges
 from app.services.graph.exposure import compute_exposed_internet
@@ -31,7 +31,7 @@ from app.services.side_scanning.trigger import (
     has_prior_side_scan,
 )
 from app.workers.celery_app import celery_app
-from app.workers.tasks.cloud_utils import _get_tenant_db, _upsert, upsert_finding
+from app.workers.tasks.cloud_utils import _get_tenant_db, _upsert, upsert_finding_with_edge
 from app.workers.tasks.job_logging import JobLogHandler
 
 logger = logging.getLogger(__name__)
@@ -42,25 +42,6 @@ def _update_job(db: Any, job_id: str, **fields: Any) -> None:
         db.collection("scan_jobs").update({"_key": job_id, **fields})
     except Exception:
         logger.exception("Failed to update scan_job %s", job_id)
-
-
-def _upsert_finding(db: Any, finding: Finding) -> None:
-    """Upsert finding and create HAS_FINDING edge from resource → finding."""
-    upsert_finding(db, finding)
-
-    finding_key = finding.arango_key()
-    edge_key = f"{finding.resource_id}__{finding_key}".replace("/", "_").replace(":", "_")
-    edge_doc = {
-        "_key": edge_key[:240],
-        "_from": f"resources/{finding.resource_id}",
-        "_to": f"findings/{finding_key}",
-        "tenant_id": finding.tenant_id,
-    }
-    try:
-        if not db.collection("HAS_FINDING").has(edge_doc["_key"]):
-            db.collection("HAS_FINDING").insert(edge_doc)
-    except Exception:
-        pass  # edge already exists or resource doesn't exist — both acceptable
 
 
 def _upsert_inventory(db: Any, inventory: dict[str, list[dict[str, Any]]]) -> int:
@@ -411,7 +392,7 @@ def _run_cspm_scan_locked(
         findings = scan_result.findings
 
         for finding in findings:
-            _upsert_finding(db, finding)
+            upsert_finding_with_edge(db, finding)
 
         # Score snapshot for the Compliance Score Trend chart — one row per framework,
         # upserted by day (see snapshot_compliance_scores). Runs for every provider,

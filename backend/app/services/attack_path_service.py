@@ -423,7 +423,7 @@ def mark_resources_in_attack_path(db: Any, tenant_id: str, attack_path_docs: lis
             col_name, key = vid.split("/", 1)
             db.collection(col_name).update({"_key": key, "in_attack_path": True, "tenant_id": tenant_id})
         except Exception:
-            pass
+            logger.debug("in_attack_path flag skipped for %s/%s", col_name, key)
 
 
 def run_attack_path_detection(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from arango.database import StandardDatabase
@@ -33,6 +34,8 @@ from app.workers.tasks.cloud_utils import _get_aws_session
 from app.workers.tasks.cspm_scan import run_cspm_scan
 from app.workers.tasks.gcp_discovery import discover_gcp
 from app.workers.tasks.k8s_discovery import discover_k8s
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/providers", tags=["providers"])
 
@@ -113,7 +116,8 @@ def _dispatch_discovery(
         if job_id:
             update_provider_last_discovery(db, config_key, job_id)
     except Exception:
-        pass  # config saved even if dispatch fails — user can retry via POST /{id}/discover
+        # config saved even if dispatch fails — user can retry via POST /{id}/discover
+        logger.exception("Discovery dispatch failed [provider=%s key=%s]", provider, config_key)
     return job_id
 
 

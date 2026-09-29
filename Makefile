@@ -170,6 +170,10 @@ fe-build: ## Build frontend for production
 	cd frontend && npm run build
 
 # ── Combined ──────────────────────────────────────────────────────────────────
+.PHONY: migrate
+migrate: ## Run schema migrations for all registered tenants (US-00.12)
+	cd backend && .venv/bin/python scripts/run_migrations.py
+
 .PHONY: test-all
 test-all: test fe-test ## Run all tests across backend and frontend
 

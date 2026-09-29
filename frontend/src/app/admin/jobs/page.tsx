@@ -5,8 +5,8 @@ import { RefreshCw } from "lucide-react";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { JobDetailPanel } from "@/components/admin/JobDetailPanel";
 import { formatDuration, formatTaskName, type Job } from "@/lib/jobFormat";
+import { apiClient, getErrorMessage, type ApiResponse } from "@/lib/api";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function AdminJobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -18,12 +18,10 @@ export default function AdminJobsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/api/v1/admin/jobs`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = await res.json();
-      setJobs(body.data?.items ?? []);
+      const res = await apiClient.get<ApiResponse<{ items: Job[] }>>('/api/v1/admin/jobs');
+      setJobs(res.data.data?.items ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load jobs");
+      setError(getErrorMessage(e, "Failed to load jobs"));
     } finally {
       setLoading(false);
     }

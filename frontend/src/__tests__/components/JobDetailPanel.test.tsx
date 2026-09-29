@@ -2,6 +2,8 @@ import '@testing-library/jest-dom'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
+import axios from 'axios'
+import { apiClient } from '@/lib/api'
 
 import { JobDetailPanel } from '@/components/admin/JobDetailPanel'
 import type { Job, JobDetail } from '@/lib/jobFormat'
@@ -35,11 +37,11 @@ const mockDetail: JobDetail = {
   checks_completed: 42,
 }
 
+// US-14.25: o painel usa apiClient (axios) — mocka o get dele
 function mockFetchOnce(data: JobDetail) {
-  global.fetch = jest.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({ data }),
-  }) as jest.Mock
+  jest.spyOn(apiClient, 'get').mockResolvedValue({
+    data: { data },
+  } as never)
 }
 
 describe('JobDetailPanel', () => {
@@ -72,8 +74,8 @@ describe('JobDetailPanel', () => {
 
     await waitFor(() => expect(screen.getByTestId('job-log-viewer')).toBeInTheDocument())
     expect(screen.getByText(/scan started/)).toBeInTheDocument()
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining(`/api/v1/admin/jobs/${mockJob.job_id}?tenant_id=${mockJob.tenant_id}`)
+    expect(apiClient.get).toHaveBeenCalledWith(
+      `/api/v1/admin/jobs/${mockJob.job_id}?tenant_id=${mockJob.tenant_id}`
     )
   })
 

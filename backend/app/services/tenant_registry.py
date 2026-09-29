@@ -111,14 +111,14 @@ def register_tenant(tenant_id: str, platform_admin: bool = False) -> dict:
         doc = dict(col.get(tenant_id))
 
     # Provisioning mínimo do database (US-06.10: a resolução por request não
-    # cria nada — a criação é toda daqui).
+    # cria nada — a criação é toda daqui) + migrações versionadas (US-00.12).
     client = _client()
     db_name = f"ogum_{tenant_id}"
     if not client.db(SYSTEM_DB_NAME, settings.ARANGO_USER, settings.ARANGO_PASSWORD).has_database(db_name):
         client.db(SYSTEM_DB_NAME, settings.ARANGO_USER, settings.ARANGO_PASSWORD).create_database(db_name)
-        from app.db.init import init_tenant_schema
+    from app.migrations import run_migrations
 
-        init_tenant_schema(client.db(db_name, settings.ARANGO_USER, settings.ARANGO_PASSWORD))
+    run_migrations(client.db(db_name, settings.ARANGO_USER, settings.ARANGO_PASSWORD), tenant_id)
     return doc
 
 

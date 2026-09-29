@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -15,6 +16,8 @@ from app.db.init import init_admin_schema, init_tenant_schema
 from app.models.admin import AdminAuditEntry, JobDetail, JobSummary, QueueDepth, TaskType, WorkerInfo
 from app.workers.celery_app import celery_app
 from app.workers.tasks.cspm_scan import run_cspm_scan
+
+logger = logging.getLogger(__name__)
 
 _KNOWN_QUEUES = ["celery", "default", "discovery", "scanning", "iac"]
 
@@ -352,4 +355,4 @@ def _write_audit_log(
         doc["tenant_id"] = tenant_id
         db.collection("admin_audit_log").insert(doc)
     except Exception:
-        pass
+        logger.debug("admin audit insert skipped", exc_info=True)

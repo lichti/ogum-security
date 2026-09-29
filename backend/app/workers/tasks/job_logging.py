@@ -11,6 +11,8 @@ from typing import Any
 
 _MAX_LOG_LINES = 500
 
+logger = logging.getLogger(__name__)
+
 
 class JobLogHandler(logging.Handler):
     """Buffers formatted log lines in memory; flush_to_db() persists them.
@@ -36,13 +38,15 @@ class JobLogHandler(logging.Handler):
             if len(self._lines) > _MAX_LOG_LINES:
                 self._lines = self._lines[-_MAX_LOG_LINES:]
         except Exception:
-            pass  # a formatting error must never break the task it's observing
+            # a formatting error must never break the task it's observing
+            logger.debug("Log record formatting failed", exc_info=True)
 
     def flush_to_db(self) -> None:
         try:
             self._db.collection(self._collection).update({"_key": self._job_id, "logs": self._lines})
         except Exception:
-            pass  # best-effort — missing logs are a UX gap, not a job failure
+            # best-effort — missing logs are a UX gap, not a job failure
+            logger.debug("Job log flush failed for %s", self._job_id, exc_info=True)
 
 
 class capture_job_logs:  # noqa: N801 - context manager, lowercase name matches usage as `with capture_job_logs(...)`

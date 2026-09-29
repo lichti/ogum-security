@@ -54,6 +54,8 @@ import type {
   ViewScope,
 } from './types'
 
+export type { ApiResponse }
+
 // FastAPI's Query(list[str]) expects repeated bare keys (?k=a&k=b), not axios's
 // default bracket notation (?k[]=a&k[]=b) — a custom serializer keeps array
 // filters (providers, regions, etc.) working across the whole client.
@@ -77,6 +79,18 @@ export const apiClient = axios.create({
   },
   paramsSerializer: serializeParams,
 })
+
+// US-14.25 — extração única de mensagem de erro (antes duplicada à mão em
+// ConnectWizard e EditProviderModal).
+export function getErrorMessage(error: unknown, fallback = 'Request failed'): string {
+  if (axios.isAxiosError(error)) {
+    const detail = (error.response?.data as { detail?: unknown } | undefined)?.detail
+    if (typeof detail === 'string' && detail) return detail
+    if (error.message) return error.message
+  }
+  if (error instanceof Error && error.message) return error.message
+  return fallback
+}
 
 // ── Interim tenant API token (US-06.09) ──────────────────────────────────────
 // O token é emitido pelo PlatformAdmin (`PUT /api/v1/admin/tenants/{id}/api-token`

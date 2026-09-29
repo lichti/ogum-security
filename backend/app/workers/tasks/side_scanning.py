@@ -64,7 +64,12 @@ from app.workers.tasks._job_tracking import (
     fail_discovery_job,
     update_job_to_running,
 )
-from app.workers.tasks.cloud_utils import _get_aws_session, _get_tenant_db, _upsert, upsert_finding
+from app.workers.tasks.cloud_utils import (
+    _get_aws_session,
+    _get_tenant_db,
+    _upsert,
+    upsert_finding_with_edge,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -123,25 +128,6 @@ def _trivy_severity(trivy_sev: str, cvss_score: float) -> SeverityLevel:
 
 
 # ─── Finding persistence ──────────────────────────────────────────────────────
-
-
-def _upsert_finding(db: Any, finding: Finding) -> None:
-    """Upsert a side-scanning finding and create HAS_FINDING edge from resource."""
-    upsert_finding(db, finding)
-    finding_key = finding.arango_key()
-    raw_edge_key = f"{finding.resource_id}__{finding_key}"
-    edge_key = raw_edge_key.replace("/", "_").replace(":", "_")[:240]
-    edge_doc = {
-        "_key": edge_key,
-        "_from": f"resources/{finding.resource_id}",
-        "_to": f"findings/{finding_key}",
-        "tenant_id": finding.tenant_id,
-    }
-    try:
-        if not db.collection("HAS_FINDING").has(edge_doc["_key"]):
-            db.collection("HAS_FINDING").insert(edge_doc)
-    except Exception:
-        pass  # edge already exists — acceptable
 
 
 # ─── Finding normalisation ────────────────────────────────────────────────────
@@ -422,7 +408,7 @@ def _persist_sbom(
         if not db.collection("HAS_SBOM").has(edge_doc["_key"]):
             db.collection("HAS_SBOM").insert(edge_doc)
     except Exception:
-        pass  # edge already exists
+        logger.debug("HAS_SBOM edge skipped (exists or resource gone) for %s", edge_doc["_key"])
 
 
 # ─── Sprint 2 tasks ───────────────────────────────────────────────────────────
@@ -615,7 +601,7 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
 
     for f in findings:
         try:
-            _upsert_finding(db, f)
+            upsert_finding_with_edge(db, f)
         except Exception:
             logger.exception("Failed to persist finding %s", f.check_id)
 
@@ -755,7 +741,7 @@ def scan_lambda_function(  # noqa: PLR0913
 
     for f in findings:
         try:
-            _upsert_finding(db, f)
+            upsert_finding_with_edge(db, f)
         except Exception:
             logger.exception("Failed to persist Lambda finding %s", f.check_id)
 
@@ -864,7 +850,7 @@ def rescan_sboms(
                         },
                     )
                     try:
-                        _upsert_finding(db, finding)
+                        upsert_finding_with_edge(db, finding)
                         new_findings += 1
                     except Exception:
                         logger.exception("Failed to persist rescan finding %s", cve_id)
@@ -1015,7 +1001,7 @@ def scan_k8s_container(  # noqa: PLR0913
 
     for f in findings:
         try:
-            _upsert_finding(db, f)
+            upsert_finding_with_edge(db, f)
         except Exception:
             logger.exception("Failed to persist K8s finding %s", f.check_id)
 
@@ -1237,7 +1223,7 @@ def scan_container_image(  # noqa: PLR0913
 
     for f in findings:
         try:
-            _upsert_finding(db, f)
+            upsert_finding_with_edge(db, f)
         except Exception:
             logger.exception("Failed to persist registry finding %s", f.check_id)
 

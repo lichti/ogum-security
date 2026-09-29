@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { getErrorMessage } from "@/lib/api";
 import { CheckCircle, ChevronRight, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { providersApi } from '@/lib/api'
 import type { ProviderType, ProviderRegisterRequest } from '@/lib/types'
@@ -152,12 +153,7 @@ export function ConnectWizard({ onComplete, onCancel }: ConnectWizardProps) {
       setJobId(resp.data.data.discovery_job_id ?? null)
       setStep('done')
     } catch (e: unknown) {
-      const msg =
-        e instanceof Error
-          ? e.message
-          : (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-            'Connection failed. Please check your settings.'
-      setError(msg)
+      setError(getErrorMessage(e, 'Connection failed. Please check your settings.'))
       setStep('configure')
     }
   }
