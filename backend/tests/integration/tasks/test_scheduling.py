@@ -100,9 +100,7 @@ class TestTriggerAllCspmScans:
         mock_client.db.return_value = mock_sys_db
         # patch no binding do módulo sob teste (from-import é vinculado no
         # carregamento — patchar app.db.client não afeta scheduling)
-        mocker.patch(
-            "app.workers.tasks.scheduling.get_arango_client", return_value=mock_client
-        )
+        mocker.patch("app.workers.tasks.scheduling.get_arango_client", return_value=mock_client)
         return mock_client
 
     def test_dispatches_cspm_for_enabled_aws_provider(self, mocker) -> None:

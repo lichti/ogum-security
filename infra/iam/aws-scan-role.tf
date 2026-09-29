@@ -48,7 +48,7 @@ data "aws_iam_policy" "view_only_access" {
 # Nota: este módulo é aplicado NA CONTA DO CLIENTE apontando trusted para a
 # conta da Ogum — ao aplicar, configure o provider para a conta do cliente.
 resource "aws_iam_role" "ogum_scanner" {
-  name               = var.role_name
+  name                 = var.role_name
   max_session_duration = 3600
 
   assume_role_policy = jsonencode({
