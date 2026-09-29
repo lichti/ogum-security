@@ -37,6 +37,8 @@ class ProviderConfig(BaseModel):
     last_health_check_at: str | None = None
     last_health_result: str | None = None
     created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    # US-03.17: valor one-time anexado só no retorno do registro (não persiste)
+    scanner_token_once: str | None = None
 
 
 class ProviderRegisterRequest(BaseModel):
@@ -84,6 +86,8 @@ class ProviderRegisterResponse(BaseModel):
     provider_id: str
     discovery_job_id: str | None = None
     message: str
+    # US-03.17: valor do scanner_token exibido UMA única vez (só no registro)
+    scanner_token: str | None = None
 
 
 class DiscoverRequest(BaseModel):

@@ -91,12 +91,18 @@ class TestTriggerAllCspmScans:
     """
 
     def _mock_arango(self, mocker, db_names: list[str]):
-        """Return a mock ArangoClient whose sys_db.databases() yields db_names."""
+        """Mock do singleton get_arango_client (US-00.11): sys_db.databases()
+        yields db_names. O alvo é o módulo do singleton — o lazy import dentro
+        do task resolve pelo provider_service/app.db.client em tempo de chamada."""
         mock_client = mocker.MagicMock()
         mock_sys_db = mocker.MagicMock()
         mock_sys_db.databases.return_value = db_names
         mock_client.db.return_value = mock_sys_db
-        mocker.patch("arango.ArangoClient", return_value=mock_client)
+        # patch no binding do módulo sob teste (from-import é vinculado no
+        # carregamento — patchar app.db.client não afeta scheduling)
+        mocker.patch(
+            "app.workers.tasks.scheduling.get_arango_client", return_value=mock_client
+        )
         return mock_client
 
     def test_dispatches_cspm_for_enabled_aws_provider(self, mocker) -> None:

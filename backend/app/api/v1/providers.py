@@ -6,6 +6,7 @@ from arango.database import StandardDatabase
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.api.v1.inventory import get_tenant_db
+from app.core.deps import require_platform_admin
 from app.models.api_responses import ApiResponse
 from app.models.provider import (
     DiscoverRequest,
@@ -22,6 +23,7 @@ from app.services.provider_service import (
     get_provider,
     list_providers,
     register_provider,
+    rotate_scanner_token,
     update_provider,
     update_provider_last_discovery,
 )
@@ -158,6 +160,7 @@ async def register_provider_endpoint(
             provider_id=config.key,
             discovery_job_id=job_id,
             message=f"Provider registered. Discovery job {queued} — check /api/v1/inventory for resources.",
+            scanner_token=getattr(config, "scanner_token_once", None),
         )
     )
 
@@ -319,6 +322,26 @@ async def test_connection_endpoint(
 # ──────────────────────────────────────────────────────────────────────────────
 # DELETE /api/v1/providers/{provider_id}
 # ──────────────────────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/{provider_id}/rotate-scanner-token",
+    response_model=ApiResponse[dict],
+    dependencies=[Depends(require_platform_admin)],
+)
+async def rotate_scanner_token_endpoint(
+    provider_id: str,
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> ApiResponse[dict]:
+    """US-03.17: rotaciona o scanner_token do provider (K8s DaemonSet/ECR).
+
+    O novo valor é retornado **uma única vez**; o anterior deixa de autenticar
+    imediatamente (hash substituído)."""
+    try:
+        token = rotate_scanner_token(db, provider_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ApiResponse(data={"provider_id": provider_id, "scanner_token": token})
 
 
 @router.delete("/{provider_id}", response_model=ApiResponse[dict[str, Any]])

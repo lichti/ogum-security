@@ -303,6 +303,71 @@ def run_cspm_scan(
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
 
+    # US-01.20 — lock distribuído por (tenant, provider): scans agendado e
+    # manual do mesmo provider nunca rodam em paralelo. TTL cobre worker morto.
+    from redis import Redis
+
+    from app.core.config import settings as _settings
+
+    lock_key = f"ogum:cspm-lock:{tenant_id}:{provider_id}"
+    lock = Redis.from_url(_settings.REDIS_URL, socket_connect_timeout=2, socket_timeout=2).set(
+        lock_key, "1", nx=True, ex=_CSPM_LOCK_TTL_SECONDS
+    )
+    if not lock:
+        skipped_job_id = str(uuid.uuid4())
+        skipped = ScanJob(
+            job_id=skipped_job_id,
+            tenant_id=tenant_id,
+            provider_id=provider_id,
+            provider=provider,
+            task_name=f"cspm_scan/{provider}",
+            frameworks=frameworks or [],
+            regions=regions or [],
+            status=ScanJobStatus.SKIPPED,
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+            raw_output={"skip_reason": "another scan already running for this provider"},
+        )
+        db.collection("scan_jobs").insert(skipped.to_arango_doc())
+        logger.warning(
+            "CSPM scan skipped — lock held [tenant=%s provider=%s job=%s]",
+            tenant_id,
+            provider_id,
+            skipped_job_id,
+        )
+        return {
+            "job_id": skipped_job_id,
+            "tenant_id": tenant_id,
+            "provider": provider,
+            "status": "skipped",
+            "skip_reason": "scan already running for this provider",
+        }
+
+    try:
+        return _run_cspm_scan_locked(self, tenant_id, provider_id, provider, frameworks, account_id, regions)
+    finally:
+        try:
+            Redis.from_url(_settings.REDIS_URL).delete(lock_key)
+        except Exception:
+            logger.warning("Failed to release CSPM lock %s", lock_key, exc_info=True)
+
+
+_CSPM_LOCK_TTL_SECONDS = 7200
+
+
+def _run_cspm_scan_locked(
+    self: Any,
+    tenant_id: str,
+    provider_id: str,
+    provider: str,
+    frameworks: list[str] | None,
+    account_id: str,
+    regions: list[str] | None,
+) -> dict[str, Any]:
+    """Corpo original do run_cspm_scan sob o lock da US-01.20."""
+    db = _get_tenant_db(tenant_id)
+    init_tenant_schema(db)
+
     # Credenciais resolvidas no worker (US-06.11/12) — nunca mais via payload
     # do broker. Vault indisponível → segredos ausentes (logado) e o scan
     # falha na camada cloud com erro claro; sem fallback para banco.

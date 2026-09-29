@@ -22,12 +22,13 @@ from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from typing import Any
 
-from arango import ArangoClient
+from arango import ArangoClient  # noqa: F401 — anotação de tipo
 from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.rbac import Role
 from app.core.security import create_access_token
+from app.db.client import get_arango_client
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ class ApiTokenIssued(BaseModel):
 
 @lru_cache(maxsize=1)
 def _client() -> ArangoClient:
-    return ArangoClient(hosts=f"http://{settings.ARANGO_HOST}:{settings.ARANGO_PORT}")
+    return get_arango_client()
 
 
 def _registry_collection() -> Any:

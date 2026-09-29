@@ -6,10 +6,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 import redis as redis_lib
-from arango import ArangoClient
+from arango import ArangoClient  # noqa: F401 — anotação de tipo
 from arango.database import StandardDatabase
 
 from app.core.config import settings
+from app.db.client import get_arango_client
 from app.db.init import init_admin_schema, init_tenant_schema
 from app.models.admin import AdminAuditEntry, JobDetail, JobSummary, QueueDepth, TaskType, WorkerInfo
 from app.workers.celery_app import celery_app
@@ -22,7 +23,7 @@ _KNOWN_QUEUES = ["celery", "default", "discovery", "scanning", "iac"]
 
 
 def _arango_client() -> ArangoClient:
-    return ArangoClient(hosts=f"http://{settings.ARANGO_HOST}:{settings.ARANGO_PORT}")
+    return get_arango_client()
 
 
 def get_system_db() -> StandardDatabase:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from typing import Any
 
 from arango.database import StandardDatabase
@@ -21,22 +22,39 @@ router = APIRouter(prefix="/api/v1/side-scans", tags=["side-scans"])
 
 
 def _validate_scanner_token(db: StandardDatabase, tenant_id: str, token: str) -> None:
-    """Raise 401 if the scanner token does not match tenant_config."""
+    """US-03.17: valida o token contra o hash persistido no provider.
+
+    O token é gerado no registro/rotação (`rotate_scanner_token`) e apenas o
+    hash SHA-256 fica no documento — busca por hash (comparação em tempo
+    constante sobre o resumo, sem acoplamento ao tenant no cabeçalho)."""
+    from app.services.provider_service import hash_scanner_token
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         cursor = db.aql.execute(
-            "FOR c IN tenant_config FILTER c.tenant_id == @tid LIMIT 1 RETURN c",
-            bind_vars={"tid": tenant_id},
+            "FOR c IN tenant_config FILTER c.scanner_token_hash == @hash LIMIT 1 RETURN 1",
+            bind_vars={"hash": hash_scanner_token(token)},
         )
-        docs = list(cursor)
+        matched = len(list(cursor)) > 0
     except Exception:
+        matched = False
+    if not matched:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    if not docs:
-        raise HTTPException(status_code=401, detail="Unauthorized")
 
-    expected: str | None = docs[0].get("scanner_token")
-    if not expected or expected != token:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+_JOB_ACTIVE_OR_TERMINAL = {"queued", "running", "completed", "failed"}
+
+
+def _job_already_tracked(db: StandardDatabase, job_id: str) -> bool:
+    """True se o job_id já existe em estado ativo ou terminal (US-03.16).
+
+    Reentrega de webhook (mesmo job_id) → 202 sem duplicar trabalho."""
+    try:
+        doc = db.collection("scan_jobs").get(job_id)
+        return bool(doc and doc.get("status") in _JOB_ACTIVE_OR_TERMINAL)
+    except Exception:
+        return False
 
 
 # ─── K8s DaemonSet webhook ───────────────────────────────────────────────────
@@ -66,7 +84,11 @@ async def receive_k8s_scan_trigger(
     """
     _validate_scanner_token(db, x_ogum_tenant_id, x_ogum_token)
 
-    job_id = payload.job_id or f"k8s-{payload.pod_namespace}-{payload.pod_name}-{int(time.time())}"
+    job_id = payload.job_id or f"k8s-{payload.pod_namespace}-{payload.pod_name}-{uuid.uuid4().hex}"
+
+    # Idempotência (US-03.16): reentrega com job_id conhecido não re-enfileira
+    if _job_already_tracked(db, job_id):
+        return {"job_id": job_id, "status": "duplicate-skipped"}
 
     job_doc = {
         "_key": job_id,
@@ -123,7 +145,11 @@ async def receive_ecr_push_event(
     """Receive an ECR push event, enqueue scan_container_image. Returns 202 Accepted."""
     _validate_scanner_token(db, x_ogum_tenant_id, x_ogum_token)
 
-    job_id = payload.job_id or f"ecr-{payload.registry_id}-{int(time.time())}"
+    job_id = payload.job_id or f"ecr-{payload.registry_id}-{uuid.uuid4().hex}"
+
+    # Idempotência (US-03.16): reentrega com job_id conhecido não re-enfileira
+    if _job_already_tracked(db, job_id):
+        return {"job_id": job_id, "status": "duplicate-skipped"}
 
     job_doc = {
         "_key": job_id,

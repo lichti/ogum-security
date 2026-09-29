@@ -11,6 +11,7 @@ callers stay consistent.
 from __future__ import annotations
 
 import time
+import uuid
 from typing import Any
 
 from arango.database import StandardDatabase
@@ -92,7 +93,8 @@ def enqueue_side_scan(
     role_arn = provider.role_arn if provider else None
     external_id = provider.external_id if provider else None
 
-    job_id = f"{resource_type}-{resource_key}-{int(time.time())}"
+    # UUID: timestamps colidem em disparos no mesmo segundo (US-03.16)
+    job_id = f"{resource_type}-{uuid.uuid4().hex}"
 
     if resource_type == "ec2_instance":
         instance_id = _extract_instance_id(resource_doc)
