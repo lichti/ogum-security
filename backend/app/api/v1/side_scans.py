@@ -55,7 +55,7 @@ def _job_already_tracked(db: StandardDatabase, job_id: str) -> bool:
     Reentrega de webhook (mesmo job_id) → 202 sem duplicar trabalho."""
     try:
         doc = db.collection("scan_jobs").get(job_id)
-        return bool(doc and doc.get("status") in _JOB_ACTIVE_OR_TERMINAL)
+        return bool(doc and str(doc.get("status") or "") in _JOB_ACTIVE_OR_TERMINAL)
     except Exception:
         return False
 

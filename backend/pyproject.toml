@@ -4,7 +4,6 @@ version = "0.2.0"
 description = "Ogum Security — Open CNAPP Backend"
 authors = ["Ogum Security Contributors"]
 license = "MIT"
-readme = "README.md"
 packages = [{ include = "app" }]
 
 [tool.poetry.dependencies]

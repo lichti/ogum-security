@@ -454,7 +454,8 @@ jobs:
 
       - name: DaemonSet manifest validation
         run: |
-          kubectl apply --dry-run=client --validate=false -f infra/k8s/ogum-scanner-daemonset.yaml
+          # create --dry-run=client: parse puro, sem descoberta de cluster
+          kubectl create --dry-run=client --validate=false -f infra/k8s/ogum-scanner-daemonset.yaml
 
       - name: Checkov sobre a própria IaC (US-13.11 — warning até o próximo ciclo)
         run: |
