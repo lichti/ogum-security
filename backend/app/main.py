@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,7 +23,16 @@ from app.api.v1 import (
 from app.api.v1.admin import jobs as admin_jobs
 from app.api.v1.admin import tenants as admin_tenants
 from app.core.config import settings
-from app.core.middleware import TenantIdentityMiddleware
+from app.core.middleware import TenantIdentityMiddleware, TenantRateLimitMiddleware
+from app.core.startup import validate_production_config
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if settings.APP_ENV == "production":
+        validate_production_config()
+    yield
+
 
 app = FastAPI(
     title="Ogum Security API",
@@ -29,15 +40,21 @@ app = FastAPI(
     version="0.2.0",
     docs_url="/docs" if settings.APP_ENV != "production" else None,
     redoc_url="/redoc" if settings.APP_ENV != "production" else None,
+    lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
+    # Credenciais apenas com origens explícitas (US-06.10): "*" ou lista vazia
+    # degrada para allow_credentials=False.
+    allow_credentials=bool(settings.CORS_ORIGINS) and "*" not in settings.CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# US-06.13 — rate limiting por tenant; adicionado ANTES do middleware de
+# identidade para que este (mais externo) reescreva X-Tenant-ID primeiro.
+app.add_middleware(TenantRateLimitMiddleware)
 # US-06.09 — pass-through quando AUTH_ENABLED=false (dev); com true, exige
 # Bearer em toda rota (menos /health, docs e webhooks de scanner) e resolve
 # X-Tenant-ID/X-User-Id a partir do token verificado.

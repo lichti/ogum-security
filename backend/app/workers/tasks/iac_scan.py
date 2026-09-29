@@ -16,6 +16,7 @@ from urllib.parse import urlparse, urlunparse
 from app.db.init import init_tenant_schema
 from app.models.finding import ScanJob, ScanJobStatus
 from app.services.checkov_service import CheckovService
+from app.services.iac_guard import IacScanRejectedError, confine_scan_path, validate_repo_url
 from app.workers.celery_app import celery_app
 from app.workers.tasks.cloud_utils import _get_tenant_db
 from app.workers.tasks.cspm_scan import _update_job, _upsert_finding
@@ -77,9 +78,16 @@ def run_iac_scan(
         tmpdir = tempfile.mkdtemp(prefix="ogum_iac_")
         clone_dest = Path(tmpdir) / "repo"
 
+        # Defesa em profundidade (US-01.19): valida de novo aqui — a task roda
+        # fora do perímetro da API; clone de host não autorizado falha.
+        validate_repo_url(repo_url)
+
         _clone_repo(repo_url, branch, clone_dest, repo_token)
 
-        scan_dir = clone_dest / path
+        try:
+            scan_dir = confine_scan_path(clone_dest, path)
+        except IacScanRejectedError as exc:
+            raise FileNotFoundError(str(exc)) from exc
         if not scan_dir.exists():
             raise FileNotFoundError(f"Scan path '{path}' not found in repository")
 
