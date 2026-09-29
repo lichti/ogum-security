@@ -17,6 +17,8 @@ RUN npm run build
 # ── Stage 2: runtime ─────────────────────────────────────────────────────────
 FROM node:20-alpine
 
+RUN npm install -g npm@11
+
 WORKDIR /app
 
 ENV NODE_ENV=production \
