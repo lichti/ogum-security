@@ -2937,6 +2937,17 @@
             ],
             "title": "Role Arn"
           },
+          "scanner_token_once": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scanner Token Once"
+          },
           "status": {
             "default": "pending",
             "enum": [
@@ -3258,6 +3269,17 @@
           "provider_id": {
             "title": "Provider Id",
             "type": "string"
+          },
+          "scanner_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scanner Token"
           }
         },
         "required": [
@@ -4341,7 +4363,8 @@
           "queued",
           "running",
           "completed",
-          "failed"
+          "failed",
+          "skipped"
         ],
         "title": "ScanJobStatus",
         "type": "string"
@@ -4690,7 +4713,7 @@
   "info": {
     "description": "Open CNAPP \u2014 Built for Everyone",
     "title": "Ogum Security API",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8508,6 +8531,63 @@
           }
         },
         "summary": "Provider Health Endpoint",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/v1/providers/{provider_id}/rotate-scanner-token": {
+      "post": {
+        "description": "US-03.17: rotaciona o scanner_token do provider (K8s DaemonSet/ECR).\n\nO novo valor \u00e9 retornado **uma \u00fanica vez**; o anterior deixa de autenticar\nimediatamente (hash substitu\u00eddo).",
+        "operationId": "rotate_scanner_token_endpoint_api_v1_providers__provider_id__rotate_scanner_token_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_dict_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rotate Scanner Token Endpoint",
         "tags": [
           "providers"
         ]

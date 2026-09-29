@@ -37,7 +37,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="Ogum Security API",
     description="Open CNAPP — Built for Everyone",
-    version="0.2.0",
+    version="0.3.0",
     docs_url="/docs" if settings.APP_ENV != "production" else None,
     redoc_url="/redoc" if settings.APP_ENV != "production" else None,
     lifespan=lifespan,
@@ -63,7 +63,7 @@ app.add_middleware(TenantIdentityMiddleware)
 
 @app.get("/health", tags=["system"])
 async def health() -> dict:
-    return {"status": "ok", "version": "0.2.0"}
+    return {"status": "ok", "version": "0.3.0"}
 
 
 app.include_router(inventory.router)
