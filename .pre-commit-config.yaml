@@ -1,0 +1,7 @@
+# US-13.11 — gitleaks no pre-commit (espelha o job secrets-scan do CI).
+# Ative com: pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.3
+    hooks:
+      - id: gitleaks

@@ -23,15 +23,21 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Harden Runner (US-13.04 — egress audit)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
         with:
           driver: docker-container
 
       - name: Cache Docker layers
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-${{ hashFiles('docker/**', 'backend/pyproject.toml', 'frontend/package-lock.json') }}
@@ -49,13 +55,37 @@ jobs:
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache 2>/dev/null || true
 
+      - name: "Trivy image scan — backend (US-13.11: CRITICAL bloqueia)"
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
+        with:
+          image-ref: ogum-security-backend:latest
+          format: table
+          severity: CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Trivy image scan — frontend
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
+        with:
+          image-ref: ogum-security-frontend:latest
+          format: table
+          severity: CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
   backend-lint:
     name: Backend — Lint & Type Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-python@v5
+      - name: Harden Runner (US-13.04 — egress audit)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: "pip"
@@ -70,7 +100,7 @@ jobs:
 
       - name: Cache Poetry virtualenv
         id: venv-cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: backend/.venv
           key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml', 'backend/poetry.lock') }}
@@ -98,9 +128,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: backend-lint
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-python@v5
+      - name: Harden Runner (US-13.04 — egress audit)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: "pip"
@@ -115,7 +151,7 @@ jobs:
 
       - name: Cache Poetry virtualenv
         id: venv-cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: backend/.venv
           key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml', 'backend/poetry.lock') }}
@@ -128,7 +164,9 @@ jobs:
 
       - name: Unit tests
         working-directory: backend
-        run: poetry run pytest -m unit --cov=app --cov-report=term-missing --cov-fail-under=0
+        # US-13.10: piso honesto de 60% no unit (integration herda 80 do pyproject;
+        # plano de 60 → 80 documentado no CHANGELOG)
+        run: poetry run pytest -m unit --cov=app --cov-report=term-missing --cov-fail-under=60
         env:
           ENVIRONMENT: test
 
@@ -160,16 +198,17 @@ jobs:
           - 8200:8200
         options: >-
           --cap-add IPC_LOCK
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-python@v5
+      - name: Harden Runner (US-13.04 — egress audit)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: "pip"
@@ -184,7 +223,7 @@ jobs:
 
       - name: Cache Poetry virtualenv
         id: venv-cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: backend/.venv
           key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml', 'backend/poetry.lock') }}
@@ -218,7 +257,7 @@ jobs:
           ENVIRONMENT: test
 
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-report
           path: backend/coverage.xml
@@ -228,9 +267,15 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-python@v5
+      - name: Harden Runner (US-13.04 — egress audit)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: "pip"
@@ -245,7 +290,7 @@ jobs:
 
       - name: Cache Poetry virtualenv
         id: venv-cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: backend/.venv
           key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml', 'backend/poetry.lock') }}
@@ -265,9 +310,15 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-python@v5
+      - name: Harden Runner (US-13.04 — egress audit)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: "pip"
@@ -282,7 +333,7 @@ jobs:
 
       - name: Cache Poetry virtualenv
         id: venv-cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: backend/.venv
           key: venv-${{ runner.os }}-py3.12-${{ hashFiles('backend/pyproject.toml', 'backend/poetry.lock') }}
@@ -296,7 +347,8 @@ jobs:
       - name: Audit dependencies
         working-directory: backend
         run: |
-          pip install pip-audit
+          # US-13.10: a ferramenta de audit é auditável — versão pinada
+          pip install pip-audit==2.7.3
           # Ignored vulnerabilities (tracked in chore/security-upgrades):
           # CVE-2026-3219, CVE-2026-6357, PYSEC-2026-196, PYSEC-2026-3721 — affect pip itself in the poetry venv, not a project dep
           # GHSA-537c-gmf6-5ccf — cryptography transitive dep; no fix path without breaking changes
@@ -315,9 +367,15 @@ jobs:
     name: Frontend — Lint, Type Check & Component Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - name: Harden Runner (US-13.04 — egress audit)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
@@ -333,9 +391,65 @@ jobs:
 
       - name: Component tests (Jest)
         working-directory: frontend
-        run: npm run test -- --coverage --passWithNoTests
+        run: npm run test -- --coverage
 
       - name: Type check & build
         working-directory: frontend
         run: npm run build
 
+
+  secrets-scan:
+    name: Security — Secret Scanning (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Harden Runner (US-13.04 — egress audit)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+
+      - name: Gitleaks (US-13.11)
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  iac-validation:
+    name: IaC — Terraform/CFN/K8s Validation & Checkov
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Harden Runner (US-13.04 — egress audit)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+
+      - name: CloudFormation lint (US-13.01)
+        run: |
+          pip install cfn-lint==1.22.1
+          cfn-lint infra/iam/*.cfn.yml
+
+      - name: Terraform fmt & validate (US-13.01)
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+
+      - name: Terraform validate
+        working-directory: infra/iam
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false
+          terraform validate
+
+      - name: Kubectl client dry-run (US-13.11 — pendência do Epic 03 Sprint 3)
+        uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4
+
+      - name: DaemonSet manifest validation
+        run: |
+          kubectl apply --dry-run=client --validate=false -f infra/k8s/ogum-scanner-daemonset.yaml
+
+      - name: Checkov sobre a própria IaC (US-13.11 — warning até o próximo ciclo)
+        run: |
+          pip install checkov==3.2.373
+          checkov -d infra/ --framework terraform,cloudformation,kubernetes --soft-fail --quiet
