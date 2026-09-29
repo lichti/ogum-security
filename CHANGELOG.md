@@ -13,7 +13,7 @@ Commit types that trigger version bumps:
 
 ---
 
-## [Unreleased]
+## [0.3.0] - 2026-09-09
 
 ### Fixed
 
