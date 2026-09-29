@@ -56,19 +56,22 @@ jobs:
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache 2>/dev/null || true
 
       # US-13.11 — docker run da imagem trivy pinada (o trivy-action 0.28
-      # está quebrado upstream: delega a setup-trivy@v0.2.1, tag inexistente)
+      # está quebrado upstream: delega a setup-trivy@v0.2.1, tag inexistente).
+      # Scanners: vuln (CVE bloqueia). Segredos ficam no gitleaks (fonte,
+      # blocking) — o scanner de secrets aponta falso positivo no texto de
+      # exemplo do ConnectWizard embutido nos bundles .next.
       - name: "Trivy image scan — backend (US-13.11: CRITICAL bloqueia)"
         run: >-
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
           aquasec/trivy@sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9
-          image --exit-code 1 --severity CRITICAL --ignore-unfixed
+          image --scanners vuln --exit-code 1 --severity CRITICAL --ignore-unfixed
           ogum-security-backend:latest
 
       - name: Trivy image scan — frontend
         run: >-
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
           aquasec/trivy@sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9
-          image --exit-code 1 --severity CRITICAL --ignore-unfixed
+          image --scanners vuln --exit-code 1 --severity CRITICAL --ignore-unfixed
           ogum-security-frontend:latest
 
   backend-lint:
