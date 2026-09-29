@@ -61,6 +61,23 @@ def db_tenant_a(sys_db, arango_client: ArangoClient):
         sys_db.delete_database(_DB_NAME_A)
 
 
+@pytest.fixture(scope="session")
+def _registered_test_tenants(sys_db):
+    """US-06.10: o resolver estrito exige registro em `_system.tenants`.
+    Registra (idempotente) os tenants usados pela suíte — inclui "dev", usado
+    por endpoints de seed. Sem teardown: registro é inofensivo e CI é efêmero."""
+    from app.services import tenant_registry
+
+    registered = []
+    for tid in (TEST_TENANT_A, TEST_TENANT_B, "dev"):
+        try:
+            tenant_registry.register_tenant(tid)
+            registered.append(tid)
+        except Exception:
+            pass  # suíte de unidade sem Arango: fixture não é usada lá
+    yield registered
+
+
 @pytest.fixture
 def db_tenant_b(sys_db, arango_client: ArangoClient):
     """Clean ArangoDB database for Tenant B. Dropped after each test."""

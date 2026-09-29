@@ -41,13 +41,22 @@ class Settings(BaseSettings):
     # Dev / seed
     DEV_MODE: bool = False
 
-    # Auth (Epic 06 — Sprint 1 fundação + US-06.09 gate interim)
-    AUTH_ENABLED: bool = False
+    # Auth (Epic 06 — fundação + gate interim US-06.09; ADR-016: default true
+    # desde o fechamento da Wave 1; dev desativa via env ou `AUTH_ENABLED=false`)
+    AUTH_ENABLED: bool = True
     INTERIM_TOKEN_EXPIRE_DAYS: int = 30
     JWT_ALGORITHM: str = "HS256"  # RS256 (tokens de IdP) chega com a US-06.01
     JWT_SECRET_KEY: str = ""  # fallback: APP_SECRET_KEY
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Rate limiting por tenant (US-06.13 — security.md §3.1: 100 req/s padrão)
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_PER_SECOND: int = 100
+    RATE_LIMIT_WINDOW_SECONDS: int = 1
+
+    # IaC scan — allowlist de hosts do git clone (US-01.19, anti-SSRF)
+    IAC_ALLOWED_HOSTS: list[str] = ["github.com", "gitlab.com", "bitbucket.org"]
 
 
 settings = Settings()

@@ -35,13 +35,16 @@ def auth_enabled(monkeypatch):
 
 @pytest.fixture
 def clean_registry(sys_db):
-    """Remove os registros de token e o database de tenant criados pelos testes
-    (os das fixtures db_tenant_a/b são limpos pelas próprias fixtures)."""
+    """Zera os tokens dos tenants de teste e restaura o estado "registrado sem
+    token" (a allowlist do resolver estrito precisa dos registros vivos —
+    US-06.10). Databases criados pelos testes são removidos."""
     yield
     if sys_db.has_collection(tenant_registry.TENANTS_COLLECTION):
         col = sys_db.collection(tenant_registry.TENANTS_COLLECTION)
-        for tenant_id in (TEST_TENANT_A, TEST_TENANT_B, "dev"):
+        for tenant_id in (TEST_TENANT_A, TEST_TENANT_B):
             col.delete(tenant_id, ignore_missing=True)
+        for tenant_id in (TEST_TENANT_A, TEST_TENANT_B):
+            tenant_registry.register_tenant(tenant_id)
     sys_db.delete_database(f"ogum_{TEST_TENANT_B}", ignore_missing=True)
 
 

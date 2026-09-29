@@ -30,6 +30,46 @@ _WRITE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# US-02.13 (emenda do plano v1): allowlist de coleções consultáveis. O
+# console nunca toca `tenant_config` (antiga morada das credenciais em
+# plaintext — hoje referências ao Vault, ainda assim fora do alcance do
+# console) nem `audit_log`. Query com qualquer coleção fora da lista → 422.
+_AQL_ALLOWED_COLLECTIONS = frozenset(
+    {
+        # vértices de dados
+        "resources",
+        "identities",
+        "vulnerabilities",
+        "network_endpoints",
+        "data_assets",
+        "attack_paths",
+        "findings",
+        "scan_jobs",
+        "saved_queries",
+        "sboms",
+        "sarif_reports",
+        "compliance_score_snapshots",
+        "packages",
+        # arestas
+        "EXPOSED_TO",
+        "ASSUMES_ROLE",
+        "CONTAINS_BUG",
+        "STORES_SENSITIVE_DATA",
+        "ROUTES_TRAFFIC",
+        "BELONGS_TO",
+        "ATTACHED_TO",
+        "MEMBER_OF",
+        "STS_ASSUMEROLE_ALLOW",
+        "ATTACHED_POLICY",
+        "HAS_FINDING",
+        "HAS_SBOM",
+        "HAS_ACTIVE_SESSION",
+        "IMPLEMENTS",
+        "MAPPED_TO",
+        "ASSUMES",
+    }
+)
+
 _MAX_AQL_RESULT_ROWS = 200
 _MAX_SAVED_QUERIES = 50
 
@@ -39,6 +79,43 @@ def _validate_read_only(aql: str) -> None:
         raise HTTPException(
             status_code=422,
             detail="AQL console is read-only: INSERT/UPDATE/REMOVE/REPLACE/UPSERT are not allowed",
+        )
+
+
+def _validate_collections(db: StandardDatabase, query: str, bind_vars: dict[str, Any]) -> None:
+    """Allowlist de coleções via `explain`: pega nomes literais **e** binds
+    `@coll` de forma precisa (sem parse de AQL na mão). Query inválida → 422
+    (mesmo resultado que a execução daria)."""
+    try:
+        explanation = db.aql.explain(query, bind_vars=bind_vars)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"AQL error: {exc}") from exc
+
+    # python-arango pode devolver o plano direto ou embrulhado em plan/plans.
+    plans: list[dict[str, Any]] = []
+    if isinstance(explanation, dict):
+        if "nodes" in explanation:
+            plans.append(explanation)
+        if explanation.get("plan"):
+            plans.append(explanation["plan"])
+        plans.extend(explanation.get("plans") or [])
+
+    used: set[str] = set()
+    for plan in plans:
+        for node in (plan or {}).get("nodes") or []:
+            name = node.get("collection")
+            if isinstance(name, str):
+                used.add(name)
+            for coll in node.get("collections") or []:
+                coll_name = coll.get("name") if isinstance(coll, dict) else coll
+                if coll_name:
+                    used.add(coll_name)
+
+    denied = used - _AQL_ALLOWED_COLLECTIONS
+    if denied:
+        raise HTTPException(
+            status_code=422,
+            detail=f"AQL console cannot access collection(s): {', '.join(sorted(denied))}",
         )
 
 
@@ -164,6 +241,8 @@ async def execute_aql(
     bind_vars = dict(body.bind_vars)
     if "@tenant_id" in body.query or "tenant_id" in body.bind_vars:
         bind_vars["tenant_id"] = x_tenant_id
+
+    _validate_collections(db, body.query, bind_vars)
 
     start = time.monotonic()
     try:

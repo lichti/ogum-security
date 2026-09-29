@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import PurePosixPath
+
 from arango.database import StandardDatabase
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -9,6 +11,7 @@ from pydantic import BaseModel, Field
 from app.api.v1.inventory import get_tenant_db
 from app.models.api_responses import ApiResponse
 from app.models.finding import ScanJob
+from app.services.iac_guard import IacScanRejectedError, validate_repo_url
 from app.services.scan_service import get_scan_job
 from app.workers.tasks.iac_scan import run_iac_scan
 
@@ -35,8 +38,15 @@ def trigger_iac_scan(
     db: StandardDatabase = Depends(get_tenant_db),
 ) -> ApiResponse[IacScanResponse]:
     """Trigger a Checkov IaC scan on a git repository. Returns a job_id for status polling."""
-    if not body.repo_url.startswith(("https://", "ssh://", "git@")):
-        raise HTTPException(status_code=422, detail="repo_url must be a valid git URL")
+    try:
+        validate_repo_url(body.repo_url)
+    except IacScanRejectedError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # Sanidade barata do path na borda (o confinamento real ao clone dir é no
+    # worker, com o diretório resolvido — defesa em profundidade).
+    candidate = PurePosixPath(body.path or ".")
+    if candidate.is_absolute() or ".." in candidate.parts:
+        raise HTTPException(status_code=422, detail="path must be relative and may not contain '..'")
 
     task = run_iac_scan.delay(
         tenant_id=x_tenant_id,

@@ -17,7 +17,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import re
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from typing import Any
 
 from arango import ArangoClient
@@ -32,6 +34,22 @@ logger = logging.getLogger(__name__)
 SYSTEM_DB_NAME = "_system"
 TENANTS_COLLECTION = "tenants"
 
+# ArangoDB-safe tenant id: charset restrito e tamanho limitado — bloqueia
+# path/injection no nome do database (`ogum_{tenant_id}`). UUID v4 estrito é
+# exigência do provisioning completo (US-06.04); ambientes existentes usam
+# nomes ("dev"), então a validação interim é de formato seguro.
+_TENANT_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
+
+
+class InvalidTenantIdError(ValueError):
+    pass
+
+
+def validate_tenant_id(tenant_id: str) -> str:
+    if not _TENANT_ID_RE.fullmatch(tenant_id or ""):
+        raise InvalidTenantIdError("tenant_id must match ^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
+    return tenant_id
+
 
 class ApiTokenIssued(BaseModel):
     tenant_id: str
@@ -40,12 +58,27 @@ class ApiTokenIssued(BaseModel):
     expires_at: str
 
 
+@lru_cache(maxsize=1)
+def _client() -> ArangoClient:
+    return ArangoClient(hosts=f"http://{settings.ARANGO_HOST}:{settings.ARANGO_PORT}")
+
+
 def _registry_collection() -> Any:
-    client = ArangoClient(hosts=f"http://{settings.ARANGO_HOST}:{settings.ARANGO_PORT}")
-    db = client.db(SYSTEM_DB_NAME, settings.ARANGO_USER, settings.ARANGO_PASSWORD)
+    db = _client().db(SYSTEM_DB_NAME, settings.ARANGO_USER, settings.ARANGO_PASSWORD)
     if not db.has_collection(TENANTS_COLLECTION):
         db.create_collection(TENANTS_COLLECTION)
     return db.collection(TENANTS_COLLECTION)
+
+
+def is_registered(tenant_id: str) -> bool:
+    """Allowlist check do resolver estrito (US-06.10)."""
+    try:
+        return _registry_collection().has(tenant_id)
+    except Exception:
+        # Registro indisponível → não é allowlist: falha fechada (o tenant
+        # deixa de resolver) com o erro logado.
+        logger.warning("tenant registry unavailable — treating as unregistered", exc_info=True)
+        return False
 
 
 def _hash_token(token: str) -> str:
@@ -53,10 +86,12 @@ def _hash_token(token: str) -> str:
 
 
 def register_tenant(tenant_id: str, platform_admin: bool = False) -> dict:
-    """Idempotente: cria o registro do tenant se não existir (US-06.09; a
-    criação do database segue sendo do provisioning da US-06.04)."""
+    """Interim provisioning (US-06.04 é o estado completo): valida o formato,
+    garante o registro em `_system.tenants`, cria o database `ogum_{tenant_id}`
+    se faltar e aplica o schema (idempotente). Idempotente por construction."""
+    validate_tenant_id(tenant_id)
     col = _registry_collection()
-    doc: dict | None = col.get(tenant_id)
+    doc = col.get(tenant_id)
     if doc is None:
         col.insert(
             {
@@ -73,6 +108,16 @@ def register_tenant(tenant_id: str, platform_admin: bool = False) -> dict:
     elif platform_admin and not doc.get("platform_admin"):
         col.update({"_key": tenant_id, "platform_admin": True})
         doc = dict(col.get(tenant_id))
+
+    # Provisioning mínimo do database (US-06.10: a resolução por request não
+    # cria nada — a criação é toda daqui).
+    client = _client()
+    db_name = f"ogum_{tenant_id}"
+    if not client.db(SYSTEM_DB_NAME, settings.ARANGO_USER, settings.ARANGO_PASSWORD).has_database(db_name):
+        client.db(SYSTEM_DB_NAME, settings.ARANGO_USER, settings.ARANGO_PASSWORD).create_database(db_name)
+        from app.db.init import init_tenant_schema
+
+        init_tenant_schema(client.db(db_name, settings.ARANGO_USER, settings.ARANGO_PASSWORD))
     return doc
 
 

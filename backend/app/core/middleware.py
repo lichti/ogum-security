@@ -19,6 +19,8 @@ Pure ASGI (não BaseHTTPMiddleware) para poder mutar `scope["headers"]`.
 from __future__ import annotations
 
 import logging
+import time
+from functools import lru_cache
 
 from starlette.responses import JSONResponse
 
@@ -96,4 +98,109 @@ class TenantIdentityMiddleware:
         await self.app(scope, receive, send)
 
 
-__all__ = ["TenantIdentityMiddleware"]
+__all__ = ["TenantIdentityMiddleware", "TenantRateLimitMiddleware"]
+
+
+# ── Rate limiting por tenant (US-06.13) ──────────────────────────────────────
+
+
+class TenantRateLimitMiddleware:
+    """Fixed-window por tenant no Redis (`ogum:rl:{tenant}:{epoch_sec}`).
+
+    Lê o `X-Tenant-ID` **já reescrito** pelo TenantIdentityMiddleware (por isso
+    deve ser adicionado ANTES dele — identity é o middleware mais externo).
+    Limite: `rate_limit_per_second` do registro do tenant (cache em processo,
+    60s) ou `RATE_LIMIT_PER_SECOND` default. Estourou → 429 com `Retry-After`
+    e headers `X-RateLimit-*`. Redis indisponível → fail-open com warning
+    (rate limit é defesa em profundidade; disponibilidade primeiro).
+    Isento: `/health`, docs/OpenAPI, webhooks de scanner, OPTIONS.
+    """
+
+    _REGISTRY_CACHE_TTL = 60.0
+
+    def __init__(self, app):
+        self.app = app
+        self._overrides: dict[str, tuple[float, int]] = {}
+
+    async def __call__(self, scope, receive, send):
+        if (
+            scope["type"] != "http"
+            or not settings.RATE_LIMIT_ENABLED
+            or scope["method"] == "OPTIONS"
+            or scope["path"] in EXEMPT_PATHS
+            or scope["path"].startswith(WEBHOOK_PREFIXES)
+        ):
+            await self.app(scope, receive, send)
+            return
+        tenant = _header_value(scope, b"x-tenant-id")
+        if not tenant:
+            await self.app(scope, receive, send)
+            return
+
+        limit = self._limit_for(tenant)
+        window_secs = max(1, settings.RATE_LIMIT_WINDOW_SECONDS)
+        window = int(time.time() // window_secs)
+        key = f"ogum:rl:{tenant}:{window}"
+        try:
+            redis = _rl_redis()
+            count = redis.incr(key)
+            if count == 1:
+                redis.expire(key, window_secs + 1)
+        except Exception:
+            logger.warning("rate-limit Redis unavailable — failing open", exc_info=True)
+            await self.app(scope, receive, send)
+            return
+
+        remaining = max(0, limit - count)
+        reset_in = max(0, (window + 1) * window_secs - time.time())
+
+        if count > limit:
+            resp = JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded"},
+                headers={
+                    "Retry-After": str(max(1, int(reset_in) or 1)),
+                    "X-RateLimit-Limit": str(limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(window + 1),
+                },
+            )
+            await resp(scope, receive, send)
+            return
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers") or [])
+                headers += [
+                    (b"x-ratelimit-limit", str(limit).encode()),
+                    (b"x-ratelimit-remaining", str(remaining).encode()),
+                    (b"x-ratelimit-reset", str(window + 1).encode()),
+                ]
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+    def _limit_for(self, tenant: str) -> int:
+        now = time.monotonic()
+        cached = self._overrides.get(tenant)
+        if cached and now - cached[0] < self._REGISTRY_CACHE_TTL:
+            return cached[1]
+        limit = settings.RATE_LIMIT_PER_SECOND
+        try:
+            from app.services import tenant_registry
+
+            doc = tenant_registry._registry_collection().get(tenant)
+            if doc and doc.get("rate_limit_per_second"):
+                limit = int(doc["rate_limit_per_second"])
+        except Exception:
+            logger.debug("rate-limit override lookup failed for %s", tenant, exc_info=True)
+        self._overrides[tenant] = (now, limit)
+        return limit
+
+
+@lru_cache(maxsize=1)
+def _rl_redis():
+    from redis import Redis
+
+    return Redis.from_url(settings.REDIS_URL, socket_connect_timeout=1, socket_timeout=1)
