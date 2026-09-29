@@ -11,6 +11,7 @@ every provider's discovery/scan task (AWS, Azure, GCP, K8s).
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,7 +19,10 @@ import boto3
 
 from app.core.config import settings
 from app.db.client import get_arango_client
+from app.models.finding import Finding
 from app.models.inventory import ResourceStatus
+
+logger = logging.getLogger(__name__)
 
 
 def _get_aws_session(
@@ -80,7 +84,7 @@ def _set_provider_status(db: Any, provider_key: str | None, status: str) -> None
         if db.has_collection("tenant_config"):
             db.collection("tenant_config").update({"_key": provider_key, "status": status})
     except Exception:
-        pass
+        logger.debug("Provider status update skipped [provider=%s]", provider_key)
 
 
 def _get_tenant_db(tenant_id: str):  # type: ignore[no-untyped-def]
@@ -127,6 +131,30 @@ def _upsert(db: Any, collection: str, doc: dict[str, Any], update: dict[str, Any
                 "update": update,
             },
         )
+
+
+def upsert_finding_with_edge(db: Any, finding: Finding) -> None:
+    """Upsert do finding + aresta HAS_FINDING resources/{id} → findings/{key}.
+
+    Unificação (US-00.12/W4.4) dos dois `_upsert_finding` divergentes apenas
+    no estilo — mesma chave de aresta sanitizada e truncada em 240.
+    """
+    upsert_finding(db, finding)
+
+    finding_key = finding.arango_key()
+    edge_key = f"{finding.resource_id}__{finding_key}".replace("/", "_").replace(":", "_")[:240]
+    edge_doc = {
+        "_key": edge_key,
+        "_from": f"resources/{finding.resource_id}",
+        "_to": f"findings/{finding_key}",
+        "tenant_id": finding.tenant_id,
+    }
+    try:
+        if not db.collection("HAS_FINDING").has(edge_doc["_key"]):
+            db.collection("HAS_FINDING").insert(edge_doc)
+    except Exception:
+        # aresta já existe ou recurso inexistente — ambos aceitáveis
+        logger.debug("HAS_FINDING edge skipped for %s", edge_key)
 
 
 def upsert_finding(db: Any, finding: Any) -> None:

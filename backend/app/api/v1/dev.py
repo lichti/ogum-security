@@ -7,6 +7,7 @@ Used for seeding realistic demo findings without real cloud credentials.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -19,6 +20,8 @@ from app.core.config import settings
 from app.db.init import init_tenant_schema
 from app.models.api_responses import ApiResponse
 from app.workers.tasks.cloud_utils import _upsert
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/dev", tags=["dev"])
 
@@ -654,7 +657,7 @@ def clear_dev_data(
         )
         deleted_findings = len(list(cursor))
     except Exception:
-        pass
+        logger.debug("Dev seed findings cleanup failed", exc_info=True)
 
     try:
         cursor = db.aql.execute(
@@ -663,7 +666,7 @@ def clear_dev_data(
         )
         deleted_jobs = len(list(cursor))
     except Exception:
-        pass
+        logger.debug("Dev seed jobs cleanup failed", exc_info=True)
 
     return ApiResponse(
         data={

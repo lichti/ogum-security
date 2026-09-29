@@ -86,25 +86,25 @@ function QuickLink({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { data: complianceData } = useQuery({
+  const { data: complianceData, isError: complianceDataError } = useQuery({
     queryKey: ['compliance-summary'],
     queryFn: () => complianceApi.summary(),
     refetchInterval: 60_000,
   })
 
-  const { data: statsData } = useQuery({
+  const { data: statsData, isError: statsDataError } = useQuery({
     queryKey: ['findings-stats'],
     queryFn: () => findingsApi.stats(),
     refetchInterval: 60_000,
   })
 
-  const { data: scansData } = useQuery({
+  const { data: scansData, isError: scansDataError } = useQuery({
     queryKey: ['scans-list'],
     queryFn: () => scansApi.list({ limit: 5 }),
     refetchInterval: 30_000,
   })
 
-  const { data: attackPathStats } = useQuery({
+  const { data: attackPathStats, isError: attackPathStatsError } = useQuery({
     queryKey: ['attack-paths-stats'],
     queryFn: () => attackPathsApi.stats().then((r) => r.data.data),
     staleTime: 60_000,
@@ -114,8 +114,22 @@ export default function DashboardPage() {
   const stats = statsData?.data.data
   const recentScans = scansData?.data.data.items ?? []
 
+  // US-14.24: falha de API visível — sem dados + erro ≠ "zero riscos"
+  const anyQueryFailed = complianceDataError || statsDataError || scansDataError || attackPathStatsError
+
   return (
     <div id="dashboard-page" className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+      {anyQueryFailed && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-4 rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200"
+        >
+          <span>
+            Algumas métricas não carregaram — verifique a conexão com a API. Os
+            valores exibidos podem estar incompletos.
+          </span>
+        </div>
+      )}
 
       {/* Top stats row */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

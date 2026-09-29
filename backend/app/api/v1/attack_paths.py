@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -19,6 +20,8 @@ from app.services.attack_path_enrichment import enrich_path_rows
 from app.services.attack_path_narrative_service import build_path_narrative
 from app.services.mitre_service import get_techniques_for_path
 from app.services.resource_categories import category_of, resource_types_for_category
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/attack-paths", tags=["attack-paths"])
 
@@ -244,7 +247,7 @@ async def get_attack_path_mitre(
         if isinstance(result, dict):
             path_doc = result
     except Exception:
-        pass
+        logger.debug("Attack path lookup failed", exc_info=True)
 
     if not path_doc or path_doc.get("tenant_id") != x_tenant_id:
         raise HTTPException(status_code=404, detail="Attack path not found")
@@ -265,7 +268,7 @@ def _load_enriched_path_doc(db: StandardDatabase, x_tenant_id: str, path_id: str
         if isinstance(result, dict):
             path_doc = result
     except Exception:
-        pass
+        logger.debug("Attack path lookup failed", exc_info=True)
 
     if not path_doc or path_doc.get("tenant_id") != x_tenant_id:
         return None
@@ -275,7 +278,7 @@ def _load_enriched_path_doc(db: StandardDatabase, x_tenant_id: str, path_id: str
         resolved = db.document(path_doc["target_id"])
         target_doc = resolved if isinstance(resolved, dict) else {}
     except Exception:
-        pass
+        logger.debug("Attack path target fetch failed", exc_info=True)
     enrichable = dict(path_doc)
     for field, source in (
         ("target_resource_type", "resource_type"),

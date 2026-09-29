@@ -1,10 +1,10 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
+import { apiClient, type ApiResponse } from "@/lib/api";
 import { X } from 'lucide-react'
 import { StatusBadge } from '@/components/admin/StatusBadge'
 import { formatDuration, formatTaskName, type Job, type JobDetail } from '@/lib/jobFormat'
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface JobDetailPanelProps {
   job: Job | null
@@ -12,12 +12,10 @@ interface JobDetailPanelProps {
 }
 
 async function fetchJobDetail(jobId: string, tenantId: string): Promise<JobDetail> {
-  const res = await fetch(
-    `${API}/api/v1/admin/jobs/${jobId}?tenant_id=${encodeURIComponent(tenantId)}`
+  const res = await apiClient.get<ApiResponse<JobDetail>>(
+    `/api/v1/admin/jobs/${jobId}?tenant_id=${encodeURIComponent(tenantId)}`
   )
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const body = await res.json()
-  return body.data as JobDetail
+  return res.data.data
 }
 
 export function JobDetailPanel({ job, onClose }: JobDetailPanelProps) {

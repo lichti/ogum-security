@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiClient, type ApiResponse } from "@/lib/api";
 import { RefreshCw } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 interface QueueDepth {
   queue: string;
@@ -21,10 +21,8 @@ export default function AdminQueueDepthPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/api/v1/admin/queue-depth`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = await res.json();
-      setQueues(body.data ?? []);
+      const res = await apiClient.get<ApiResponse<QueueDepth[]>>('/api/v1/admin/queue-depth');
+      setQueues(res.data.data ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load queue depths");
     } finally {

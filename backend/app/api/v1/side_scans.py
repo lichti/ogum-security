@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from typing import Any
@@ -14,6 +15,8 @@ from app.api.v1.inventory import get_tenant_db
 from app.services.provider_service import _make_key, get_provider
 from app.services.side_scanning.trigger import SCANNABLE_RESOURCE_TYPES, enqueue_side_scan
 from app.workers.tasks.side_scanning import scan_container_image, scan_k8s_container
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/side-scans", tags=["side-scans"])
 
@@ -106,7 +109,7 @@ async def receive_k8s_scan_trigger(
         if not db.collection("scan_jobs").has(job_id):
             db.collection("scan_jobs").insert(job_doc)
     except Exception:
-        pass  # key collision acceptable
+        logger.debug("scan_jobs insert skipped (key collision) for %s", job_id)
 
     scan_k8s_container.delay(
         tenant_id=x_ogum_tenant_id,
@@ -167,7 +170,7 @@ async def receive_ecr_push_event(
         if not db.collection("scan_jobs").has(job_id):
             db.collection("scan_jobs").insert(job_doc)
     except Exception:
-        pass
+        logger.debug("scan_jobs insert skipped for %s (exists or invalid)", job_id)
 
     scan_container_image.delay(
         tenant_id=x_ogum_tenant_id,

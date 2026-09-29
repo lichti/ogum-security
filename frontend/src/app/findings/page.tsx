@@ -36,7 +36,19 @@ function FindingsPageContent() {
   const searchParams = useSearchParams()
   const [filters, setFilters] = useState<FindingsFilter>(() => {
     const framework = searchParams.get('framework')
-    return framework ? { ...DEFAULT_FILTERS, framework: [framework] } : DEFAULT_FILTERS
+    // US-14.24: deep-link de severidade do dashboard (?severity=CRITICAL) agora
+    // pré-filha — antes o link era gerado mas a página ignorava o parâmetro.
+    const severity = searchParams.get('severity')
+    if (framework) return { ...DEFAULT_FILTERS, framework: [framework] }
+    if (severity) {
+      const valid = (['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFORMATIONAL'] as const).includes(
+        severity as never,
+      )
+      return valid
+        ? { ...DEFAULT_FILTERS, severity: [severity as FindingsFilter['severity'] extends (infer S)[] ? S : never] }
+        : DEFAULT_FILTERS
+    }
+    return DEFAULT_FILTERS
   })
   const [prevCursors, setPrevCursors] = useState<string[]>([])
   // ?finding=<key> deep-link (e.g. from the Inventory resource Compliance tab)
@@ -49,7 +61,7 @@ function FindingsPageContent() {
     staleTime: 30_000,
   })
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['findings', filters],
     queryFn: () => findingsApi.list(filters).then((r) => r.data.data),
     placeholderData: (prev) => prev,
@@ -57,6 +69,8 @@ function FindingsPageContent() {
 
   const findings = data?.items ?? []
   const nextCursor = data?.next_cursor ?? null
+  // US-14.24: erro visível em vez de tabela vazia silenciosa
+  const loadError = isError ? 'Não foi possível carregar os findings — a API está acessível?' : null
   const stats = statsData?.data
 
   const handleFiltersChange = useCallback((next: FindingsFilter) => {
@@ -126,6 +140,22 @@ function FindingsPageContent() {
         <div id="findings-filters" className="mb-6">
           <FindingFilters filters={filters} onChange={handleFiltersChange} />
         </div>
+
+        {/* US-14.24: estado de erro explícito da query da lista */}
+        {loadError && (
+          <div
+            role="alert"
+            className="flex items-center justify-between gap-4 rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200"
+          >
+            <span>{loadError}</span>
+            <button
+              onClick={() => refetch()}
+              className="px-3 py-1.5 rounded-md bg-red-900/60 hover:bg-red-900 text-red-100 text-xs font-medium"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
 
         {/* Table */}
         <div id="findings-table">

@@ -10,6 +10,7 @@ callers stay consistent.
 
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from typing import Any
@@ -20,6 +21,8 @@ from app.services.provider_service import get_provider, get_provider_credentials
 from app.services.side_scanning.ec2_metadata import resolve_ec2_scan_metadata
 from app.workers.tasks.cloud_utils import _get_aws_session
 from app.workers.tasks.side_scanning import scan_ec2_instance_v2, scan_lambda_function
+
+logger = logging.getLogger(__name__)
 
 SCANNABLE_RESOURCE_TYPES = frozenset({"ec2_instance", "lambda_function"})
 
@@ -48,7 +51,7 @@ def _insert_job_doc(db: StandardDatabase, job_doc: dict[str, Any]) -> None:
         if not db.collection("scan_jobs").has(job_doc["_key"]):
             db.collection("scan_jobs").insert(job_doc)
     except Exception:
-        pass  # key collision acceptable
+        logger.debug("scan_jobs insert skipped (key collision) for %s", job_doc["_key"])
 
 
 def has_prior_side_scan(db: StandardDatabase, tenant_id: str, resource_key: str) -> bool:
