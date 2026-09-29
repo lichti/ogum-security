@@ -1,0 +1,54 @@
+# US-13.01 — IAM Role de scan (CSPM/inventário) para onboarding de contas AWS.
+# Princípio do menor privilégio + External ID (anti confused-deputy), conforme
+# specs/credential-model.md §6. Validado no CI com cfn-lint (.github/workflows/ci.yml).
+#
+# Deploy (conta do cliente):
+#   aws cloudformation deploy \
+#     --template-file infra/iam/aws-scan-role.cfn.yml \
+#     --stack-name ogum-scanner-role \
+#     --parameter-overrides OgumAccountId=<ACCOUNT> ExternalId=<EXTERNAL_ID> \
+#     --capabilities CAPABILITY_NAMED_IAM
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Ogum Security scanner role — SecurityAudit + ViewOnlyAccess com External ID
+
+Parameters:
+  OgumAccountId:
+    Type: String
+    Description: Account ID da Ogum (trusted entity do AssumeRole)
+    AllowedPattern: "^[0-9]{12}$"
+  ExternalId:
+    Type: String
+    Description: External ID único por tenant (anti confused-deputy)
+    NoEcho: true
+    MinLength: 8
+  RoleName:
+    Type: String
+    Default: ogum-scanner-role
+    Description: Nome da role (o tenant pode customizar)
+
+Resources:
+  OgumScannerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      Description: Ogum Security — leitura de postura (CSPM/inventário/side-scanning)
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${OgumAccountId}:root"
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref ExternalId
+      ManagedPolicyArns:
+        # Somente leitura de postura — sem permissões de escrita
+        - arn:aws:iam::aws:policy/SecurityAudit
+        - arn:aws:iam::aws:policy/view-only-access
+
+Outputs:
+  RoleArn:
+    Description: ARN da role a ser registrada no Ogum (role_arn)
+    Value: !GetAtt OgumScannerRole.Arn
