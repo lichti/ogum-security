@@ -23,12 +23,14 @@ RUN curl -sfLo /tmp/trivy.deb \
 RUN pip install --no-cache-dir poetry==1.8.3 \
     && pip install --no-cache-dir "packaging==23.2" "setuptools>=68"
 
-# poetry.lock commitado (US-13.10) — build reprodutível; --sync remove o que
-# estiver fora do lock.
+# poetry.lock commitado (US-13.10) — build reprodutível. Sem --sync: o
+# downgrade de cryptography durante o sync morre silencioso dentro do build
+# (pip extrai o wheel e o processo some); o prune do --sync é cosmético aqui
+# porque o stage de runtime copia os site-packages de qualquer forma.
 COPY pyproject.toml poetry.lock ./
 
 RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --no-root --sync
+    && poetry install --no-interaction --no-ansi --no-root
 
 # ── Stage 2: runtime ─────────────────────────────────────────────────────────
 FROM python:3.12-slim
