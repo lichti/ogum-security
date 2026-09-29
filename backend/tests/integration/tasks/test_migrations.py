@@ -36,7 +36,9 @@ def test_register_tenant_provisions_migrated_db(sys_db, arango_client):
     tenant_id = "migrated-it"
     try:
         tenant_registry.register_tenant(tenant_id)
-        db = arango_client.db(f"ogum_{tenant_id}", username="root", password="changeme")
+        from app.core.config import settings as _s
+
+        db = arango_client.db(f"ogum_{tenant_id}", username=_s.ARANGO_USER, password=_s.ARANGO_PASSWORD)
         # schema veio pela 001 (não pelo bootstrap solto) e o registro existe
         assert db.has_collection("resources")
         assert MIGRATIONS_COLLECTION in [c["name"] for c in db.collections()]
