@@ -16,6 +16,7 @@ from typing import Any
 
 from redis import Redis
 
+from app.db.client import get_arango_client
 from app.models.inventory import Provider
 from app.workers.celery_app import celery_app
 
@@ -83,13 +84,12 @@ def trigger_all_cspm_scans() -> dict[str, Any]:
     run_cspm_scan task per enabled provider. Skips providers with no
     supported CSPM framework (e.g. k8s).
     """
-    from arango import ArangoClient
 
     from app.core.config import settings
     from app.services.provider_service import list_providers
     from app.workers.tasks.cspm_scan import run_cspm_scan
 
-    client = ArangoClient(hosts=f"http://{settings.ARANGO_HOST}:{settings.ARANGO_PORT}")
+    client = get_arango_client()
     sys_db = client.db("_system", username=settings.ARANGO_USER, password=settings.ARANGO_PASSWORD)
 
     tenant_ids = [

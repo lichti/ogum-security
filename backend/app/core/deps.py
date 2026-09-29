@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from arango import ArangoClient
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
@@ -21,6 +20,7 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.core.rbac import Role, has_permission
 from app.core.security import decode_access_token
+from app.db.client import get_arango_client
 from app.services import tenant_registry
 
 # HTTPBearer (e não OAuth2PasswordBearer) porque o fluxo não tem formulário de
@@ -41,7 +41,7 @@ class CurrentUser(BaseModel):
 
 
 def _tenant_database(tenant_id: str) -> Any:
-    client = ArangoClient(hosts=f"http://{settings.ARANGO_HOST}:{settings.ARANGO_PORT}")
+    client = get_arango_client()
     # Somente resolve um database existente — jamais cria (US-06.10 torna o
     # registro em `_system.tenants` a allowlist única; criação é do provisioning).
     return client.db(f"ogum_{tenant_id}", settings.ARANGO_USER, settings.ARANGO_PASSWORD)

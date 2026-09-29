@@ -41,11 +41,15 @@ _ECR_PAYLOAD = {
 @pytest.fixture
 def api_client(db_tenant_a):
     init_tenant_schema(db_tenant_a)
+    # US-03.17: validação é por hash do scanner_token no provider
+    from app.services.provider_service import hash_scanner_token
+
     db_tenant_a.collection("tenant_config").insert(
         {
-            "_key": "config",
+            "_key": "ecr-provider",
+            "provider": "aws",
             "tenant_id": TEST_TENANT_A,
-            "scanner_token": _SCANNER_TOKEN,
+            "scanner_token_hash": hash_scanner_token(_SCANNER_TOKEN),
         },
         overwrite=True,
     )

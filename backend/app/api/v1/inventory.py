@@ -5,12 +5,12 @@ import io
 import json
 from datetime import UTC, datetime
 
-from arango import ArangoClient
 from arango.database import StandardDatabase
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.core.config import settings
+from app.db.client import get_arango_client
 from app.db.init import init_tenant_schema
 from app.models.api_responses import (
     ApiResponse,
@@ -41,7 +41,7 @@ def get_tenant_db(x_tenant_id: str = Header(..., alias="X-Tenant-ID")) -> Standa
     `init_tenant_schema` permanece aqui como interim idempotente enquanto não
     há migrações versionadas (US-00.12).
     """
-    client = ArangoClient(hosts=f"http://{settings.ARANGO_HOST}:{settings.ARANGO_PORT}")
+    client = get_arango_client()
     try:
         tenant_registry.validate_tenant_id(x_tenant_id)
     except InvalidTenantIdError as exc:

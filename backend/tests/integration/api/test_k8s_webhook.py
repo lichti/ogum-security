@@ -39,12 +39,15 @@ _VALID_PAYLOAD = {
 def api_client(db_tenant_a):
     init_tenant_schema(db_tenant_a)
 
-    # Seed tenant_config with scanner_token
+    # US-03.17: seed do hash do scanner_token (valor nunca persistido)
+    from app.services.provider_service import hash_scanner_token
+
     db_tenant_a.collection("tenant_config").insert(
         {
-            "_key": "config",
+            "_key": "k8s-provider",
+            "provider": "k8s",
             "tenant_id": TEST_TENANT_A,
-            "scanner_token": _SCANNER_TOKEN,
+            "scanner_token_hash": hash_scanner_token(_SCANNER_TOKEN),
         },
         overwrite=True,
     )

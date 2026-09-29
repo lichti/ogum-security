@@ -15,9 +15,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 import boto3
-from arango import ArangoClient
 
 from app.core.config import settings
+from app.db.client import get_arango_client
 from app.models.inventory import ResourceStatus
 
 
@@ -84,7 +84,7 @@ def _set_provider_status(db: Any, provider_key: str | None, status: str) -> None
 
 
 def _get_tenant_db(tenant_id: str):  # type: ignore[no-untyped-def]
-    client = ArangoClient(hosts=f"http://{settings.ARANGO_HOST}:{settings.ARANGO_PORT}")
+    client = get_arango_client()
     return client.db(
         f"ogum_{tenant_id}",
         username=settings.ARANGO_USER,

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import logging
+import secrets
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -12,6 +14,14 @@ from app.services import vault_client
 from app.services.vault_client import CredentialNotFoundError
 
 logger = logging.getLogger(__name__)
+
+
+def secrets_module_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def hash_scanner_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def _make_key(provider: str, identifier: str) -> str:
@@ -109,6 +119,15 @@ def register_provider(
     if secrets:
         vault_ref = vault_client.store_credentials(tenant_id, key, secrets)
 
+    # scanner_token (US-03.17): gerado no registro de providers consumidos por
+    # webhook (K8s DaemonSet / ECR); o documento guarda só o hash.
+    scanner_token: str | None = None
+    if request.provider in ("k8s", "kubernetes"):
+        scanner_token = secrets_module_token()
+        doc_scanner_hash: str | None = hash_scanner_token(scanner_token)
+    else:
+        doc_scanner_hash = None
+
     doc = {
         "_key": key,
         "provider": request.provider,
@@ -128,6 +147,7 @@ def register_provider(
         # Segredos: apenas a referência ao Vault — campos de credencial sempre None
         "credentials_vault_path": vault_ref.get("path"),
         "credentials_vault_version": vault_ref.get("version"),
+        "scanner_token_hash": doc_scanner_hash,
         "aws_access_key_id": None,
         "aws_secret_access_key": None,
         "azure_client_secret": None,
@@ -140,10 +160,27 @@ def register_provider(
 
     _ensure_collection(db)
     db.collection("tenant_config").insert(doc, overwrite=True)
-    return ProviderConfig(
+    config = ProviderConfig(
         key=key,
         **{k: v for k, v in doc.items() if k not in ("_key",) and k not in _SECRET_FIELDS},  # type: ignore[arg-type]
     )
+    # Valor do token anexado uma única vez ao retorno (nunca persistido)
+    config.scanner_token_once = scanner_token
+    return config
+
+
+def rotate_scanner_token(db: StandardDatabase, provider_id: str) -> str:
+    """Gera novo scanner_token e revoga o anterior (hash substituído — US-03.17).
+
+    O valor novo é retornado uma única vez; persiste-se apenas o hash."""
+    _ensure_collection(db)
+    doc = db.collection("tenant_config").get(provider_id)
+    if not doc:
+        raise KeyError(f"Provider {provider_id} not found")
+    token = secrets_module_token()
+    db.collection("tenant_config").update({"_key": provider_id, "scanner_token_hash": hash_scanner_token(token)})
+    logger.info("scanner_token rotated for provider=%s", provider_id)
+    return token
 
 
 def resolve_provider_credentials(db: StandardDatabase, provider_id: str) -> dict[str, Any]:
