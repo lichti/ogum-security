@@ -103,6 +103,8 @@ def fake_idp(monkeypatch, rsa_material):
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
+        if request.url.host != "idp.ogum-test.invalid":
+            return httpx.Response(404, text="unknown host")  # IdP estranho no config → 422
         if path.endswith("/.well-known/openid-configuration"):
             return httpx.Response(
                 200,
@@ -382,6 +384,25 @@ def test_config_platform_admin_saves(oidc_tenant, fake_idp):
     doc = oidc_tenant.collection("oidc_config").get("idp")
     assert doc["client_id"] == CLIENT_ID
     assert "client_secret" not in doc  # secret só no Vault
+
+
+@redis_available
+def test_config_invalid_discovery_rolls_back(oidc_tenant):
+    """Discovery que não responde → 422 e NADA persistido (rollback)."""
+    client = TestClient(app)
+    token = tenant_registry.mint_api_token(TEST_TENANT_A, platform_admin=True).api_token
+    response = client.post(
+        "/api/v1/auth/oidc/config",
+        json={
+            "tenant_id": TEST_TENANT_A,
+            "discovery_url": "https://idp-quebrado.example.com/.well-known/openid-configuration",
+            "client_id": CLIENT_ID,
+            "client_secret": "s3cret",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 422
+    assert oidc_tenant.collection("oidc_config").get("idp") is None
 
 
 # ── status do IdP (login page) ───────────────────────────────────────────────

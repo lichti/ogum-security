@@ -253,12 +253,6 @@ async def refresh(request: Request, body: RefreshIn | None = None) -> Response:
 async def save_oidc_config(request: OidcConfigIn) -> ApiResponse[dict[str, Any]]:
     from app.api.v1.inventory import get_tenant_db  # resolver estrito + allowlist
 
-    try:
-        # gate do AC: o discovery tem que responder ANTES de salvar
-        oidc_service.validate_discovery(str(request.discovery_url))
-    except oidc_service.DiscoveryError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
     db = get_tenant_db(x_tenant_id=request.tenant_id)
     config = oidc_service.save_config(
         db,
@@ -274,6 +268,24 @@ async def save_oidc_config(request: OidcConfigIn) -> ApiResponse[dict[str, Any]]
         ),
         request.client_secret,
     )
+    try:
+        # gate do AC: o discovery tem que responder antes de "salvar" — o fetch
+        # roda sobre o valor RELIDO do ArangoDB (o que ficou persistido é o que
+        # é validado), não sobre o payload da request.
+        saved = oidc_service.load_config(db)
+        assert saved is not None  # acabou de ser gravado
+        oidc_service.validate_discovery(saved.discovery_url)
+    except oidc_service.DiscoveryError as exc:
+        # rollback compensatório: um IdP que não responde não fica registrado
+        # (o secret órfão no Vault é inerte sem o doc — destruído por higiene)
+        db.collection("oidc_config").delete("idp")
+        try:
+            oidc_service.vault_client.destroy_credentials(
+                oidc_service.vault_client.tenant_secret_path(request.tenant_id, "oidc")
+            )
+        except Exception:
+            logger.warning("Vault cleanup after invalid discovery failed for %s", request.tenant_id, exc_info=True)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return ApiResponse(
         data={
             "tenant_id": request.tenant_id,
