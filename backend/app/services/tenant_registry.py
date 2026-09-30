@@ -83,7 +83,10 @@ def is_registered(tenant_id: str) -> bool:
 
 
 def _hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()  # codeql[py/weak-cryptographic-algorithm]: alta entropia
+    # Índice de lookup de bearer token de alta entropia (JWT), não hash de senha —
+    # a verificação compara o hex em tempo constante (verify_api_token).
+    # codeql[py/weak-sensitive-data-hashing]: falso positivo de nome — token de alta entropia
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def register_tenant(tenant_id: str, platform_admin: bool = False) -> dict:

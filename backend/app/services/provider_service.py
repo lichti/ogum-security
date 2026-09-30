@@ -204,10 +204,8 @@ def resolve_provider_credentials(db: StandardDatabase, provider_id: str) -> dict
             secrets = vault_client.load_credentials(path)
         except vault_client.CredentialNotFoundError:
             # Sem fallback para banco: scan segue sem segredos (modo ambient da
-            # worker) e falha na camada cloud com erro claro. O log fica em
-            # mensagem estática + provider_id — nem path nem traceback (CodeQL
-            # py/clear-text-logging-sensitive-data: campos de credencial e
-            # tracebacks de leitura de segredo carregam taint).
+            # worker) e falha na camada cloud com erro claro. O log é estático +
+            # provider_id de propósito — nem path nem traceback do Vault.
             logger.warning("Credential load failed for %s (no secret stored)", provider_id)
             secrets = {}
         except vault_client.VaultError:

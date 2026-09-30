@@ -42,7 +42,8 @@ def main() -> int:
     print(f"expires_at:     {issued.expires_at}")
     print()
     print("Guarde este valor agora — ele NÃO será exibido novamente:")
-    print(issued.api_token)  # codeql[py/clear-text-logging-sensitive-data]: exibição única é o propósito do CLI
+    # codeql[py/clear-text-logging-sensitive-data]: exibir o token uma única vez é o propósito do CLI (US-06.09)
+    print(issued.api_token)
     return 0
 
 

@@ -15,7 +15,7 @@ from tests.conftest import _provision_tenant_db
 pytestmark = pytest.mark.integration
 
 TENANT = "vault-it"
-SECRET_KEY = "aws-123456789012"
+PROVIDER_ID = "aws-123456789012"
 SECRET_VALUE = "wJalrXUtnFEMI/test-secret-value"
 
 
@@ -23,7 +23,7 @@ SECRET_VALUE = "wJalrXUtnFEMI/test-secret-value"
 def vault_db(sys_db, arango_client):
     db = _provision_tenant_db(sys_db, arango_client, f"ogum_{TENANT}")
     yield db
-    provider_doc = db.collection("tenant_config").get(SECRET_KEY) if db.has_collection("tenant_config") else None
+    provider_doc = db.collection("tenant_config").get(PROVIDER_ID) if db.has_collection("tenant_config") else None
     if provider_doc and provider_doc.get("credentials_vault_path"):
         try:
             vault_client.destroy_credentials(provider_doc["credentials_vault_path"])
@@ -50,7 +50,7 @@ def test_register_stores_secrets_only_in_vault(vault_db):
     config = provider_service.register_provider(vault_db, TENANT, _register_request())
 
     doc = vault_db.collection("tenant_config").get(config.key)
-    assert doc["credentials_vault_path"] == f"tenants/{TENANT}/{SECRET_KEY}"
+    assert doc["credentials_vault_path"] == f"tenants/{TENANT}/{PROVIDER_ID}"
     assert doc["credentials_vault_version"] == 1
     for field in provider_service._SECRET_FIELDS:
         assert doc.get(field) is None
@@ -62,7 +62,7 @@ def test_register_stores_secrets_only_in_vault(vault_db):
 @pytest.mark.integration
 def test_resolve_returns_secrets_and_role_fields(vault_db):
     provider_service.register_provider(vault_db, TENANT, _register_request())
-    resolved = provider_service.resolve_provider_credentials(vault_db, SECRET_KEY)
+    resolved = provider_service.resolve_provider_credentials(vault_db, PROVIDER_ID)
     assert resolved["aws_secret_access_key"] == SECRET_VALUE
     assert resolved["external_id"]  # campo não-secreto vindo do documento
 
@@ -73,22 +73,22 @@ def test_update_rotates_secret_in_vault(vault_db):
     new_secret = "rotated-secret-value"
     provider_service.update_provider(
         vault_db,
-        SECRET_KEY,
+        PROVIDER_ID,
         ProviderUpdateRequest(aws_secret_access_key=new_secret),
         tenant_id=TENANT,
     )
-    resolved = provider_service.resolve_provider_credentials(vault_db, SECRET_KEY)
+    resolved = provider_service.resolve_provider_credentials(vault_db, PROVIDER_ID)
     assert resolved["aws_secret_access_key"] == new_secret
-    doc = vault_db.collection("tenant_config").get(SECRET_KEY)
+    doc = vault_db.collection("tenant_config").get(PROVIDER_ID)
     assert doc["credentials_vault_version"] == 2
 
 
 @pytest.mark.integration
 def test_delete_destroys_vault_secret(vault_db):
     provider_service.register_provider(vault_db, TENANT, _register_request())
-    doc = vault_db.collection("tenant_config").get(SECRET_KEY)
+    doc = vault_db.collection("tenant_config").get(PROVIDER_ID)
     path = doc["credentials_vault_path"]
-    provider_service.delete_provider(vault_db, SECRET_KEY)
+    provider_service.delete_provider(vault_db, PROVIDER_ID)
     with pytest.raises(vault_client.CredentialNotFoundError):
         vault_client.load_credentials(path)
 
@@ -112,9 +112,9 @@ def test_vault_unavailable_resolves_without_secrets_and_get_returns_empty(vault_
 
     # Resolução no worker: sem segredos (modo ambient), sem crash — e NUNCA
     # lê plaintext do banco (não há mais plaintext no documento).
-    resolved = provider_service.resolve_provider_credentials(vault_db, SECRET_KEY)
+    resolved = provider_service.resolve_provider_credentials(vault_db, PROVIDER_ID)
     assert resolved.get("aws_secret_access_key") is None
     assert resolved["external_id"]
 
     # Probe server-side: credencial indisponível → {} (não exceção)
-    assert provider_service.get_provider_credentials(vault_db, SECRET_KEY) == {}
+    assert provider_service.get_provider_credentials(vault_db, PROVIDER_ID) == {}
