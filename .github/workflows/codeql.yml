@@ -45,10 +45,13 @@ jobs:
         uses: github/codeql-action/init@1190a975f95ce23525efb6a3fc21ea29567c1b52 # v3
         with:
           languages: ${{ matrix.language }}
-          # Advanced setup não roda a query de supressão por default — sem ela,
-          # supressões inline `# codeql[...]` não são honradas e o gate de PR
-          # conta falsos positivos suprimidos como alertas novos.
-          queries: ${{ matrix.language == 'python' && '+codeql/python-queries:AlertSuppression.ql' || '' }}
+          # O advanced setup não roda a query de supressão por default — sem ela,
+          # supressões inline "# codeql[...]" não são honradas e o gate de PR
+          # conta falsos positivos suprimidos como alertas novos. O "+" preserva
+          # o default suite; a perna JS não muda. O suite local seleciona a
+          # AlertSuppression.ql do pack codeql/python-queries (input `queries`
+          # não aceita .ql individual — só packs, suites e .qls).
+          queries: ${{ matrix.language == 'python' && '+.github/codeql/python-suppression.qls' || '' }}
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@1190a975f95ce23525efb6a3fc21ea29567c1b52 # v3
