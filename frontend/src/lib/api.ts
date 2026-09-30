@@ -72,13 +72,20 @@ export function serializeParams(params: Record<string, unknown>): string {
   return search.toString()
 }
 
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+
 export const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000',
+  baseURL: API_BASE_URL,
+  // auth por cookie HttpOnly (US-06.01): o browser manda ogum_access junto
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
   paramsSerializer: serializeParams,
 })
+
+// Instância nua para o refresh — sem interceptors, sem risco de loop de 401.
+const refreshClient = axios.create({ baseURL: API_BASE_URL, withCredentials: true })
 
 // US-14.25 — extração única de mensagem de erro (antes duplicada à mão em
 // ConnectWizard e EditProviderModal).
@@ -131,13 +138,65 @@ apiClient.interceptors.request.use((config) => {
 
 // 401 → token ausente, revogado (rotacionado) ou expirado. Normaliza a mensagem
 // e emite um evento para a UI; os estados de erro dedicados chegam com US-14.24.
+// ── Sessão OIDC (US-06.01) ───────────────────────────────────────────────────
+// Access token curto (15 min) em cookie HttpOnly + refresh (7 d) com rotação.
+// 401 → uma tentativa única de refresh (single-flight) → retry da request
+// original; falhou, /login?next=<rota atual> preserva o destino.
+
+export const authApi = {
+  status: (tenantId: string) =>
+    apiClient.get<ApiResponse<{ enabled: boolean; idp_name: string }>>('/api/v1/auth/oidc/status', {
+      params: { tenant_id: tenantId },
+    }),
+  refresh: () => refreshClient.post('/api/v1/auth/refresh'),
+}
+
+let refreshInFlight: Promise<boolean> | null = null
+
+function tryRefresh(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = authApi
+      .refresh()
+      .then(() => true)
+      .catch(() => false)
+      .finally(() => {
+        refreshInFlight = null
+      })
+  }
+  return refreshInFlight
+}
+
+declare module 'axios' {
+  export interface InternalAxiosRequestConfig {
+    _ogumRetried?: boolean
+  }
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const config = axios.isAxiosError(error) ? error.config : undefined
+    const isAuthRoute = typeof config?.url === 'string' && config.url.includes('/api/v1/auth/')
+    if (
+      axios.isAxiosError(error) &&
+      error.response?.status === 401 &&
+      config &&
+      !config._ogumRetried &&
+      !isAuthRoute
+    ) {
+      config._ogumRetried = true
+      if (await tryRefresh()) {
+        return apiClient.request(config)
+      }
+    }
     if (axios.isAxiosError(error) && error.response?.status === 401) {
-      error.message = 'Unauthorized — set a valid tenant API token (ogum_api_token)'
+      error.message = 'Unauthorized — redirecting to login'
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('ogum:unauthorized'))
+        if (!window.location.pathname.startsWith('/login')) {
+          const next = encodeURIComponent(window.location.pathname + window.location.search)
+          window.location.assign(`/login?next=${next}`)
+        }
       }
     }
     return Promise.reject(error)
