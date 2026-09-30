@@ -25,8 +25,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.13.3",
-    "tailwind-merge": "^2.5.4",
-    "zustand": "^5.0.0"
+    "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",

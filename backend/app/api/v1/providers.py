@@ -1,34 +1,41 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from arango.database import StandardDatabase
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.api.v1.inventory import get_tenant_db
+from app.core.deps import require_platform_admin
 from app.models.api_responses import ApiResponse
 from app.models.provider import (
     DiscoverRequest,
     DiscoverResponse,
     ProviderConfig,
+    ProviderHealth,
     ProviderRegisterRequest,
     ProviderRegisterResponse,
     ProviderUpdateRequest,
 )
+from app.services.provider_health import evaluate_cached_health, run_connection_test
 from app.services.provider_service import (
     delete_provider,
     get_provider,
-    get_provider_credentials,
     list_providers,
     register_provider,
+    rotate_scanner_token,
     update_provider,
     update_provider_last_discovery,
 )
+from app.services.vault_client import VaultUnavailableError
 from app.workers.tasks.azure_discovery import discover_azure
 from app.workers.tasks.cloud_utils import _get_aws_session
 from app.workers.tasks.cspm_scan import run_cspm_scan
 from app.workers.tasks.gcp_discovery import discover_gcp
 from app.workers.tasks.k8s_discovery import discover_k8s
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/providers", tags=["providers"])
 
@@ -63,18 +70,13 @@ def _dispatch_discovery(
     config_key: str,
     request: ProviderRegisterRequest,
     db: StandardDatabase,
-    role_arn: str | None = None,
-    external_id: str | None = None,
 ) -> str | None:
     """Dispatch discovery task for the given provider. Returns job_id or None.
 
-    Sensitive credentials (aws_secret_access_key, azure_client_secret,
-    gcp_service_account_json, kubeconfig) are passed as task kwargs and are
-    ephemeral — they live only in the Celery message broker and worker memory,
-    never in ArangoDB or application logs.
-
-    For re-triggered discovery (POST /{id}/discover), credentials are not
-    available (not stored). The task falls back to ambient worker credentials.
+    Nenhum segredo vai no payload (US-06.12): as tasks recebem provider_key e
+    resolvem credenciais do Vault no worker. Providers sem segredo armazenado
+    (ambient/managed identity/ADC/incluster) seguem o caminho de credenciais
+    ambientes da própria worker.
     """
     job_id: str | None = None
     try:
@@ -87,12 +89,6 @@ def _dispatch_discovery(
                 provider_id=config_key,
                 provider="aws",
                 frameworks=None,
-                credentials={
-                    "role_arn": role_arn,
-                    "external_id": external_id,
-                    "aws_access_key_id": request.aws_access_key_id,
-                    "aws_secret_access_key": request.aws_secret_access_key,
-                },
                 account_id=request.account_id or "",
                 regions=request.regions,
             ).id
@@ -101,7 +97,6 @@ def _dispatch_discovery(
                 tenant_id,
                 request.subscription_id or "",
                 client_id=request.azure_client_id,
-                client_secret=request.azure_client_secret,
                 azure_tenant_id=request.azure_tenant_id,
                 provider_key=config_key,
             ).id
@@ -109,21 +104,20 @@ def _dispatch_discovery(
             job_id = discover_gcp.delay(
                 tenant_id,
                 request.project_id or "",
-                service_account_info=request.gcp_service_account_json,
                 provider_key=config_key,
             ).id
         elif provider == "k8s":
             job_id = discover_k8s.delay(
                 tenant_id,
                 request.cluster_name or "",
-                kubeconfig=request.kubeconfig,
                 provider_key=config_key,
             ).id
 
         if job_id:
             update_provider_last_discovery(db, config_key, job_id)
     except Exception:
-        pass  # config saved even if dispatch fails — user can retry via POST /{id}/discover
+        # config saved even if dispatch fails — user can retry via POST /{id}/discover
+        logger.exception("Discovery dispatch failed [provider=%s key=%s]", provider, config_key)
     return job_id
 
 
@@ -149,15 +143,19 @@ async def register_provider_endpoint(
         if not request.account_id and detected:
             request = request.model_copy(update={"account_id": detected})
 
-    config = register_provider(db, x_tenant_id, request)
+    try:
+        config = register_provider(db, x_tenant_id, request)
+    except VaultUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Credential store (Vault) unavailable — provider not registered: {exc}",
+        ) from exc
     job_id = _dispatch_discovery(
         request.provider,
         x_tenant_id,
         config.key,
         request,
         db,
-        role_arn=config.role_arn,
-        external_id=config.external_id,
     )
 
     queued = "queued" if job_id else "not started"
@@ -166,6 +164,7 @@ async def register_provider_endpoint(
             provider_id=config.key,
             discovery_job_id=job_id,
             message=f"Provider registered. Discovery job {queued} — check /api/v1/inventory for resources.",
+            scanner_token=getattr(config, "scanner_token_once", None),
         )
     )
 
@@ -233,9 +232,28 @@ async def trigger_discovery_endpoint(
     if not config.enabled:
         raise HTTPException(status_code=409, detail="Provider is disabled. Enable it before triggering discovery.")
 
-    # Body credentials override stored ones; stored credentials are the fallback for scheduled jobs.
+    # Credenciais do body (override) são persistidas no Vault antes do
+    # despacho; a task resolve tudo no worker via provider_key (US-06.12).
     body_creds = body or DiscoverRequest()
-    stored = get_provider_credentials(db, provider_id)
+    body_secrets = {
+        field: getattr(body_creds, field)
+        for field in (
+            "aws_access_key_id",
+            "aws_secret_access_key",
+            "azure_client_secret",
+            "gcp_service_account_json",
+            "kubeconfig",
+        )
+        if getattr(body_creds, field)
+    }
+    if body_secrets:
+        update_provider(
+            db,
+            provider_id,
+            ProviderUpdateRequest(**body_secrets),
+            tenant_id=x_tenant_id,
+        )
+
     from app.models.provider import ProviderRegisterRequest as _Req
 
     stub = _Req(
@@ -249,11 +267,6 @@ async def trigger_discovery_endpoint(
         validate_connection=False,
         azure_tenant_id=config.azure_tenant_id,
         azure_client_id=config.azure_client_id,
-        aws_access_key_id=body_creds.aws_access_key_id or stored.get("aws_access_key_id"),
-        aws_secret_access_key=body_creds.aws_secret_access_key or stored.get("aws_secret_access_key"),
-        azure_client_secret=body_creds.azure_client_secret or stored.get("azure_client_secret"),
-        gcp_service_account_json=body_creds.gcp_service_account_json or stored.get("gcp_service_account_json"),
-        kubeconfig=body_creds.kubeconfig or stored.get("kubeconfig"),
     )
     job_id = _dispatch_discovery(
         config.provider,
@@ -261,8 +274,6 @@ async def trigger_discovery_endpoint(
         provider_id,
         stub,
         db,
-        role_arn=config.role_arn,
-        external_id=config.external_id,
     )
     if not job_id:
         raise HTTPException(status_code=503, detail="Failed to dispatch discovery job. Check worker connectivity.")
@@ -277,8 +288,64 @@ async def trigger_discovery_endpoint(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# GET /api/v1/providers/{provider_id}/health
+# POST /api/v1/providers/{provider_id}/test-connection
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/{provider_id}/health", response_model=ApiResponse[ProviderHealth])
+async def provider_health_endpoint(
+    provider_id: str,
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> ApiResponse[ProviderHealth]:
+    """Cached health derivation from stored signals — no cloud API calls."""
+    config = get_provider(db, provider_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    return ApiResponse(data=evaluate_cached_health(config))
+
+
+@router.post("/{provider_id}/test-connection", response_model=ApiResponse[ProviderHealth])
+async def test_connection_endpoint(
+    provider_id: str,
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> ApiResponse[ProviderHealth]:
+    """Live credential probe (read-only) — the "Test Connection" action.
+
+    Always returns 200 with a `health` verdict: a failed probe is a valid,
+    expected outcome to render on the card, not an HTTP error.
+    """
+    config = get_provider(db, provider_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    if not config.enabled:
+        raise HTTPException(status_code=409, detail="Provider is disabled. Enable it before testing the connection.")
+    return ApiResponse(data=run_connection_test(db, config))
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # DELETE /api/v1/providers/{provider_id}
 # ──────────────────────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/{provider_id}/rotate-scanner-token",
+    response_model=ApiResponse[dict],
+    dependencies=[Depends(require_platform_admin)],
+)
+async def rotate_scanner_token_endpoint(
+    provider_id: str,
+    db: StandardDatabase = Depends(get_tenant_db),
+) -> ApiResponse[dict]:
+    """US-03.17: rotaciona o scanner_token do provider (K8s DaemonSet/ECR).
+
+    O novo valor é retornado **uma única vez**; o anterior deixa de autenticar
+    imediatamente (hash substituído)."""
+    try:
+        token = rotate_scanner_token(db, provider_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ApiResponse(data={"provider_id": provider_id, "scanner_token": token})
 
 
 @router.delete("/{provider_id}", response_model=ApiResponse[dict[str, Any]])

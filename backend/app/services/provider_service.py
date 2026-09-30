@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import logging
+import secrets
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -7,6 +10,18 @@ from typing import Any
 from arango.database import StandardDatabase
 
 from app.models.provider import ProviderConfig, ProviderRegisterRequest, ProviderUpdateRequest
+from app.services import vault_client
+from app.services.vault_client import CredentialNotFoundError
+
+logger = logging.getLogger(__name__)
+
+
+def secrets_module_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def hash_scanner_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def _make_key(provider: str, identifier: str) -> str:
@@ -28,6 +43,17 @@ _SECRET_FIELDS = frozenset(
         "kubeconfig",
     }
 )
+
+
+def _request_secrets(request: ProviderRegisterRequest) -> dict[str, Any]:
+    """Campos de segredo presentes no pedido de registro (a fonte única de
+    segredos é o Vault — o documento no ArangoDB nunca os recebe)."""
+    secrets: dict[str, Any] = {}
+    for field in _SECRET_FIELDS:
+        value = getattr(request, field, None)
+        if value:
+            secrets[field] = value
+    return secrets
 
 
 def _doc_to_config(doc: dict[str, Any]) -> ProviderConfig:
@@ -65,7 +91,12 @@ def register_provider(
     tenant_id: str,
     request: ProviderRegisterRequest,
 ) -> ProviderConfig:
-    """Persist provider config in tenant_config. Credentials are never stored here."""
+    """Persist provider config in tenant_config.
+
+    Segredos vão exclusivamente para o Vault (US-06.11/ADR-015): o documento
+    guarda apenas `credentials_vault_path`/`credentials_vault_version` — nunca
+    campos de credencial (verdade desde agora; as docstrings anteriores
+    afirmavam isso enquanto gravavam plaintext)."""
     identifier = (
         request.account_id or request.subscription_id or request.project_id or request.cluster_name or "default"
     )
@@ -79,6 +110,23 @@ def register_provider(
         existing_external_id = existing.get("external_id")
 
     credential_type = _infer_credential_type(request.provider, request)
+
+    # Secrets → Vault (fora do ArangoDB por construção). Se o Vault estiver
+    # indisponível, VaultUnavailableError propaga — registro falha com erro
+    # claro, sem degradar para armazenamento local.
+    secrets = _request_secrets(request)
+    vault_ref: dict[str, Any] = {}
+    if secrets:
+        vault_ref = vault_client.store_credentials(tenant_id, key, secrets)
+
+    # scanner_token (US-03.17): gerado no registro de providers consumidos por
+    # webhook (K8s DaemonSet / ECR); o documento guarda só o hash.
+    scanner_token: str | None = None
+    if request.provider in ("k8s", "kubernetes"):
+        scanner_token = secrets_module_token()
+        doc_scanner_hash: str | None = hash_scanner_token(scanner_token)
+    else:
+        doc_scanner_hash = None
 
     doc = {
         "_key": key,
@@ -96,12 +144,15 @@ def register_provider(
         "external_id": existing_external_id or str(uuid.uuid4()),
         "azure_tenant_id": request.azure_tenant_id,
         "azure_client_id": request.azure_client_id,
-        # Credentials stored for scheduled jobs — NEVER returned in API responses
-        "aws_access_key_id": request.aws_access_key_id,
-        "aws_secret_access_key": request.aws_secret_access_key,
-        "azure_client_secret": request.azure_client_secret,
-        "gcp_service_account_json": request.gcp_service_account_json,
-        "kubeconfig": request.kubeconfig,
+        # Segredos: apenas a referência ao Vault — campos de credencial sempre None
+        "credentials_vault_path": vault_ref.get("path"),
+        "credentials_vault_version": vault_ref.get("version"),
+        "scanner_token_hash": doc_scanner_hash,
+        "aws_access_key_id": None,
+        "aws_secret_access_key": None,
+        "azure_client_secret": None,
+        "gcp_service_account_json": None,
+        "kubeconfig": None,
         "last_discovery_at": None,
         "last_discovery_job_id": None,
         "created_at": datetime.now(UTC).isoformat(),
@@ -109,23 +160,98 @@ def register_provider(
 
     _ensure_collection(db)
     db.collection("tenant_config").insert(doc, overwrite=True)
-    return ProviderConfig(
+    config = ProviderConfig(
         key=key,
         **{k: v for k, v in doc.items() if k not in ("_key",) and k not in _SECRET_FIELDS},  # type: ignore[arg-type]
     )
+    # Valor do token anexado uma única vez ao retorno (nunca persistido)
+    config.scanner_token_once = scanner_token
+    return config
+
+
+def rotate_scanner_token(db: StandardDatabase, provider_id: str) -> str:
+    """Gera novo scanner_token e revoga o anterior (hash substituído — US-03.17).
+
+    O valor novo é retornado uma única vez; persiste-se apenas o hash."""
+    _ensure_collection(db)
+    doc = db.collection("tenant_config").get(provider_id)
+    if not doc:
+        raise KeyError(f"Provider {provider_id} not found")
+    token = secrets_module_token()
+    db.collection("tenant_config").update({"_key": provider_id, "scanner_token_hash": hash_scanner_token(token)})
+    logger.info("scanner_token rotated for provider=%s", provider_id)
+    return token
+
+
+def resolve_provider_credentials(db: StandardDatabase, provider_id: str) -> dict[str, Any]:
+    """Credenciais completas para execução de scan/discovery, resolvidas no
+    momento do uso dentro do worker (US-06.11/US-06.12).
+
+    Segredos vêm do Vault — indisponibilidade ou ausência levanta
+    CredentialNotFoundError/VaultUnavailableError com mensagem clara (a task
+    falha visivelmente; **nunca** há fallback para credencial em banco). Os
+    campos não-secretos (role_arn, external_id, ids Azure, cluster) vêm do
+    documento do provider.
+    """
+    _ensure_collection(db)
+    doc = db.collection("tenant_config").get(provider_id)
+    if not doc:
+        raise CredentialNotFoundError(f"Provider {provider_id} not found")
+
+    path = doc.get("credentials_vault_path")
+    if path:
+        try:
+            secrets = vault_client.load_credentials(path)
+        except vault_client.CredentialNotFoundError:
+            # Sem fallback para banco: scan segue sem segredos (modo ambient da
+            # worker) e falha na camada cloud com erro claro. O log é estático +
+            # provider_id de propósito — nem path nem traceback do Vault.
+            logger.warning("Credential load failed for %s (no secret stored)", provider_id)
+            secrets = {}
+        except vault_client.VaultError:
+            logger.warning("Credential load failed for %s (Vault unavailable)", provider_id)
+            secrets = {}
+    else:
+        # Documento legado pré-migração (plaintext) ou provider ambient/role
+        # (nada a resolver — a worker usa as próprias credenciais). A janela
+        # legado é fechada pelo script scripts/migrate_credentials_to_vault.py;
+        # não é fallback de Vault indisponível (o load acima já teria logado).
+        secrets = {f: doc[f] for f in _SECRET_FIELDS if doc.get(f)}
+
+    return {
+        **secrets,
+        "role_arn": doc.get("role_arn"),
+        "external_id": doc.get("external_id"),
+        "azure_tenant_id": doc.get("azure_tenant_id"),
+        "azure_client_id": doc.get("azure_client_id"),
+        "cluster_name": doc.get("cluster_name"),
+    }
 
 
 def get_provider_credentials(db: StandardDatabase, provider_id: str) -> dict[str, Any]:
-    """Return stored credential secrets for a provider.
+    """Return stored credential secrets for a provider (server-side probes:
+    test-connection, provider health — not for task dispatch; workers use
+    `resolve_provider_credentials`).
 
-    These fields are intentionally excluded from ProviderConfig and never
-    returned in API responses. Call this only inside task dispatch paths.
+    Indisponibilidade do Vault/segredo ausente → `{}` (os chamadores tratam
+    como "credentials not available"); a causa fica logada.
     """
     _ensure_collection(db)
     try:
         doc = db.collection("tenant_config").get(provider_id)
         if not doc:
             return {}
+        path = doc.get("credentials_vault_path")
+        if path:
+            try:
+                return vault_client.load_credentials(path)
+            except vault_client.CredentialNotFoundError:
+                logger.warning("Credential load failed for %s (no secret stored)", provider_id)
+                return {}
+            except vault_client.VaultError:
+                logger.warning("Credential load failed for %s (Vault unavailable)", provider_id)
+                return {}
+        # Legado pré-migração
         return {
             "aws_access_key_id": doc.get("aws_access_key_id"),
             "aws_secret_access_key": doc.get("aws_secret_access_key"),
@@ -157,6 +283,7 @@ def update_provider(
     db: StandardDatabase,
     provider_id: str,
     update: ProviderUpdateRequest,
+    tenant_id: str | None = None,
 ) -> ProviderConfig | None:
     _ensure_collection(db)
     patch: dict[str, Any] = {"_key": provider_id}
@@ -174,17 +301,40 @@ def update_provider(
         patch["azure_tenant_id"] = update.azure_tenant_id or None
     if update.azure_client_id is not None:
         patch["azure_client_id"] = update.azure_client_id or None
-    # Secrets — empty string clears; None means "don't change"
-    if update.aws_access_key_id is not None:
-        patch["aws_access_key_id"] = update.aws_access_key_id or None
-    if update.aws_secret_access_key is not None:
-        patch["aws_secret_access_key"] = update.aws_secret_access_key or None
-    if update.azure_client_secret is not None:
-        patch["azure_client_secret"] = update.azure_client_secret or None
-    if update.gcp_service_account_json is not None:
-        patch["gcp_service_account_json"] = update.gcp_service_account_json or None
-    if update.kubeconfig is not None:
-        patch["kubeconfig"] = update.kubeconfig or None
+
+    # Secrets — empty string clears; None means "don't change". Novo lote vai
+    # para o Vault (nova versão); campos no documento permanecem None.
+    update_secrets: dict[str, Any] = {}
+    for field in (
+        "aws_access_key_id",
+        "aws_secret_access_key",
+        "azure_client_secret",
+        "gcp_service_account_json",
+        "kubeconfig",
+    ):
+        value = getattr(update, field)
+        if value is not None:
+            update_secrets[field] = value or None
+    if any(v for v in update_secrets.values()):
+        doc = db.collection("tenant_config").get(provider_id) or {}
+        path = doc.get("credentials_vault_path")
+        if not path:
+            tenant = tenant_id or db.name.removeprefix("ogum_")
+            path = vault_client.tenant_secret_path(tenant, provider_id)
+        current: dict[str, Any] = {}
+        try:
+            current = vault_client.load_credentials(path)
+        except CredentialNotFoundError:
+            current = {}
+        merged = {**current, **{k: v for k, v in update_secrets.items() if v}}
+        # Campo limpo (string vazia) é removido do lote no Vault
+        for k, v in update_secrets.items():
+            if v is None and k in merged:
+                del merged[k]
+        vault_ref = vault_client.store_credentials(tenant_id or db.name.removeprefix("ogum_"), provider_id, merged)
+        patch["credentials_vault_path"] = vault_ref["path"]
+        patch["credentials_vault_version"] = vault_ref["version"]
+
     try:
         db.collection("tenant_config").update(patch)
         return get_provider(db, provider_id)
@@ -336,6 +486,15 @@ def delete_provider(db: StandardDatabase, provider_id: str) -> tuple[bool, dict[
     if not config:
         return False, {}
     try:
+        # Best-effort: destrói os segredos no Vault (todas as versões) antes
+        # de remover o documento; falha não bloqueia a exclusão.
+        doc = db.collection("tenant_config").get(provider_id) or {}
+        path = doc.get("credentials_vault_path")
+        if path:
+            try:
+                vault_client.destroy_credentials(path)
+            except vault_client.VaultError:
+                logger.warning("Vault destroy failed for %s", path, exc_info=True)
         purge_counts = _purge_provider_resources(db, config)
         db.collection("tenant_config").delete(provider_id)
         return True, purge_counts

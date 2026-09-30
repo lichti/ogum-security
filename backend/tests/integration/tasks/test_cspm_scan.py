@@ -26,10 +26,30 @@ _TASK_KWARGS = {
     "provider_id": PROVIDER_ID,
     "provider": "aws",
     "frameworks": FRAMEWORKS,
-    "credentials": {"aws_access_key_id": None, "aws_secret_access_key": None},
     "account_id": ACCOUNT_ID,
     "regions": ["us-east-1"],
 }
+
+
+@pytest.fixture(autouse=True)
+def _provider_registered(db_tenant_a):
+    """US-06.11/12: a task resolve credenciais/campos de role a partir do
+    documento do provider no worker — os testes precisam do doc em
+    tenant_config (sem segredos; o caminho Vault é coberto em
+    test_vault_credentials.py)."""
+    init_tenant_schema(db_tenant_a)
+    db_tenant_a.collection("tenant_config").insert(
+        {
+            "_key": PROVIDER_ID,
+            "provider": "aws",
+            "account_id": ACCOUNT_ID,
+            "credential_type": "ambient",
+            "status": "active",
+            "external_id": "ext-test-123",
+        },
+        overwrite=True,
+    )
+    yield
 
 
 def _make_mock_finding(

@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, CheckCircle2 } from 'lucide-react'
 import { providersApi, scansApi } from '@/lib/api'
 import type { ProviderConfig } from '@/lib/types'
-import { ProvidersTable } from '@/components/providers/ProvidersTable'
+import { ProvidersCardGrid } from '@/components/providers/ProvidersCardGrid'
 import { ConnectWizard } from '@/components/providers/ConnectWizard'
 import { EditProviderModal } from '@/components/providers/EditProviderModal'
 
@@ -54,6 +54,14 @@ export default function ProvidersPage() {
     onError: () => setActionError('Failed to trigger CSPM scan. Check that provider credentials are configured.'),
   })
 
+  const testConnectionMutation = useMutation({
+    mutationFn: (id: string) => providersApi.testConnection(id).then((r) => r.data.data),
+    onSuccess: invalidate,
+    // A failed probe is a valid rendered outcome (health=failed), not an HTTP error —
+    // only network/4xx/5xx failures land here.
+    onError: () => setActionError('Connection test request failed.'),
+  })
+
   const providers = data ?? []
 
   return (
@@ -86,25 +94,19 @@ export default function ProvidersPage() {
           </div>
         )}
 
-        <div id="providers-table" className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div id="providers-accounts" className="bg-slate-900 border border-slate-800 rounded-xl p-4">
           {isLoading ? (
             <div className="py-16 text-center text-slate-500 text-sm">Loading...</div>
           ) : (
-            <>
-              <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400 text-sm">
-                  {providers.length} {providers.length === 1 ? 'account' : 'accounts'} connected
-                </span>
-              </div>
-              <ProvidersTable
-                providers={providers}
-                onEdit={(p) => setEditingProvider(p)}
-                onToggle={(id, enabled) => toggleMutation.mutateAsync({ id, enabled })}
-                onDiscover={(id) => discoverMutation.mutateAsync(id)}
-                onScan={(id) => scanMutation.mutateAsync(id)}
-                onDelete={(id) => deleteMutation.mutateAsync(id)}
-              />
-            </>
+            <ProvidersCardGrid
+              providers={providers}
+              onEdit={(p) => setEditingProvider(p)}
+              onToggle={(id, enabled) => toggleMutation.mutateAsync({ id, enabled })}
+              onDiscover={(id) => discoverMutation.mutateAsync(id)}
+              onScan={(id) => scanMutation.mutateAsync(id)}
+              onDelete={(id) => deleteMutation.mutateAsync(id)}
+              onTestConnection={(id) => testConnectionMutation.mutateAsync(id)}
+            />
           )}
         </div>
       </div>

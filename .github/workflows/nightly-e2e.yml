@@ -1,0 +1,89 @@
+name: Nightly E2E
+
+# US-13.11 — smoke E2E real contra o stack completo (compose), noturno.
+# Os specs de rota inexistente (/login) foram substituídos por e2e/smoke.spec.ts.
+
+on:
+  schedule:
+    - cron: "0 4 * * *" # 04:00 UTC, todas as noites
+  workflow_dispatch: {} # execução manual para debug
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: E2E — Compose Stack Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Harden Runner (US-13.04 — egress audit)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build e subir o stack
+        run: docker compose up -d --build
+        env:
+          DOCKER_BUILDKIT: 1
+
+      - name: Aguardar backend saudável
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+              echo "backend pronto após ${i} tentativas"; break
+            fi
+            sleep 5
+          done
+          curl -sf http://localhost:8000/health > /dev/null
+
+      - name: Aguardar frontend
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+              echo "frontend pronto após ${i} tentativas"; break
+            fi
+            sleep 5
+          done
+
+      - name: Provisionar tenant dev + token (US-06.09/06.10)
+        id: token
+        run: |
+          TOKEN=$(docker compose exec -T backend python scripts/mint_tenant_token.py --tenant-id dev | tail -1)
+          echo "token=${TOKEN}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependências + browsers
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Rodar smoke E2E
+        working-directory: frontend
+        run: npx playwright test
+        env:
+          BASE_URL: http://localhost:3000
+          API_URL: http://localhost:8000
+          OGUM_E2E_API_TOKEN: ${{ steps.token.outputs.token }}
+
+      - name: Upload artefatos de falha
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-failures
+          path: frontend/test-results/
+          retention-days: 7

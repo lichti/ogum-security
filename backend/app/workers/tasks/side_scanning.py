@@ -35,9 +35,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+from celery.exceptions import SoftTimeLimitExceeded
 
 from app.db.init import init_tenant_schema
 from app.models.finding import Finding, FindingSource, FindingStatus, SeverityLevel
+from app.services.provider_service import get_provider_credentials
 from app.services.side_scanning import cvss_to_severity
 from app.services.side_scanning.analyzers.trivy_analyzer import (
     run_trivy_ebs,
@@ -59,9 +61,15 @@ from app.services.side_scanning.snapshot_manager import (
 from app.workers.celery_app import celery_app
 from app.workers.tasks._job_tracking import (
     complete_discovery_job,
+    fail_discovery_job,
     update_job_to_running,
 )
-from app.workers.tasks.cloud_utils import _get_aws_session, _get_tenant_db, _upsert, upsert_finding
+from app.workers.tasks.cloud_utils import (
+    _get_aws_session,
+    _get_tenant_db,
+    _upsert,
+    upsert_finding_with_edge,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +102,23 @@ _TRIVY_SEVERITY_MAP: dict[str, SeverityLevel] = {
 }
 
 
+_RETRY_BACKOFF_SECONDS = (5, 15, 45)
+_MAX_SCAN_RETRIES = 3
+
+
+def _retry_or_fail(self: Any, db: Any, job_id: str, exc: Exception) -> None:
+    """US-03.16: retry com backoff 5s/15s/45s; esgotado → job `failed` com o erro.
+
+    Chamado a partir de `except Exception` nos tasks de side-scanning. Quando o
+    limite é atingido, marca o job como failed com a causa e deixa a exceção
+    propagar (o `raise` do chamador conclui o bookkeeping do Celery).
+    """
+    if self.request.retries < _MAX_SCAN_RETRIES:
+        countdown = _RETRY_BACKOFF_SECONDS[min(self.request.retries, len(_RETRY_BACKOFF_SECONDS) - 1)]
+        raise self.retry(exc=exc, countdown=countdown)
+    fail_discovery_job(db, job_id, error_message=f"{type(exc).__name__}: {exc}")
+
+
 def _trivy_severity(trivy_sev: str, cvss_score: float) -> SeverityLevel:
     """Map Trivy Severity string to SeverityLevel. Falls back to CVSS when UNKNOWN."""
     mapped = _TRIVY_SEVERITY_MAP.get((trivy_sev or "UNKNOWN").upper())
@@ -103,25 +128,6 @@ def _trivy_severity(trivy_sev: str, cvss_score: float) -> SeverityLevel:
 
 
 # ─── Finding persistence ──────────────────────────────────────────────────────
-
-
-def _upsert_finding(db: Any, finding: Finding) -> None:
-    """Upsert a side-scanning finding and create HAS_FINDING edge from resource."""
-    upsert_finding(db, finding)
-    finding_key = finding.arango_key()
-    raw_edge_key = f"{finding.resource_id}__{finding_key}"
-    edge_key = raw_edge_key.replace("/", "_").replace(":", "_")[:240]
-    edge_doc = {
-        "_key": edge_key,
-        "_from": f"resources/{finding.resource_id}",
-        "_to": f"findings/{finding_key}",
-        "tenant_id": finding.tenant_id,
-    }
-    try:
-        if not db.collection("HAS_FINDING").has(edge_doc["_key"]):
-            db.collection("HAS_FINDING").insert(edge_doc)
-    except Exception:
-        pass  # edge already exists — acceptable
 
 
 # ─── Finding normalisation ────────────────────────────────────────────────────
@@ -402,7 +408,7 @@ def _persist_sbom(
         if not db.collection("HAS_SBOM").has(edge_doc["_key"]):
             db.collection("HAS_SBOM").insert(edge_doc)
     except Exception:
-        pass  # edge already exists
+        logger.debug("HAS_SBOM edge skipped (exists or resource gone) for %s", edge_doc["_key"])
 
 
 # ─── Sprint 2 tasks ───────────────────────────────────────────────────────────
@@ -442,7 +448,7 @@ def _run_yara_via_scoped_mount(
     return run_yara(_SCAN_MOUNT_PATH, timeout=_ANALYZER_TIMEOUT)
 
 
-@celery_app.task(bind=True, max_retries=1, default_retry_delay=300, time_limit=1800)
+@celery_app.task(bind=True, max_retries=3, time_limit=1800, soft_time_limit=1740)
 def scan_ec2_instance_v2(  # noqa: PLR0913
     self: Any,
     tenant_id: str,
@@ -459,8 +465,6 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
     resource_arn: str | None = None,
     role_arn: str | None = None,
     external_id: str | None = None,
-    aws_access_key_id: str | None = None,
-    aws_secret_access_key: str | None = None,
 ) -> dict[str, Any]:
     """
     EBS Direct API scan pipeline:
@@ -488,11 +492,14 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
         scan_job_id,
     )
 
+    # Segredos resolvidos no worker via Vault (US-06.12) — {} habilita o
+    # modo ambient da worker (instance role), sem fallback para banco.
+    stored = get_provider_credentials(db, provider_id)
     session = _get_aws_session(
         role_arn=role_arn,
         external_id=external_id,
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key,
+        aws_access_key_id=stored.get("aws_access_key_id"),
+        aws_secret_access_key=stored.get("aws_secret_access_key"),
     )
     ec2 = session.client("ec2", region_name=region)
 
@@ -550,8 +557,15 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
         # 3. SBOM generation
         sbom_json = _generate_sbom(snapshot_id, trivy_server_url, scan_job_id)
 
+    except SoftTimeLimitExceeded:
+        fail_discovery_job(db, scan_job_id, "timeout: EBS scan exceeded its soft time limit")
+        raise
+    except Exception as exc:
+        _retry_or_fail(self, db, scan_job_id, exc)
+        raise
     finally:
-        # 4. Cleanup — always runs, even on exception
+        # 4. Cleanup — always runs, even on exception (o complete foi movido
+        # para o caminho de sucesso — US-03.16: job falho NUNCA é 'completed')
         scan_volume_id = yara_state["scan_volume_id"]
         mounted = yara_state["mounted"]
         if mounted:
@@ -565,7 +579,6 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
                 logger.exception("Volume cleanup failed for %s — job=%s", scan_volume_id, scan_job_id)
         if snapshot_id:
             delete_snapshot_safe(ec2, snapshot_id)
-        complete_discovery_job(db, scan_job_id, len(vulns) + len(secrets) + len(yara_matches))
 
     # 5. Normalise and persist findings
     rkey = resource_key or instance_id
@@ -588,7 +601,7 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
 
     for f in findings:
         try:
-            _upsert_finding(db, f)
+            upsert_finding_with_edge(db, f)
         except Exception:
             logger.exception("Failed to persist finding %s", f.check_id)
 
@@ -598,6 +611,7 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
     except Exception:
         logger.exception("Failed to persist SBOM for instance=%s", instance_id)
 
+    complete_discovery_job(db, scan_job_id, len(vulns) + len(secrets) + len(yara_matches))
     logger.info(
         "scan_ec2_instance_v2 complete [tenant=%s instance=%s findings=%d job=%s]",
         tenant_id,
@@ -616,7 +630,7 @@ def scan_ec2_instance_v2(  # noqa: PLR0913
     }
 
 
-@celery_app.task(bind=True, max_retries=1, default_retry_delay=120, time_limit=900)
+@celery_app.task(bind=True, max_retries=3, time_limit=900, soft_time_limit=840)
 def scan_lambda_function(  # noqa: PLR0913
     self: Any,
     tenant_id: str,
@@ -629,8 +643,6 @@ def scan_lambda_function(  # noqa: PLR0913
     account_id: str = "",
     role_arn: str | None = None,
     external_id: str | None = None,
-    aws_access_key_id: str | None = None,
-    aws_secret_access_key: str | None = None,
 ) -> dict[str, Any]:
     """
     Agentless Lambda scan via RAM disk:
@@ -655,11 +667,12 @@ def scan_lambda_function(  # noqa: PLR0913
         scan_job_id,
     )
 
+    stored = get_provider_credentials(db, provider_id)
     session = _get_aws_session(
         role_arn=role_arn,
         external_id=external_id,
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key,
+        aws_access_key_id=stored.get("aws_access_key_id"),
+        aws_secret_access_key=stored.get("aws_secret_access_key"),
     )
     lambda_client = session.client("lambda", region_name=region)
 
@@ -687,10 +700,15 @@ def scan_lambda_function(  # noqa: PLR0913
         # 4. Scan with trivy fs (Lambda uses local trivy, not EBS Direct)
         vulns = run_trivy_fs(f"{ram_dir}/code", timeout=600)
 
+    except SoftTimeLimitExceeded:
+        fail_discovery_job(db, scan_job_id, "timeout: Lambda scan exceeded its soft time limit")
+        raise
+    except Exception as exc:
+        _retry_or_fail(self, db, scan_job_id, exc)
+        raise
     finally:
-        # 5. Always wipe RAM disk
+        # 5. Always wipe RAM disk (complete movido para o caminho de sucesso — US-03.16)
         shutil.rmtree(ram_dir, ignore_errors=True)
-        complete_discovery_job(db, scan_job_id, len(vulns))
 
     # 6. Normalise and persist
     resource_key = function_arn.replace("/", "_").replace(":", "_")
@@ -723,10 +741,11 @@ def scan_lambda_function(  # noqa: PLR0913
 
     for f in findings:
         try:
-            _upsert_finding(db, f)
+            upsert_finding_with_edge(db, f)
         except Exception:
             logger.exception("Failed to persist Lambda finding %s", f.check_id)
 
+    complete_discovery_job(db, scan_job_id, len(vulns))
     logger.info(
         "scan_lambda_function complete [tenant=%s function=%s findings=%d job=%s]",
         tenant_id,
@@ -741,7 +760,7 @@ def scan_lambda_function(  # noqa: PLR0913
     }
 
 
-@celery_app.task(bind=True, max_retries=1, default_retry_delay=60, time_limit=3600)
+@celery_app.task(bind=True, max_retries=3, time_limit=3600, soft_time_limit=3540)
 def rescan_sboms(
     self: Any,
     tenant_id: str,
@@ -831,7 +850,7 @@ def rescan_sboms(
                         },
                     )
                     try:
-                        _upsert_finding(db, finding)
+                        upsert_finding_with_edge(db, finding)
                         new_findings += 1
                     except Exception:
                         logger.exception("Failed to persist rescan finding %s", cve_id)
@@ -889,7 +908,7 @@ def _generate_sbom_rootfs(rootfs_path: str, trivy_server_url: str, job_id: str) 
 # ─── Sprint 3 task ────────────────────────────────────────────────────────────
 
 
-@celery_app.task(bind=True, max_retries=1, default_retry_delay=120, time_limit=900)
+@celery_app.task(bind=True, max_retries=3, time_limit=900, soft_time_limit=840)
 def scan_k8s_container(  # noqa: PLR0913
     self: Any,
     tenant_id: str,
@@ -938,8 +957,12 @@ def scan_k8s_container(  # noqa: PLR0913
         # 2. SBOM generation
         sbom_json = _generate_sbom_rootfs(scan_path, trivy_server_url, scan_job_id)
 
-    finally:
-        complete_discovery_job(db, scan_job_id, len(vulns) + len(secrets))
+    except SoftTimeLimitExceeded:
+        fail_discovery_job(db, scan_job_id, "timeout: K8s container scan exceeded its soft time limit")
+        raise
+    except Exception as exc:
+        _retry_or_fail(self, db, scan_job_id, exc)
+        raise
 
     # 3. Normalise findings — resource_id is the ArangoDB _id of the Pod vertex
     resource_key = resource_id.replace("/", "_").replace(":", "_")
@@ -978,7 +1001,7 @@ def scan_k8s_container(  # noqa: PLR0913
 
     for f in findings:
         try:
-            _upsert_finding(db, f)
+            upsert_finding_with_edge(db, f)
         except Exception:
             logger.exception("Failed to persist K8s finding %s", f.check_id)
 
@@ -988,6 +1011,7 @@ def scan_k8s_container(  # noqa: PLR0913
     except Exception:
         logger.exception("Failed to persist SBOM for pod=%s/%s", pod_namespace, pod_name)
 
+    complete_discovery_job(db, scan_job_id, len(vulns) + len(secrets))
     logger.info(
         "scan_k8s_container complete [tenant=%s pod=%s/%s findings=%d job=%s]",
         tenant_id,
@@ -1110,7 +1134,7 @@ def _normalise_misconfig(
 # ─── Sprint 4 task ────────────────────────────────────────────────────────────
 
 
-@celery_app.task(bind=True, max_retries=1, default_retry_delay=120, time_limit=1800)
+@celery_app.task(bind=True, max_retries=3, time_limit=1800, soft_time_limit=1740)
 def scan_container_image(  # noqa: PLR0913
     self: Any,
     tenant_id: str,
@@ -1157,8 +1181,12 @@ def scan_container_image(  # noqa: PLR0913
         # 2. SARIF report for CI/CD
         sarif_json = _generate_sarif(image_uri, image_digest, trivy_server_url)
 
-    finally:
-        complete_discovery_job(db, scan_job_id, len(vulns) + len(secrets) + len(misconfigs))
+    except SoftTimeLimitExceeded:
+        fail_discovery_job(db, scan_job_id, "timeout: registry image scan exceeded its soft time limit")
+        raise
+    except Exception as exc:
+        _retry_or_fail(self, db, scan_job_id, exc)
+        raise
 
     # 3. Normalise findings — resource_id is the image digest (stable across tags)
     resource_id = image_digest.replace(":", "_").replace("/", "_")[:120]
@@ -1195,7 +1223,7 @@ def scan_container_image(  # noqa: PLR0913
 
     for f in findings:
         try:
-            _upsert_finding(db, f)
+            upsert_finding_with_edge(db, f)
         except Exception:
             logger.exception("Failed to persist registry finding %s", f.check_id)
 
@@ -1205,6 +1233,7 @@ def scan_container_image(  # noqa: PLR0913
     except Exception:
         logger.exception("Failed to persist SARIF for %s", image_uri)
 
+    complete_discovery_job(db, scan_job_id, len(vulns) + len(secrets) + len(misconfigs))
     logger.info(
         "scan_container_image complete [tenant=%s image=%s findings=%d job=%s]",
         tenant_id,

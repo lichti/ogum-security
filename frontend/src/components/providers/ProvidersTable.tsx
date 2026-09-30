@@ -3,13 +3,6 @@ import { useState } from 'react'
 import { RefreshCw, Trash2, Power, PowerOff, Pencil, ShieldCheck } from 'lucide-react'
 import type { ProviderConfig, ProviderStatus } from '@/lib/types'
 
-const PROVIDER_LABELS: Record<string, string> = {
-  aws: 'Amazon Web Services',
-  azure: 'Microsoft Azure',
-  gcp: 'Google Cloud Platform',
-  k8s: 'Kubernetes',
-}
-
 const PROVIDER_BADGE_COLORS: Record<string, string> = {
   aws: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
   azure: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
@@ -158,90 +151,3 @@ export function ProvidersTable({ providers, onEdit, onToggle, onDiscover, onScan
   )
 }
 
-interface ProviderCardProps {
-  provider: ProviderConfig
-  onEdit: (provider: ProviderConfig) => void
-  onToggle: (id: string, enabled: boolean) => Promise<unknown>
-  onDiscover: (id: string) => Promise<unknown>
-  onScan: (id: string) => Promise<unknown>
-  onDelete: (id: string) => Promise<unknown>
-}
-
-export function ProviderCard({ provider: p, onEdit, onToggle, onDiscover, onScan, onDelete }: ProviderCardProps) {
-  const [busy, setBusy] = useState(false)
-  const status = STATUS_BADGE[p.status ?? 'pending']
-
-  const withBusy = (fn: () => Promise<unknown>) => async (): Promise<void> => {
-    setBusy(true)
-    try { await fn() } finally { setBusy(false) }
-  }
-
-  return (
-    <div data-testid={`provider-card-${p.key}`} className="bg-slate-900 border border-slate-700 rounded-xl p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${PROVIDER_BADGE_COLORS[p.provider]} mb-2`}>
-            {PROVIDER_LABELS[p.provider] ?? p.provider.toUpperCase()}
-          </span>
-          <div className="text-slate-200 font-medium">{p.display_name}</div>
-          <div className="text-slate-500 text-xs font-mono mt-0.5">{providerIdentifier(p)}</div>
-        </div>
-        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${status.classes}`}>
-          {status.label}
-        </span>
-      </div>
-
-      {p.regions.length > 0 && (
-        <div className="text-slate-500 text-xs mb-3">
-          Regions: {p.regions.join(', ')}
-        </div>
-      )}
-
-      <div className="text-slate-500 text-xs mb-4">
-        Last discovery: {relativeTime(p.last_discovery_at)}
-      </div>
-
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => onEdit(p)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-600 transition-colors"
-        >
-          <Pencil className="w-3 h-3" />
-          Edit
-        </button>
-        <button
-          disabled={busy || !p.enabled}
-          onClick={withBusy(() => onDiscover(p.key))}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-lg border border-orange-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          <RefreshCw className={`w-3 h-3 ${busy ? 'animate-spin' : ''}`} />
-          Rediscover
-        </button>
-        <button
-          disabled={busy || !p.enabled}
-          onClick={withBusy(() => onScan(p.key))}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg border border-green-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          <ShieldCheck className="w-3 h-3" />
-          Scan Now
-        </button>
-        <button
-          disabled={busy}
-          onClick={withBusy(() => onToggle(p.key, !p.enabled))}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          {p.enabled ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3 text-green-400" />}
-          {p.enabled ? 'Disable' : 'Enable'}
-        </button>
-        <button
-          disabled={busy}
-          onClick={withBusy(() => onDelete(p.key))}
-          className="ml-auto p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-700 rounded disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          title="Delete"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </div>
-    </div>
-  )
-}

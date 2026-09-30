@@ -5,12 +5,12 @@ import io
 import json
 from datetime import UTC, datetime
 
-from arango import ArangoClient
 from arango.database import StandardDatabase
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.core.config import settings
+from app.db.client import get_arango_client
 from app.db.init import init_tenant_schema
 from app.models.api_responses import (
     ApiResponse,
@@ -22,21 +22,36 @@ from app.models.api_responses import (
 )
 from app.models.inventory_detail import BlastRadiusResponse, ResourceComplianceResponse, ResourceNarrativeSummary
 from app.models.software_inventory import SoftwareInventoryResponse
+from app.services import tenant_registry
 from app.services.inventory_detail_service import build_resource_summary, get_blast_radius, get_resource_compliance
 from app.services.inventory_service import get_inventory_stats, get_resource, list_resources
 from app.services.software_inventory_service import get_software_inventory
+from app.services.tenant_registry import InvalidTenantIdError
 from app.workers.tasks.cspm_scan import run_cspm_scan
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["inventory"])
 
 
 def get_tenant_db(x_tenant_id: str = Header(..., alias="X-Tenant-ID")) -> StandardDatabase:
-    """DEV MODE: tenant_id from X-Tenant-ID header. Sprint 7 replaces this with JWT extraction."""
-    client = ArangoClient(hosts=f"http://{settings.ARANGO_HOST}:{settings.ARANGO_PORT}")
+    """Resolve o database do tenant — resolver estrito (US-06.10).
+
+    `_system.tenants` é a allowlist única: tenant não registrado → 404; formato
+    inválido → 422. **Nunca cria database no caminho da request** — a criação é
+    do provisioning (`tenant_registry.register_tenant`, interim da US-06.04).
+    `init_tenant_schema` permanece aqui como interim idempotente enquanto não
+    há migrações versionadas (US-00.12).
+    """
+    client = get_arango_client()
+    try:
+        tenant_registry.validate_tenant_id(x_tenant_id)
+    except InvalidTenantIdError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not tenant_registry.is_registered(x_tenant_id):
+        raise HTTPException(status_code=404, detail="Tenant not registered")
     sys_db = client.db("_system", username=settings.ARANGO_USER, password=settings.ARANGO_PASSWORD)
     db_name = f"ogum_{x_tenant_id}"
     if not sys_db.has_database(db_name):
-        sys_db.create_database(db_name)
+        raise HTTPException(status_code=404, detail="Tenant database not provisioned")
     db = client.db(db_name, username=settings.ARANGO_USER, password=settings.ARANGO_PASSWORD)
     init_tenant_schema(db)
     return db

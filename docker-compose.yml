@@ -1,10 +1,12 @@
 name: ogum-security
 
+# US-13.12: imagens terceiras pinadas por digest; docker.sock removido do
+# worker (nenhum código o usa — side-scanning é EBS Direct API + trivy).
 services:
 
   # ── ArangoDB — Graph Database ─────────────────────────────────────────────
   arangodb:
-    image: arangodb:3.12
+    image: arangodb:3.12@sha256:5b734c1ac7a68e0a7de8b28e043a7354a255854a93deaf9095496b9079044d21
     container_name: ogum-arangodb
     environment:
       ARANGO_ROOT_PASSWORD: ${ARANGO_PASSWORD:-changeme}
@@ -22,7 +24,7 @@ services:
 
   # ── Redis — Task Queue & Cache ────────────────────────────────────────────
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2
     container_name: ogum-redis
     ports:
       - "6379:6379"
@@ -35,9 +37,21 @@ services:
       retries: 5
     restart: unless-stopped
 
+  vault:
+    image: hashicorp/vault:1.15@sha256:fea7f528068fbb458307f54eb2cc1141be77f7603f0ac36e33f17ea4a25e392d
+    container_name: ogum-vault
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ogum-dev-root
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    ports:
+      - "8200:8200"
+    restart: unless-stopped
+
   # ── Redpanda — Kafka-compatible Message Broker ────────────────────────────
   redpanda:
-    image: redpandadata/redpanda:v24.2.1
+    image: redpandadata/redpanda:v24.2.1@sha256:ba665359a21fd22583d8a91e5461ce5799c6c0c2fff2cdf0935242d9e0ca6238
     container_name: ogum-redpanda
     command:
       - redpanda
@@ -61,7 +75,7 @@ services:
 
   # ── Qdrant — Vector DB for RAG ────────────────────────────────────────────
   qdrant:
-    image: qdrant/qdrant:v1.11.0
+    image: qdrant/qdrant:v1.11.0@sha256:22a2d455837380d5fa1a3455b87b4fe7af30aa4f4712f8a57027c61022113796
     container_name: ogum-qdrant
     ports:
       - "6333:6333"
@@ -71,7 +85,7 @@ services:
 
   # ── Ollama — Local LLM for Ogum.AI ───────────────────────────────────────
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama@sha256:4be1eaabf0dd0152bfbb780347e2888b5fe86ec25d0faa3eb4b1a956173736fb
     container_name: ogum-ollama
     ports:
       - "11434:11434"
@@ -89,7 +103,7 @@ services:
 
   # ── Trivy Server — Shared Vulnerability DB (EBS Direct API sidecar) ─────
   trivy-server:
-    image: aquasec/trivy:latest
+    image: aquasec/trivy@sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9
     container_name: ogum-trivy-server
     command: server --listen 0.0.0.0:4954
     ports:
@@ -146,7 +160,7 @@ services:
 
   # ── Swagger UI — API Reference (no other service required) ──────────────
   swagger-ui:
-    image: swaggerapi/swagger-ui:latest
+    image: swaggerapi/swagger-ui@sha256:11c12fc0140d391836f03e2bdcc3fd220f58861b172c1a8c41b60532c25a397b
     container_name: ogum-swagger-ui
     ports:
       - "8085:8080"
@@ -177,7 +191,6 @@ services:
       - .env
     volumes:
       - ./backend:/app
-      - /var/run/docker.sock:/var/run/docker.sock  # for side-scanning container management
     depends_on:
       - redis
       - arangodb
@@ -211,6 +224,9 @@ services:
     build:
       context: ./frontend
       dockerfile: ../docker/frontend.Dockerfile
+    # Dev: a imagem tem CMD de produção (node server.js, standalone) — o
+    # perfil local sobrecarrega com npm run dev + bind mounts (US-13.12).
+    command: npm run dev
     container_name: ogum-frontend
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000

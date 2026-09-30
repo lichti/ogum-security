@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import time
+import uuid
 from typing import Any
 
 from arango.database import StandardDatabase
@@ -10,9 +12,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from app.api.v1.inventory import get_tenant_db
-from app.services.provider_service import _make_key, get_provider, get_provider_credentials
+from app.services.provider_service import _make_key, get_provider
 from app.services.side_scanning.trigger import SCANNABLE_RESOURCE_TYPES, enqueue_side_scan
 from app.workers.tasks.side_scanning import scan_container_image, scan_k8s_container
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/side-scans", tags=["side-scans"])
 
@@ -21,22 +25,39 @@ router = APIRouter(prefix="/api/v1/side-scans", tags=["side-scans"])
 
 
 def _validate_scanner_token(db: StandardDatabase, tenant_id: str, token: str) -> None:
-    """Raise 401 if the scanner token does not match tenant_config."""
+    """US-03.17: valida o token contra o hash persistido no provider.
+
+    O token é gerado no registro/rotação (`rotate_scanner_token`) e apenas o
+    hash SHA-256 fica no documento — busca por hash (comparação em tempo
+    constante sobre o resumo, sem acoplamento ao tenant no cabeçalho)."""
+    from app.services.provider_service import hash_scanner_token
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         cursor = db.aql.execute(
-            "FOR c IN tenant_config FILTER c.tenant_id == @tid LIMIT 1 RETURN c",
-            bind_vars={"tid": tenant_id},
+            "FOR c IN tenant_config FILTER c.scanner_token_hash == @hash LIMIT 1 RETURN 1",
+            bind_vars={"hash": hash_scanner_token(token)},
         )
-        docs = list(cursor)
+        matched = len(list(cursor)) > 0
     except Exception:
+        matched = False
+    if not matched:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    if not docs:
-        raise HTTPException(status_code=401, detail="Unauthorized")
 
-    expected: str | None = docs[0].get("scanner_token")
-    if not expected or expected != token:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+_JOB_ACTIVE_OR_TERMINAL = {"queued", "running", "completed", "failed"}
+
+
+def _job_already_tracked(db: StandardDatabase, job_id: str) -> bool:
+    """True se o job_id já existe em estado ativo ou terminal (US-03.16).
+
+    Reentrega de webhook (mesmo job_id) → 202 sem duplicar trabalho."""
+    try:
+        doc = db.collection("scan_jobs").get(job_id)
+        return bool(doc and str(doc.get("status") or "") in _JOB_ACTIVE_OR_TERMINAL)
+    except Exception:
+        return False
 
 
 # ─── K8s DaemonSet webhook ───────────────────────────────────────────────────
@@ -66,7 +87,11 @@ async def receive_k8s_scan_trigger(
     """
     _validate_scanner_token(db, x_ogum_tenant_id, x_ogum_token)
 
-    job_id = payload.job_id or f"k8s-{payload.pod_namespace}-{payload.pod_name}-{int(time.time())}"
+    job_id = payload.job_id or f"k8s-{payload.pod_namespace}-{payload.pod_name}-{uuid.uuid4().hex}"
+
+    # Idempotência (US-03.16): reentrega com job_id conhecido não re-enfileira
+    if _job_already_tracked(db, job_id):
+        return {"job_id": job_id, "status": "duplicate-skipped"}
 
     job_doc = {
         "_key": job_id,
@@ -84,7 +109,7 @@ async def receive_k8s_scan_trigger(
         if not db.collection("scan_jobs").has(job_id):
             db.collection("scan_jobs").insert(job_doc)
     except Exception:
-        pass  # key collision acceptable
+        logger.debug("scan_jobs insert skipped (key collision) for %s", job_id)
 
     scan_k8s_container.delay(
         tenant_id=x_ogum_tenant_id,
@@ -123,7 +148,11 @@ async def receive_ecr_push_event(
     """Receive an ECR push event, enqueue scan_container_image. Returns 202 Accepted."""
     _validate_scanner_token(db, x_ogum_tenant_id, x_ogum_token)
 
-    job_id = payload.job_id or f"ecr-{payload.registry_id}-{int(time.time())}"
+    job_id = payload.job_id or f"ecr-{payload.registry_id}-{uuid.uuid4().hex}"
+
+    # Idempotência (US-03.16): reentrega com job_id conhecido não re-enfileira
+    if _job_already_tracked(db, job_id):
+        return {"job_id": job_id, "status": "duplicate-skipped"}
 
     job_doc = {
         "_key": job_id,
@@ -141,7 +170,7 @@ async def receive_ecr_push_event(
         if not db.collection("scan_jobs").has(job_id):
             db.collection("scan_jobs").insert(job_doc)
     except Exception:
-        pass
+        logger.debug("scan_jobs insert skipped for %s (exists or invalid)", job_id)
 
     scan_container_image.delay(
         tenant_id=x_ogum_tenant_id,
@@ -187,14 +216,7 @@ async def trigger_resource_scan(
     if provider is None:
         raise HTTPException(status_code=400, detail="Provider not found for this resource")
 
-    credentials = get_provider_credentials(db, provider_id)
-    full_credentials = {
-        **credentials,
-        "role_arn": provider.role_arn,
-        "external_id": getattr(provider, "external_id", None),
-    }
-
-    job_id = enqueue_side_scan(db, x_tenant_id, resource_doc, provider_id, full_credentials)
+    job_id = enqueue_side_scan(db, x_tenant_id, resource_doc, provider_id)
     if job_id is None:
         raise HTTPException(status_code=422, detail="Resource could not be resolved to a scannable target")
 
@@ -313,14 +335,7 @@ async def retry_scan_job(
         provider = get_provider(db, provider_id)
         if provider is None:
             raise HTTPException(status_code=400, detail="Provider not found for this resource")
-        credentials = get_provider_credentials(db, provider_id)
-        full_credentials = {
-            **credentials,
-            "role_arn": provider.role_arn,
-            "external_id": getattr(provider, "external_id", None),
-        }
-
-        new_job_id = enqueue_side_scan(db, x_tenant_id, resource_doc, provider_id, full_credentials)
+        new_job_id = enqueue_side_scan(db, x_tenant_id, resource_doc, provider_id)
         if new_job_id is None:
             raise HTTPException(status_code=422, detail="Resource could not be resolved to a scannable target")
         return {"job_id": new_job_id, "status": "queued", "original_job_id": job_id}

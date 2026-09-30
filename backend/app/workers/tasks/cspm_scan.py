@@ -16,12 +16,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.db.init import init_tenant_schema
-from app.models.finding import Finding, ScanJob, ScanJobStatus
+from app.models.finding import ScanJob, ScanJobStatus
 from app.services.compliance_service import snapshot_compliance_scores
 from app.services.graph.data_access_edges import build_data_access_edges
 from app.services.graph.exposure import compute_exposed_internet
 from app.services.graph.iam_edges import build_iam_edges
 from app.services.graph.resource_edges import build_resource_edges
+from app.services.provider_service import resolve_provider_credentials
 from app.services.prowler_inventory import extract_inventory_from_findings
 from app.services.prowler_service import ProwlerService, ScanResult
 from app.services.side_scanning.trigger import (
@@ -30,7 +31,7 @@ from app.services.side_scanning.trigger import (
     has_prior_side_scan,
 )
 from app.workers.celery_app import celery_app
-from app.workers.tasks.cloud_utils import _get_tenant_db, _upsert, upsert_finding
+from app.workers.tasks.cloud_utils import _get_tenant_db, _upsert, upsert_finding_with_edge
 from app.workers.tasks.job_logging import JobLogHandler
 
 logger = logging.getLogger(__name__)
@@ -41,25 +42,6 @@ def _update_job(db: Any, job_id: str, **fields: Any) -> None:
         db.collection("scan_jobs").update({"_key": job_id, **fields})
     except Exception:
         logger.exception("Failed to update scan_job %s", job_id)
-
-
-def _upsert_finding(db: Any, finding: Finding) -> None:
-    """Upsert finding and create HAS_FINDING edge from resource → finding."""
-    upsert_finding(db, finding)
-
-    finding_key = finding.arango_key()
-    edge_key = f"{finding.resource_id}__{finding_key}".replace("/", "_").replace(":", "_")
-    edge_doc = {
-        "_key": edge_key[:240],
-        "_from": f"resources/{finding.resource_id}",
-        "_to": f"findings/{finding_key}",
-        "tenant_id": finding.tenant_id,
-    }
-    try:
-        if not db.collection("HAS_FINDING").has(edge_doc["_key"]):
-            db.collection("HAS_FINDING").insert(edge_doc)
-    except Exception:
-        pass  # edge already exists or resource doesn't exist — both acceptable
 
 
 def _upsert_inventory(db: Any, inventory: dict[str, list[dict[str, Any]]]) -> int:
@@ -182,7 +164,6 @@ def _auto_trigger_side_scans(
     db: Any,
     tenant_id: str,
     provider_id: str,
-    credentials: dict[str, Any],
     inventory: dict[str, list[dict[str, Any]]],
 ) -> int:
     """
@@ -203,7 +184,7 @@ def _auto_trigger_side_scans(
         if not resource_key or has_prior_side_scan(db, tenant_id, resource_key):
             continue
         try:
-            job_id = enqueue_side_scan(db, tenant_id, resource, provider_id, credentials)
+            job_id = enqueue_side_scan(db, tenant_id, resource, provider_id)
         except Exception:
             logger.exception("Failed to auto-trigger side-scan [tenant=%s resource=%s]", tenant_id, resource_key)
             continue
@@ -279,7 +260,6 @@ def run_cspm_scan(
     provider_id: str,
     provider: str,
     frameworks: list[str] | None,
-    credentials: dict[str, Any],
     account_id: str,
     regions: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -298,12 +278,81 @@ def run_cspm_scan(
             Prowler's full check catalog (recommended — every check still
             tags its result with every framework it belongs to, so this is a
             superset of any explicit list, not a narrower scan).
-        credentials: Ephemeral credentials dict (never stored beyond this call).
         account_id: Cloud account/subscription/project ID.
         regions: Optional list of regions to scan (None = all).
     """
     db = _get_tenant_db(tenant_id)
     init_tenant_schema(db)
+
+    # US-01.20 — lock distribuído por (tenant, provider): scans agendado e
+    # manual do mesmo provider nunca rodam em paralelo. TTL cobre worker morto.
+    from redis import Redis
+
+    from app.core.config import settings as _settings
+
+    lock_key = f"ogum:cspm-lock:{tenant_id}:{provider_id}"
+    lock = Redis.from_url(_settings.REDIS_URL, socket_connect_timeout=2, socket_timeout=2).set(
+        lock_key, "1", nx=True, ex=_CSPM_LOCK_TTL_SECONDS
+    )
+    if not lock:
+        skipped_job_id = str(uuid.uuid4())
+        skipped = ScanJob(
+            job_id=skipped_job_id,
+            tenant_id=tenant_id,
+            provider_id=provider_id,
+            provider=provider,
+            task_name=f"cspm_scan/{provider}",
+            frameworks=frameworks or [],
+            regions=regions or [],
+            status=ScanJobStatus.SKIPPED,
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+            error_message="another scan already running for this provider",
+        )
+        db.collection("scan_jobs").insert(skipped.to_arango_doc())
+        logger.warning(
+            "CSPM scan skipped — lock held [tenant=%s provider=%s job=%s]",
+            tenant_id,
+            provider_id,
+            skipped_job_id,
+        )
+        return {
+            "job_id": skipped_job_id,
+            "tenant_id": tenant_id,
+            "provider": provider,
+            "status": "skipped",
+            "skip_reason": "scan already running for this provider",
+        }
+
+    try:
+        return _run_cspm_scan_locked(self, tenant_id, provider_id, provider, frameworks, account_id, regions)
+    finally:
+        try:
+            Redis.from_url(_settings.REDIS_URL).delete(lock_key)
+        except Exception:
+            logger.warning("Failed to release CSPM lock %s", lock_key, exc_info=True)
+
+
+_CSPM_LOCK_TTL_SECONDS = 7200
+
+
+def _run_cspm_scan_locked(
+    self: Any,
+    tenant_id: str,
+    provider_id: str,
+    provider: str,
+    frameworks: list[str] | None,
+    account_id: str,
+    regions: list[str] | None,
+) -> dict[str, Any]:
+    """Corpo original do run_cspm_scan sob o lock da US-01.20."""
+    db = _get_tenant_db(tenant_id)
+    init_tenant_schema(db)
+
+    # Credenciais resolvidas no worker (US-06.11/12) — nunca mais via payload
+    # do broker. Vault indisponível → segredos ausentes (logado) e o scan
+    # falha na camada cloud com erro claro; sem fallback para banco.
+    credentials = resolve_provider_credentials(db, provider_id)
 
     job_id = str(uuid.uuid4())
     job = ScanJob(
@@ -343,7 +392,7 @@ def run_cspm_scan(
         findings = scan_result.findings
 
         for finding in findings:
-            _upsert_finding(db, finding)
+            upsert_finding_with_edge(db, finding)
 
         # Score snapshot for the Compliance Score Trend chart — one row per framework,
         # upserted by day (see snapshot_compliance_scores). Runs for every provider,
@@ -368,11 +417,10 @@ def run_cspm_scan(
         assets_removed = len(deleted_resource_ids.get("resources", []))
         findings_removed = _cascade_delete_findings(db, tenant_id, deleted_resource_ids.get("resources", []))
 
-        # Side-scanning is AWS-only (scan_ec2_instance_v2/scan_lambda_function) and
-        # needs a live boto3 session, which credentials/provider_id here already
-        # carry — no extra credential resolution.
+        # Side-scanning is AWS-only (scan_ec2_instance_v2/scan_lambda_function);
+        # as tasks resolvem as credenciais no worker via provider_id (US-06.12).
         side_scans_triggered = (
-            _auto_trigger_side_scans(db, tenant_id, provider_id, credentials, inventory) if provider == "aws" else 0
+            _auto_trigger_side_scans(db, tenant_id, provider_id, inventory) if provider == "aws" else 0
         )
 
         # Graph enrichment — derives edges from the raw_metadata just persisted

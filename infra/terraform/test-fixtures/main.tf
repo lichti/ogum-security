@@ -1,3 +1,16 @@
+# W4.5 (plano v1): backend remoto — DESCOMENTE após criar o bucket do
+# laboratório (S3 + lock DynamoDB). Enquanto local, o terraform.tfstate
+# contém a access key de teste em plaintext: nunca commitar (gitignored).
+# terraform {
+#   backend "s3" {
+#     bucket         = "ogum-lab-tfstate"
+#     key            = "test-fixtures/terraform.tfstate"
+#     region         = "us-east-1"
+#     dynamodb_table = "ogum-lab-tfstate-lock"
+#     encrypt        = true
+#   }
+# }
+
 terraform {
   required_version = ">= 1.5"
 

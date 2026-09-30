@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
 from arango.database import StandardDatabase
 
 from app.models.finding import FindingStatus
+
+logger = logging.getLogger(__name__)
 
 
 def _encode_cursor(detected_at: str, key: str) -> str:
@@ -201,6 +204,7 @@ def update_finding_status(
                 }
             )
     except Exception:
-        pass  # audit failure must not block the status update
+        # audit failure must not block the status update
+        logger.debug("Audit log write skipped for %s", finding_key, exc_info=True)
 
     return get_finding(db, finding_key, tenant_id)

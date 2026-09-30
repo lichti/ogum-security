@@ -36,17 +36,20 @@ function CopyButton({ text }: { text: string }) {
 
 export function FindingDetailPanel({ findingKey, onClose, onMuted }: FindingDetailPanelProps) {
   const [finding, setFinding] = useState<FindingDetail | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showMuteModal, setShowMuteModal] = useState(false)
   const [mutingLoading, setMutingLoading] = useState(false)
   const { classify } = useSlaSettings()
 
   useEffect(() => {
-    if (!findingKey) { setFinding(null); return }
+    if (!findingKey) { setFinding(null); setLoadFailed(false); return }
     setLoading(true)
+    setLoadFailed(false)
     findingsApi.get(findingKey)
       .then((r) => setFinding(r.data.data))
-      .catch(() => setFinding(null))
+      // US-14.24: falha de rede nunca mais vira painel vazio silencioso
+      .catch(() => { setFinding(null); setLoadFailed(true) })
       .finally(() => setLoading(false))
   }, [findingKey])
 
@@ -107,6 +110,11 @@ export function FindingDetailPanel({ findingKey, onClose, onMuted }: FindingDeta
           </button>
         </div>
 
+        {loadFailed && !loading && (
+          <div role="alert" className="px-4 py-3 text-sm text-red-300 bg-red-950/40 rounded-lg border border-red-900/60">
+            Não foi possível carregar o detalhe do finding. Tente fechar e reabrir o painel.
+          </div>
+        )}
         {loading && (
           <div className="p-4 space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (

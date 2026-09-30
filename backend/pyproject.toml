@@ -4,7 +4,6 @@ version = "0.2.0"
 description = "Ogum Security — Open CNAPP Backend"
 authors = ["Ogum Security Contributors"]
 license = "MIT"
-readme = "README.md"
 packages = [{ include = "app" }]
 
 [tool.poetry.dependencies]
@@ -30,6 +29,7 @@ google-cloud-compute = "^1.19.0"
 google-cloud-container = "^2.52.0"
 google-cloud-storage = "^2.18.0"
 google-auth = "^2.35.0"
+hvac = "^2.3.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.0"
@@ -46,7 +46,7 @@ line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
+select = ["E", "F", "I", "N", "W", "UP", "S110"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -72,6 +72,10 @@ markers = [
     "security: tenant isolation and auth enforcement — always run in CI, always blocking",
     "e2e: full-stack browser tests via Playwright",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Cleanup best-effort silencioso é idiomático em fixtures/testes
+"tests/**" = ["S110"]
 
 [tool.coverage.run]
 source = ["app"]

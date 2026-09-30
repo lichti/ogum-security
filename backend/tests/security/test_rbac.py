@@ -1,80 +1,222 @@
-"""
-RBAC enforcement tests — security-critical, always run in CI.
+"""RBAC enforcement tests — security-critical, always run in CI (US-06.09).
 
-Verify that every protected route enforces authentication and role-based
-access control. A 401 or 403 in the wrong place is a security bug.
+Verify that the interim tenant-token gate enforces authentication and the
+PlatformAdmin boundary on /api/v1/admin/*, and that the tenant identity is
+resolved from the verified token — never from client headers.
 
-These tests are stubs — uncomment and adapt each case once the FastAPI
-app and auth middleware are implemented (app/main.py, app/core/security.py).
+Real ArangoDB (tenant registry in `_system`) and real Redis (blocklist),
+per the global test rules. The auth flag is flipped per test via
+monkeypatch — the middleware reads `settings.AUTH_ENABLED` at request time.
 """
+
+import asyncio
 
 import pytest
+from fastapi.testclient import TestClient
 
-# from fastapi.testclient import TestClient
-# from tests.conftest import TEST_TENANT_A
+from app.core.config import settings
+from app.core.middleware import TenantIdentityMiddleware
+from app.main import app
+from app.services import tenant_registry
+from tests.conftest import TEST_TENANT_A, TEST_TENANT_B
+
+CDR_NOT_BUILT = "CDR engine and approval flow are Epic 04 — not implemented yet"
+
+
+@pytest.fixture
+def client() -> TestClient:
+    return TestClient(app)
+
+
+@pytest.fixture
+def auth_enabled(monkeypatch):
+    monkeypatch.setattr(settings, "AUTH_ENABLED", True)
+
+
+@pytest.fixture
+def clean_registry(sys_db):
+    """Zera os tokens dos tenants de teste e restaura o estado "registrado sem
+    token" (a allowlist do resolver estrito precisa dos registros vivos —
+    US-06.10). Databases criados pelos testes são removidos."""
+    yield
+    if sys_db.has_collection(tenant_registry.TENANTS_COLLECTION):
+        col = sys_db.collection(tenant_registry.TENANTS_COLLECTION)
+        for tenant_id in (TEST_TENANT_A, TEST_TENANT_B):
+            col.delete(tenant_id, ignore_missing=True)
+        for tenant_id in (TEST_TENANT_A, TEST_TENANT_B):
+            tenant_registry.register_tenant(tenant_id)
+    sys_db.delete_database(f"ogum_{TEST_TENANT_B}", ignore_missing=True)
+
+
+def _mint(tenant_id: str, platform_admin: bool = False) -> str:
+    return tenant_registry.mint_api_token(tenant_id, platform_admin=platform_admin).api_token
+
+
+def _auth(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.mark.security
+@pytest.mark.usefixtures("auth_enabled")
 class TestAuthenticationRequired:
-    """All protected routes must return 401 when no token is provided."""
+    """Every protected route returns 401 when no (valid) token is provided."""
 
-    def test_inventory_requires_auth(self) -> None:
-        pytest.skip("Implement when GET /api/v1/inventory is created")
-        # response = api_client.get("/api/v1/inventory")
-        # assert response.status_code == 401
+    def test_inventory_requires_auth(self, client):
+        assert client.get("/api/v1/inventory").status_code == 401
 
-    def test_findings_requires_auth(self) -> None:
-        pytest.skip("Implement when GET /api/v1/findings is created")
+    def test_findings_requires_auth(self, client):
+        assert client.get("/api/v1/findings").status_code == 401
 
-    def test_scans_requires_auth(self) -> None:
-        pytest.skip("Implement when POST /api/v1/scans is created")
+    def test_scans_requires_auth(self, client):
+        response = client.post("/api/v1/scans", json={})
+        assert response.status_code == 401
 
-    def test_cdr_requires_auth(self) -> None:
-        pytest.skip("Implement when POST /api/v1/incidents/{id}/respond is created")
+    def test_admin_jobs_requires_auth(self, client):
+        assert client.get("/api/v1/admin/jobs").status_code == 401
+
+    def test_garbage_token_rejected(self, client):
+        response = client.get("/api/v1/inventory", headers=_auth("not-a-jwt"))
+        assert response.status_code == 401
+
+    def test_health_stays_public(self, client):
+        assert client.get("/health").status_code == 200
+
+    def test_scanner_webhooks_bypass_bearer_gate(self, client):
+        """Webhooks autenticam por x-ogum-token próprio — nunca pelo Bearer.
+
+        Sem os headers obrigatórios do webhook a resposta é 422 (FastAPI),
+        nunca 401 do gate Bearer.
+        """
+        response = client.post("/api/v1/side-scans/webhooks/k8s-scan", json={})
+        assert response.status_code != 401
+
+    def test_401_carries_www_authenticate(self, client):
+        response = client.get("/api/v1/inventory")
+        assert response.headers.get("www-authenticate") == "Bearer"
 
 
 @pytest.mark.security
+@pytest.mark.usefixtures("auth_enabled", "clean_registry")
 class TestRoleEnforcement:
-    """Roles with insufficient privilege must receive 403, not 401 or 200."""
+    """/api/v1/admin/* exige token com flag platform_admin; SecOps → 403."""
 
-    def test_devops_cannot_trigger_cdr_tier2(self) -> None:
-        """DevOps role must not authorize CDR Tier 2 containment actions."""
-        pytest.skip("Implement when CDR respond endpoint is created")
-        # response = api_client.post(
-        #     "/api/v1/incidents/inc-001/respond",
-        #     json={"action": "isolate_ec2", "resource_id": "i-abc"},
-        #     headers=auth_headers_devops,
-        # )
-        # assert response.status_code == 403
+    def test_secops_token_cannot_list_admin_jobs(self, client):
+        response = client.get("/api/v1/admin/jobs", headers=_auth(_mint(TEST_TENANT_A)))
+        assert response.status_code == 403
 
-    def test_auditor_cannot_trigger_scan(self) -> None:
-        """Auditor role is read-only — must not initiate scans."""
-        pytest.skip("Implement when Auditor role and scan endpoint exist")
+    def test_secops_token_cannot_mint_tokens(self, client):
+        response = client.put(
+            f"/api/v1/admin/tenants/{TEST_TENANT_B}/api-token",
+            headers=_auth(_mint(TEST_TENANT_A)),
+        )
+        assert response.status_code == 403
 
-    def test_devops_cannot_delete_provider(self) -> None:
-        """Only PlatformAdmin can remove connected cloud providers."""
-        pytest.skip("Implement when DELETE /api/v1/providers/{id} exists")
+    def test_platform_admin_token_lists_registry(self, client):
+        token = _mint(TEST_TENANT_A, platform_admin=True)
+        response = client.get("/api/v1/admin/tenants", headers=_auth(token))
+        assert response.status_code == 200
+        tenants = response.json()["data"]
+        assert any(t["tenant_id"] == TEST_TENANT_A for t in tenants)
+        assert all("token_hash" not in t for t in tenants)
 
-    def test_secops_can_view_findings(self) -> None:
-        """SecOps is the primary operator — must have read access to findings."""
-        pytest.skip("Implement when findings endpoint and SecOps role exist")
+    def test_platform_admin_token_mints_and_rotates(self, client):
+        admin_token = _mint(TEST_TENANT_A, platform_admin=True)
+        first = client.put(f"/api/v1/admin/tenants/{TEST_TENANT_B}/api-token", headers=_auth(admin_token)).json()[
+            "data"
+        ]["api_token"]
+
+        # O token recém-emitido autentica…
+        assert client.get("/api/v1/inventory", headers=_auth(first)).status_code == 200
+
+        # …e a rotação revoga o anterior imediatamente (hash substituído).
+        client.put(f"/api/v1/admin/tenants/{TEST_TENANT_B}/api-token", headers=_auth(admin_token))
+        assert client.get("/api/v1/inventory", headers=_auth(first)).status_code == 401
+
+
+@pytest.mark.security
+@pytest.mark.usefixtures("auth_enabled", "clean_registry")
+class TestTenantIdentityFromToken:
+    """A identidade vem do token verificado — header spoofado é sobrescrito."""
+
+    def _run_middleware(self, token: str, spoofed_tenant: str) -> dict:
+        captured: dict = {"called": False, "headers": None}
+
+        async def inner_app(scope, receive, send):
+            captured["called"] = True
+            captured["headers"] = dict(scope["headers"])
+
+        async def _noop_receive():
+            return {}
+
+        async def _noop_send(message):
+            return None
+
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/api/v1/inventory",
+            "headers": [
+                (b"x-tenant-id", spoofed_tenant.encode()),
+                (b"authorization", f"Bearer {token}".encode()),
+            ],
+        }
+        asyncio.run(TenantIdentityMiddleware(inner_app)(scope, _noop_receive, _noop_send))
+        return captured
+
+    def test_spoofed_tenant_header_is_overwritten(self):
+        token = _mint(TEST_TENANT_A)
+        captured = self._run_middleware(token, TEST_TENANT_B)
+        assert captured["called"] is True
+        assert captured["headers"][b"x-tenant-id"] == TEST_TENANT_A.encode()
+
+    def test_user_id_header_is_overwritten_with_subject(self):
+        token = _mint(TEST_TENANT_A)
+        captured = self._run_middleware(token, TEST_TENANT_A)
+        assert captured["headers"][b"x-user-id"] == f"tenant:{TEST_TENANT_A}".encode()
+
+    def test_missing_token_short_circuits_without_calling_app(self):
+        captured: dict = {"called": False}
+
+        async def inner_app(scope, receive, send):
+            captured["called"] = True
+
+        async def _noop_receive():
+            return {}
+
+        async def _noop_send(message):
+            return None
+
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/api/v1/inventory",
+            "headers": [(b"x-tenant-id", TEST_TENANT_A.encode())],
+        }
+        asyncio.run(TenantIdentityMiddleware(inner_app)(scope, _noop_receive, _noop_send))
+        assert captured["called"] is False
+
+
+@pytest.mark.security
+class TestDevModePassthrough:
+    """AUTH_ENABLED=false (default): comportamento dev preservado."""
+
+    def test_legacy_headers_still_work_with_auth_off(self, client, db_tenant_a):
+        response = client.get("/api/v1/inventory", headers={"X-Tenant-ID": TEST_TENANT_A})
+        assert response.status_code == 200
 
 
 @pytest.mark.security
 class TestCDRAuthorization:
     """CDR-specific authorization: Tier 2 must never auto-execute."""
 
-    def test_tier2_action_without_approval_is_rejected(self) -> None:
-        """
-        Tier 2 containment (isolate EC2, terminate deployment) must not execute
-        without explicit human approval token from Slack/Teams webhook.
-        """
-        pytest.skip("Implement when CDR engine and approval flow are created")
+    @pytest.mark.skip(reason=CDR_NOT_BUILT)
+    def test_tier2_action_without_approval_is_rejected(self):
+        """Tier 2 containment must not execute without explicit approval."""
 
-    def test_tier2_approval_token_is_single_use(self) -> None:
+    @pytest.mark.skip(reason=CDR_NOT_BUILT)
+    def test_tier2_approval_token_is_single_use(self):
         """An approval token used once must be invalidated — no replay."""
-        pytest.skip("Implement when approval token mechanism is created")
 
-    def test_every_cdr_action_creates_audit_entry(self) -> None:
-        """Every executed CDR action (Tier 1 or Tier 2) must produce an audit log."""
-        pytest.skip("Implement when CDR action executor and audit log are created")
+    @pytest.mark.skip(reason=CDR_NOT_BUILT)
+    def test_every_cdr_action_creates_audit_entry(self):
+        """Every executed CDR action must produce an audit log entry."""

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiClient, getErrorMessage, type ApiResponse } from "@/lib/api";
 import { RefreshCw, Circle } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 interface Worker {
   hostname: string;
@@ -29,12 +29,10 @@ export default function AdminWorkersPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/api/v1/admin/workers`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = await res.json();
-      setWorkers(body.data ?? []);
+      const res = await apiClient.get<ApiResponse<Worker[]>>('/api/v1/admin/workers');
+      setWorkers(res.data.data ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load workers");
+      setError(getErrorMessage(e, "Failed to load workers"));
     } finally {
       setLoading(false);
     }

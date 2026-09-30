@@ -83,3 +83,4 @@ logs/
 # Prowler scan outputs (never commit scan results)
 prowler-output/
 output/
+.mimosa/

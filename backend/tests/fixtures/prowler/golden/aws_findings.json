@@ -1,0 +1,155 @@
+{
+  "anonymized": true,
+  "captured_at": "2026-09-09T00:00:00+00:00",
+  "count": 8,
+  "findings": [
+    {
+      "status": "FAIL",
+      "status_extended": "IAM user 'john' does not have MFA enabled.",
+      "region": "us-east-1",
+      "resource_uid": "arn:aws:iam::123456789012:user/john",
+      "resource_name": "john",
+      "resource_metadata": null,
+      "account_uid": "123456789012",
+      "compliance": {"framework": "cis_2.0_aws", "requirements": ["1.5"]},
+      "metadata": {
+        "CheckID": "iam_user_mfa_enabled",
+        "CheckTitle": "Ensure IAM users have MFA enabled",
+        "Description": "IAM users should have hardware or virtual MFA enabled.",
+        "ResourceType": "IamUser",
+        "Severity": "high",
+        "Remediation": {
+          "Recommendation": {"Text": "Enable MFA for the IAM user."},
+          "Code": {"CLI": "aws iam enable-mfa-device --user-name john"}
+        }
+      },
+      "raw": null
+    },
+    {
+      "status": "PASS",
+      "status_extended": "Root account has MFA enabled.",
+      "region": "us-east-1",
+      "resource_uid": "arn:aws:iam::123456789012:root",
+      "resource_name": "root",
+      "resource_metadata": null,
+      "account_uid": "123456789012",
+      "compliance": {"framework": "cis_2.0_aws", "requirements": ["1.4"]},
+      "metadata": {
+        "CheckID": "root_account_mfa_enabled",
+        "CheckTitle": "Ensure root account has MFA",
+        "Description": "Root account must have MFA.",
+        "ResourceType": "AwsAccount",
+        "Severity": "critical"
+      },
+      "raw": null
+    },
+    {
+      "status": "MANUAL",
+      "status_extended": "Manual review required for encrypted buckets.",
+      "region": "us-east-1",
+      "resource_uid": "arn:aws:s3:::bucket-manual",
+      "resource_name": "bucket-manual",
+      "resource_metadata": null,
+      "account_uid": "123456789012",
+      "compliance": null,
+      "metadata": {
+        "CheckID": "s3_bucket_encrypted",
+        "CheckTitle": "S3 bucket encryption",
+        "Description": "Buckets should be encrypted.",
+        "ResourceType": "S3Bucket",
+        "Severity": "medium"
+      },
+      "raw": null
+    },
+    {
+      "status": "FAIL",
+      "status_extended": "Security group opens SSH to the world.",
+      "region": "us-west-2",
+      "resource_uid": "sg-0abc123def456",
+      "resource_name": "sg-0abc123def456",
+      "resource_metadata": null,
+      "account_uid": "123456789012",
+      "compliance": {"framework": "cis_2.0_aws", "requirements": ["5.2"]},
+      "metadata": {
+        "CheckID": "ec2_securitygroup_open_ssh",
+        "CheckTitle": "No open SSH to world",
+        "Description": "Security groups must not allow 0.0.0.0/0 on port 22.",
+        "ResourceType": "SecurityGroup",
+        "Severity": "critical"
+      },
+      "raw": null
+    },
+    {
+      "status": "FAIL",
+      "status_extended": "Volume is unencrypted.",
+      "region": "eu-west-1",
+      "resource_uid": "vol-0123456789abcdef0",
+      "resource_name": "vol-0123456789abcdef0",
+      "resource_metadata": null,
+      "account_uid": "123456789012",
+      "compliance": null,
+      "metadata": {
+        "CheckID": "ebs_volume_encryption",
+        "CheckTitle": "EBS encryption by default",
+        "Description": "EBS volumes must be encrypted.",
+        "ResourceType": "EbsVolume",
+        "Severity": "high"
+      },
+      "raw": null
+    },
+    {
+      "status": "FAIL",
+      "status_extended": "Password policy lacks minimum length.",
+      "region": "us-east-1",
+      "resource_uid": "123456789012",
+      "resource_name": "password-policy",
+      "resource_metadata": null,
+      "account_uid": "123456789012",
+      "compliance": null,
+      "metadata": {
+        "CheckID": "iam_password_policy_minimum_length",
+        "CheckTitle": "Password minimum length",
+        "Description": "Password policy must require at least 14 characters.",
+        "ResourceType": "AwsAccount",
+        "Severity": "low"
+      },
+      "raw": null
+    },
+    {
+      "status": "FAIL",
+      "status_extended": "Access logging not enabled.",
+      "region": "us-east-1",
+      "resource_uid": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/lb-1",
+      "resource_name": "lb-1",
+      "resource_metadata": null,
+      "account_uid": "123456789012",
+      "compliance": null,
+      "metadata": {
+        "CheckID": "elb_tls_logging",
+        "CheckTitle": "ALB logging",
+        "Description": "Load balancers must log requests.",
+        "ResourceType": "Elb v2",
+        "Severity": "informational"
+      },
+      "raw": null
+    },
+    {
+      "status": "fail",
+      "status_extended": "Lowercase status spelling from older prowler output.",
+      "region": "us-east-1",
+      "resource_uid": "arn:aws:kms:us-east-1:123456789012:key/abc",
+      "resource_name": "kms-abc",
+      "resource_metadata": null,
+      "account_uid": "123456789012",
+      "compliance": null,
+      "metadata": {
+        "CheckID": "kms_key_rotation",
+        "CheckTitle": "KMS key rotation",
+        "Description": "KMS keys must rotate.",
+        "ResourceType": "KmsKey",
+        "Severity": "High"
+      },
+      "raw": null
+    }
+  ]
+}

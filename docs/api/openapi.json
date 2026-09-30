@@ -469,6 +469,32 @@
         "title": "ApiResponse[ProviderConfig]",
         "type": "object"
       },
+      "ApiResponse_ProviderHealth_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ProviderHealth"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[ProviderHealth]",
+        "type": "object"
+      },
       "ApiResponse_ProviderRegisterResponse_": {
         "properties": {
           "data": {
@@ -1840,7 +1866,7 @@
         "type": "object"
       },
       "DiscoverRequest": {
-        "description": "Optional body for POST /{id}/discover.\n\nAllows re-providing ephemeral credentials for providers registered with\ncredential_type='static' / 'service_principal' / 'service_account' / 'kubeconfig'.\nCredentials passed here are forwarded to the task and never stored.\nOmit the body (or all fields) to use ambient worker credentials / stored role_arn.",
+        "description": "Optional body for POST /{id}/discover.\n\nAllows re-providing credentials for providers registered with\ncredential_type='static' / 'service_principal' / 'service_account' / 'kubeconfig'.\nCredentials passed here are persisted to Vault (US-06.11) and resolved by the\ntask in the worker \u2014 never carried in the Celery payload (US-06.12).\nOmit the body (or all fields) to use ambient worker credentials / stored role_arn.",
         "properties": {
           "aws_access_key_id": {
             "anyOf": [
@@ -2850,6 +2876,28 @@
             ],
             "title": "Last Discovery Job Id"
           },
+          "last_health_check_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Health Check At"
+          },
+          "last_health_result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Health Result"
+          },
           "project_id": {
             "anyOf": [
               {
@@ -2889,6 +2937,17 @@
             ],
             "title": "Role Arn"
           },
+          "scanner_token_once": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scanner Token Once"
+          },
           "status": {
             "default": "pending",
             "enum": [
@@ -2918,6 +2977,106 @@
           "display_name"
         ],
         "title": "ProviderConfig",
+        "type": "object"
+      },
+      "ProviderHealth": {
+        "description": "Connection health for one connected provider.\n\n`health` is derived either from stored signals (`live=False`, cheap \u2014 used by\nGET /{id}/health when rendering many cards) or from a real credential probe\n(`live=True`, POST /{id}/test-connection).",
+        "properties": {
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "health": {
+            "enum": [
+              "healthy",
+              "degraded",
+              "failed"
+            ],
+            "title": "Health",
+            "type": "string"
+          },
+          "last_discovery_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Discovery At"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "live": {
+            "default": false,
+            "title": "Live",
+            "type": "boolean"
+          },
+          "provider_id": {
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "active",
+              "error",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "health",
+          "status",
+          "enabled"
+        ],
+        "title": "ProviderHealth",
         "type": "object"
       },
       "ProviderRegisterRequest": {
@@ -3110,6 +3269,17 @@
           "provider_id": {
             "title": "Provider Id",
             "type": "string"
+          },
+          "scanner_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scanner Token"
           }
         },
         "required": [
@@ -4193,7 +4363,8 @@
           "queued",
           "running",
           "completed",
-          "failed"
+          "failed",
+          "skipped"
         ],
         "title": "ScanJobStatus",
         "type": "string"
@@ -4531,12 +4702,18 @@
         "title": "WorkerInfo",
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
     }
   },
   "info": {
     "description": "Open CNAPP \u2014 Built for Everyone",
     "title": "Ogum Security API",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -4634,6 +4811,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Jobs",
         "tags": [
           "admin"
@@ -4676,6 +4858,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Trigger Job",
         "tags": [
           "admin"
@@ -4730,6 +4917,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Revoke Job",
         "tags": [
           "admin"
@@ -4782,6 +4974,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Job",
         "tags": [
           "admin"
@@ -4834,6 +5031,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Stream Job Logs",
         "tags": [
           "admin"
@@ -4887,6 +5089,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Retry Job",
         "tags": [
           "admin"
@@ -4909,9 +5116,99 @@
             "description": "Successful Response"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Queue Depth",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/tenants": {
+      "get": {
+        "description": "Lista os tenants registrados (sem expor hashes de token).",
+        "operationId": "list_registered_tenants_api_v1_admin_tenants_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_dict__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Registered Tenants",
+        "tags": [
+          "admin-tenants"
+        ]
+      }
+    },
+    "/api/v1/admin/tenants/{tenant_id}/api-token": {
+      "put": {
+        "description": "Registra o tenant (se necess\u00e1rio) e emite/rotaciona o token API.\n\nO valor do token \u00e9 retornado **uma \u00fanica vez** nesta resposta; o registro\npersiste apenas o hash. Emitir novamente revoga o token anterior.",
+        "operationId": "issue_api_token_api_v1_admin_tenants__tenant_id__api_token_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "platform_admin",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Platform Admin",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_dict_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Issue Api Token",
+        "tags": [
+          "admin-tenants"
         ]
       }
     },
@@ -4931,6 +5228,11 @@
             "description": "Successful Response"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Workers",
         "tags": [
           "admin"
@@ -8177,6 +8479,167 @@
           }
         },
         "summary": "Trigger Discovery Endpoint",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/v1/providers/{provider_id}/health": {
+      "get": {
+        "description": "Cached health derivation from stored signals \u2014 no cloud API calls.",
+        "operationId": "provider_health_endpoint_api_v1_providers__provider_id__health_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ProviderHealth_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Provider Health Endpoint",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/v1/providers/{provider_id}/rotate-scanner-token": {
+      "post": {
+        "description": "US-03.17: rotaciona o scanner_token do provider (K8s DaemonSet/ECR).\n\nO novo valor \u00e9 retornado **uma \u00fanica vez**; o anterior deixa de autenticar\nimediatamente (hash substitu\u00eddo).",
+        "operationId": "rotate_scanner_token_endpoint_api_v1_providers__provider_id__rotate_scanner_token_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_dict_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rotate Scanner Token Endpoint",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/v1/providers/{provider_id}/test-connection": {
+      "post": {
+        "description": "Live credential probe (read-only) \u2014 the \"Test Connection\" action.\n\nAlways returns 200 with a `health` verdict: a failed probe is a valid,\nexpected outcome to render on the card, not an HTTP error.",
+        "operationId": "test_connection_endpoint_api_v1_providers__provider_id__test_connection_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ProviderHealth_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Connection Endpoint",
         "tags": [
           "providers"
         ]
