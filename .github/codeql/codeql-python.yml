@@ -1,0 +1,11 @@
+name: "Ogum CodeQL config (python)"
+
+# paths-ignore é feature do codeql-action (aplicada à extração/resultado),
+# documentada em "Configuring advanced setup for code scanning".
+# Testes e scripts de ops não são superfície de ataque do produto: excluí-los
+# elimina falsos positivos cujo taint nasce em fixtures de teste (ex.: uma
+# constante de teste chamada SECRET_KEY passada como provider_id) e em CLIs
+# de onboarding cujo propósito é exibir um token uma única vez.
+paths-ignore:
+  - "backend/tests/**"
+  - "backend/scripts/**"
