@@ -140,8 +140,12 @@ def fetch_discovery(discovery_url: str) -> dict[str, Any]:
     else:
         url = f"{base}/.well-known/openid-configuration"
     _assert_public_host(url)
+    # Apontar ao IdP próprio é a função da feature — a URL é de PlatformAdmin e
+    # passa pela validação acima (https em produção, DNS resolvido e faixas
+    # privadas/loopback rejeitadas, precedente US-01.19).
+    # codeql[py/full-ssrf]
+    response = _http().get(url)
     try:
-        response = _http().get(url)
         response.raise_for_status()
         doc = cast(dict[str, Any], response.json())
     except (httpx.HTTPError, ValueError) as exc:

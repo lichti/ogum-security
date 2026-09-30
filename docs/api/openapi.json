@@ -2655,6 +2655,73 @@
         "title": "NarrativeStep",
         "type": "object"
       },
+      "OidcConfigIn": {
+        "description": "Configura\u00e7\u00e3o do IdP do tenant \u2014 PlatformAdmin via POST /auth/oidc/config.\n\nO Client Secret transita apenas aqui (TLS) e \u00e9 gravado no Vault; nunca\n\u00e9 retornado por nenhuma rota.",
+        "properties": {
+          "client_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_secret": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Client Secret",
+            "type": "string"
+          },
+          "default_role": {
+            "$ref": "#/components/schemas/Role",
+            "default": "SecOps"
+          },
+          "discovery_url": {
+            "format": "uri",
+            "maxLength": 2083,
+            "minLength": 1,
+            "title": "Discovery Url",
+            "type": "string"
+          },
+          "group_claim_key": {
+            "default": "groups",
+            "maxLength": 60,
+            "title": "Group Claim Key",
+            "type": "string"
+          },
+          "idp_name": {
+            "default": "OIDC",
+            "maxLength": 60,
+            "title": "Idp Name",
+            "type": "string"
+          },
+          "role_mappings": {
+            "items": {
+              "$ref": "#/components/schemas/RoleMappingIn"
+            },
+            "title": "Role Mappings",
+            "type": "array"
+          },
+          "scopes": {
+            "default": "openid email profile groups",
+            "maxLength": 200,
+            "title": "Scopes",
+            "type": "string"
+          },
+          "tenant_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "discovery_url",
+          "client_id",
+          "client_secret"
+        ],
+        "title": "OidcConfigIn",
+        "type": "object"
+      },
       "PagedAttackPaths": {
         "properties": {
           "count": {
@@ -3439,6 +3506,25 @@
         "title": "QueueDepth",
         "type": "object"
       },
+      "RefreshIn": {
+        "description": "Fallback do cookie para clientes n\u00e3o-browser (workers, CLIs).",
+        "properties": {
+          "refresh_token": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Token"
+          }
+        },
+        "title": "RefreshIn",
+        "type": "object"
+      },
       "ResourceComplianceControl": {
         "properties": {
           "category": {
@@ -3836,6 +3922,35 @@
           "tenant_id"
         ],
         "title": "RetryRequest",
+        "type": "object"
+      },
+      "Role": {
+        "enum": [
+          "PlatformAdmin",
+          "SecOps",
+          "DevOps",
+          "Auditor"
+        ],
+        "title": "Role",
+        "type": "string"
+      },
+      "RoleMappingIn": {
+        "properties": {
+          "group": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Group",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "required": [
+          "group",
+          "role"
+        ],
+        "title": "RoleMappingIn",
         "type": "object"
       },
       "SLASettings": {
@@ -5643,6 +5758,263 @@
         "summary": "Get Attack Path Narrative",
         "tags": [
           "attack-paths"
+        ]
+      }
+    },
+    "/api/v1/auth/oidc/callback": {
+      "get": {
+        "operationId": "oidc_callback_api_v1_auth_oidc_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Oidc Callback",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/oidc/config": {
+      "post": {
+        "operationId": "save_oidc_config_api_v1_auth_oidc_config_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OidcConfigIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Save Oidc Config",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/oidc/login": {
+      "get": {
+        "operationId": "oidc_login_api_v1_auth_oidc_login_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "next",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 256,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Next"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Oidc Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/oidc/status": {
+      "get": {
+        "description": "Login page consulta antes de renderizar o bot\u00e3o SSO (nome do IdP).",
+        "operationId": "oidc_status_api_v1_auth_oidc_status_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Oidc Status",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "operationId": "refresh_api_v1_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RefreshIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh",
+        "tags": [
+          "auth"
         ]
       }
     },
