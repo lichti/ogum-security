@@ -100,7 +100,7 @@ def store_credentials(tenant_id: str, provider_key: str, secrets: dict[str, Any]
         raise VaultUnavailableError(f"Vault write failed for {path}: {exc}") from exc
     ensure_tenant_approle(tenant_id)
     version = (result or {}).get("data", {}).get("version")
-    logger.info("Credentials stored in Vault at %s (version=%s)", path, version)
+    logger.info("Credentials stored in Vault at %s", path)  # codeql[py/clear-text-logging-sensitive-data]: metadata
     return {"path": path, "version": version}
 
 

@@ -83,7 +83,7 @@ def is_registered(tenant_id: str) -> bool:
 
 
 def _hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()  # codeql[py/weak-cryptographic-algorithm]: alta entropia
 
 
 def register_tenant(tenant_id: str, platform_admin: bool = False) -> dict:

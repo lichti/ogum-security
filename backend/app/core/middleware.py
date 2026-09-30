@@ -86,12 +86,12 @@ class TenantIdentityMiddleware:
 
             spoofed = _header_value(scope, b"x-tenant-id")
             if spoofed and spoofed != token.tenant_id:
+                # O valor do header não vai para o log (input do cliente;
+                # CodeQL py/clear-text-logging-sensitive-data) — a presença basta.
                 logger.warning(
-                    "DEPRECATED header X-Tenant-ID=%r ignored — identity resolved from "
-                    "the bearer token (tenant %s). Remove the header; US-06.10 drops "
-                    "header resolution entirely.",
-                    spoofed,
-                    token.tenant_id,
+                    "DEPRECATED header X-Tenant-ID ignored — identity resolved from "
+                    "the bearer token; remove the header (US-06.10 drops header "
+                    "resolution entirely)"
                 )
             _set_header(scope, b"x-tenant-id", token.tenant_id)
             _set_header(scope, b"x-user-id", token.sub)
