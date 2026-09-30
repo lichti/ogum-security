@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import (
     attack_paths,
+    auth,
     compliance,
     findings,
     graph,
@@ -66,6 +67,7 @@ async def health() -> dict:
     return {"status": "ok", "version": "0.3.0"}
 
 
+app.include_router(auth.router)
 app.include_router(inventory.router)
 app.include_router(identities.router)
 app.include_router(providers.router)

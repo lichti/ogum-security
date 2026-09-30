@@ -1,11 +1,16 @@
 name: "Ogum CodeQL config (python)"
 
-# paths-ignore é feature do codeql-action (aplicada à extração/resultado),
-# documentada em "Configuring advanced setup for code scanning".
-# Testes e scripts de ops não são superfície de ataque do produto: excluí-los
-# elimina falsos positivos cujo taint nasce em fixtures de teste (ex.: uma
-# constante de teste chamada SECRET_KEY passada como provider_id) e em CLIs
-# de onboarding cujo propósito é exibir um token uma única vez.
+# Suite composto: o default do code scanning (python-code-scanning, 45
+# queries) + AlertSuppression.ql — o advanced setup não roda a query de
+# supressão por default, e sem ela as supressões inline "# codeql[...]"
+# não são honradas no gate de PR. O input `queries` do init não aceita
+# refs pack:arquivo ("Specifier for external repository is invalid"), então
+# a composição vive num .qls local (paths do pack via `from:`).
+# paths-ignore: testes e scripts de ops não são superfície de ataque do
+# produto — excluí-los elimina falsos positivos cujo taint nasce em
+# fixtures de teste (ver PR #247).
+queries:
+  - uses: ./.github/codeql/python-suppression.qls
 paths-ignore:
   - "backend/tests/**"
   - "backend/scripts/**"

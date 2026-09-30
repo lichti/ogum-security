@@ -1,3 +1,5 @@
-- description: Queries de supressão de alertas (honra comentários inline "# codeql[...]")
+- description: Code scanning default (python-code-scanning) + AlertSuppression — honra supressões inline "# codeql[...]"
+- apply: codeql-suites/python-code-scanning.qls
+  from: codeql/python-queries
 - query: AlertSuppression.ql
   from: codeql/python-queries

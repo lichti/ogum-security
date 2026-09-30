@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # OIDC (US-06.01 — login federado; cookies HttpOnly para o browser)
+    PUBLIC_BASE_URL: str = "http://localhost:8000"  # redirect_uri do IdP
+    FRONTEND_URL: str = "http://localhost:3000"  # redirect pós-login
+    ACCESS_COOKIE_NAME: str = "ogum_access"
+    REFRESH_COOKIE_NAME: str = "ogum_refresh"
+
     # Rate limiting por tenant (US-06.13 — security.md §3.1: 100 req/s padrão)
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_SECOND: int = 100

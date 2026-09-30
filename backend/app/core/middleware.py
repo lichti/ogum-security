@@ -31,6 +31,13 @@ from app.services import tenant_registry
 logger = logging.getLogger(__name__)
 
 EXEMPT_PATHS = {"/health", "/docs", "/redoc", "/openapi.json"}
+# Rotas públicas de auth (US-06.01) — o fluxo de login acontece pré-autenticação
+EXEMPT_PATHS |= {
+    "/api/v1/auth/oidc/login",
+    "/api/v1/auth/oidc/callback",
+    "/api/v1/auth/oidc/status",
+    "/api/v1/auth/refresh",
+}
 WEBHOOK_PREFIXES = ("/api/v1/side-scans/webhooks/",)
 _401_HEADERS = {b"www-authenticate": b"Bearer"}
 
@@ -47,6 +54,19 @@ def _header_value(scope, name: bytes) -> str | None:
     for key, value in scope["headers"]:
         if key == name:
             return bytes(value).decode("latin-1")
+    return None
+
+
+def _cookie_value(scope, name: str) -> str | None:
+    """Valor de um cookie do header Cookie (fallback de auth do browser,
+    US-06.01). Header malformado → None, não exceção."""
+    raw = _header_value(scope, b"cookie")
+    if not raw:
+        return None
+    for pair in raw.split(";"):
+        key, _, value = pair.strip().partition("=")
+        if key == name:
+            return value
     return None
 
 
@@ -69,11 +89,17 @@ class TenantIdentityMiddleware:
             and not scope["path"].startswith(WEBHOOK_PREFIXES)
         ):
             raw_auth = _header_value(scope, b"authorization")
-            if not raw_auth or not raw_auth.lower().startswith("bearer "):
+            raw_token = ""
+            if raw_auth and raw_auth.lower().startswith("bearer "):
+                raw_token = raw_auth.split(" ", 1)[1].strip()
+            else:
+                # browser autenticado por cookie HttpOnly (US-06.01): o token
+                # nunca toca localStorage, então o Bearer não existe nele
+                raw_token = _cookie_value(scope, settings.ACCESS_COOKIE_NAME)
+            if not raw_token:
                 resp = _unauthorized("Not authenticated")
                 await resp(scope, receive, send)
                 return
-            raw_token = raw_auth.split(" ", 1)[1].strip()
             try:
                 token = decode_access_token(raw_token)
                 if token.typ == "api" and not tenant_registry.verify_api_token(token.tenant_id, raw_token):
