@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Harden Runner (US-13.04 — egress audit)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
@@ -78,7 +78,7 @@ jobs:
     name: Backend — Lint & Type Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Harden Runner (US-13.04 — egress audit)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
@@ -129,7 +129,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: backend-lint
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Harden Runner (US-13.04 — egress audit)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
@@ -201,7 +201,7 @@ jobs:
           --cap-add IPC_LOCK
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Harden Runner (US-13.04 — egress audit)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
@@ -268,7 +268,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Harden Runner (US-13.04 — egress audit)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
@@ -311,7 +311,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Harden Runner (US-13.04 — egress audit)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
@@ -368,7 +368,7 @@ jobs:
     name: Frontend — Lint, Type Check & Component Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Harden Runner (US-13.04 — egress audit)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
@@ -403,7 +403,7 @@ jobs:
     name: Security — Secret Scanning (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -421,7 +421,7 @@ jobs:
     name: IaC — Terraform/CFN/K8s Validation & Checkov
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Harden Runner (US-13.04 — egress audit)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
